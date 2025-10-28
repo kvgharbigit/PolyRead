@@ -110,7 +110,6 @@ class DownloadProgress {
   DownloadProgress complete() {
     return copyWith(
       status: DownloadStatus.completed,
-      progressPercent: 100.0,
       downloadedBytes: totalBytes,
       filesCompleted: totalFiles,
       currentFile: null,

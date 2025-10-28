@@ -8,6 +8,11 @@ import 'package:polyread/features/reader/engines/reader_interface.dart';
 import 'package:polyread/features/reader/engines/pdf_reader_engine.dart';
 import 'package:polyread/features/reader/engines/epub_reader_engine.dart';
 import 'package:polyread/features/reader/services/reading_progress_service.dart';
+import 'package:polyread/features/reader/widgets/interactive_text.dart';
+import 'package:polyread/features/translation/widgets/translation_popup.dart';
+import 'package:polyread/features/translation/services/translation_service.dart';
+import 'package:polyread/features/translation/services/dictionary_service.dart';
+import 'package:polyread/features/translation/services/translation_cache_service.dart';
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/core/providers/database_provider.dart';
 import 'package:polyread/core/utils/constants.dart';
@@ -29,6 +34,7 @@ class BookReaderWidget extends ConsumerStatefulWidget {
 class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   ReaderEngine? _readerEngine;
   ReadingProgressService? _progressService;
+  TranslationService? _translationService;
   Timer? _progressTimer;
   DateTime? _sessionStartTime;
   bool _isLoading = true;
@@ -37,6 +43,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   // Reading session tracking
   int _sessionWordsRead = 0;
   int _sessionTranslations = 0;
+  
+  // Translation popup state
+  bool _showTranslationPopup = false;
+  String? _selectedText;
+  Offset _tapPosition = Offset.zero;
+  String _sourceLanguage = 'en';
+  String _targetLanguage = 'es';
   
   @override
   void initState() {
@@ -49,6 +62,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   void dispose() {
     _progressTimer?.cancel();
     _readerEngine?.dispose();
+    _translationService?.dispose();
     super.dispose();
   }
   
@@ -56,6 +70,15 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     try {
       final database = ref.read(databaseProvider);
       _progressService = ReadingProgressService(database);
+      
+      // Initialize translation service
+      final dictionaryService = DictionaryService(database);
+      final cacheService = TranslationCacheService(database);
+      _translationService = TranslationService(
+        dictionaryService: dictionaryService,
+        cacheService: cacheService,
+      );
+      await _translationService!.initialize();
       
       // Create appropriate reader engine
       if (widget.book.fileType == 'pdf') {
@@ -110,6 +133,45 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       readingTimeMs: sessionTime,
       wordsRead: _sessionWordsRead,
       translationsUsed: _sessionTranslations,
+    );
+  }
+  
+  // Translation event handlers
+  void _handleWordTap(String word, Offset position, TextSelection selection) {
+    if (_translationService == null) return;
+    
+    setState(() {
+      _selectedText = word;
+      _tapPosition = position;
+      _showTranslationPopup = true;
+    });
+    
+    _sessionTranslations++;
+  }
+  
+  void _handleSentenceTap(String sentence, Offset position, TextSelection selection) {
+    if (_translationService == null) return;
+    
+    setState(() {
+      _selectedText = sentence;
+      _tapPosition = position;
+      _showTranslationPopup = true;
+    });
+    
+    _sessionTranslations++;
+  }
+  
+  void _closeTranslationPopup() {
+    setState(() {
+      _showTranslationPopup = false;
+      _selectedText = null;
+    });
+  }
+  
+  void _addToVocabulary(String word) {
+    // TODO: Implement vocabulary service integration
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Added "$word" to vocabulary')),
     );
   }
   
@@ -225,8 +287,16 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     
     return Stack(
       children: [
-        // Main reader content
-        _readerEngine!.buildReader(context),
+        // Main reader content wrapped with tap detection
+        GestureDetector(
+          onTap: () {
+            // Close translation popup when tapping outside
+            if (_showTranslationPopup) {
+              _closeTranslationPopup();
+            }
+          },
+          child: _buildReaderContent(),
+        ),
         
         // Reading progress indicator
         Positioned(
@@ -245,8 +315,27 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
             ),
           ),
         ),
+        
+        // Translation popup overlay
+        if (_showTranslationPopup && _selectedText != null)
+          TranslationPopup(
+            selectedText: _selectedText!,
+            sourceLanguage: _sourceLanguage,
+            targetLanguage: _targetLanguage,
+            position: _tapPosition,
+            onClose: _closeTranslationPopup,
+            onAddToVocabulary: _addToVocabulary,
+            translationService: _translationService,
+          ),
       ],
     );
+  }
+  
+  Widget _buildReaderContent() {
+    // For now, return the engine's reader wrapped with interactive text
+    // This is a simplified version - in reality, we'd need to extract
+    // text from PDF/EPUB engines and wrap it with InteractiveText
+    return _readerEngine!.buildReader(context);
   }
   
   Widget _buildBottomControls() {

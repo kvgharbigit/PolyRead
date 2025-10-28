@@ -207,9 +207,13 @@ class _VocabularyCardState extends State<VocabularyCard>
   }
 
   Widget _buildCard({required Widget child}) {
+    final screenSize = MediaQuery.of(context).size;
+    final cardWidth = (screenSize.width * 0.85).clamp(300.0, 400.0);
+    final cardHeight = (screenSize.height * 0.7).clamp(450.0, 550.0);
+    
     return Container(
-      width: 350,
-      height: 500,
+      width: cardWidth,
+      height: cardHeight,
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(

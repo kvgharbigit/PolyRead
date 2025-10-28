@@ -152,8 +152,8 @@ class EpubReaderEngine implements ReaderEngine {
     return EpubView(
       controller: _controller!,
       onChapterChanged: (chapter) {
-        if (chapter?.chapter?.title != null) {
-          _currentChapter = chapter!.chapter!.title!;
+        if (chapter?.chapter?.Title != null) {
+          _currentChapter = chapter!.chapter!.Title!;
         }
       },
       onDocumentLoaded: (document) {

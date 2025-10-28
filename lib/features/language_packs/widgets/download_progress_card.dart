@@ -25,51 +25,45 @@ class DownloadProgressCard extends StatefulWidget {
 }
 
 class _DownloadProgressCardState extends State<DownloadProgressCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
+    with TickerProviderStateMixin {
+  late AnimationController _progressController;
   late Animation<double> _progressAnimation;
 
   @override
   void initState() {
     super.initState();
-    
-    _animationController = AnimationController(
+    _progressController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
     _progressAnimation = Tween<double>(
       begin: 0.0,
       end: widget.progress.progressPercent / 100,
     ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
+      parent: _progressController,
+      curve: Curves.easeInOut,
     ));
-    
-    _animationController.forward();
+    _progressController.forward();
   }
 
   @override
   void didUpdateWidget(DownloadProgressCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
     if (oldWidget.progress.progressPercent != widget.progress.progressPercent) {
       _progressAnimation = Tween<double>(
         begin: _progressAnimation.value,
         end: widget.progress.progressPercent / 100,
       ).animate(CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOut,
+        parent: _progressController,
+        curve: Curves.easeInOut,
       ));
-      
-      _animationController.reset();
-      _animationController.forward();
+      _progressController.forward(from: 0);
     }
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _progressController.dispose();
     super.dispose();
   }
 
@@ -84,13 +78,15 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
           children: [
             _buildHeader(),
             const SizedBox(height: 12),
-            _buildProgressSection(),
-            const SizedBox(height: 12),
-            _buildDetailsSection(),
-            if (_shouldShowActions()) ...[
-              const SizedBox(height: 12),
-              _buildActionButtons(),
+            _buildProgressBar(),
+            const SizedBox(height: 8),
+            _buildProgressDetails(),
+            if (widget.progress.currentFile != null) ...[
+              const SizedBox(height: 8),
+              _buildCurrentFileInfo(),
             ],
+            const SizedBox(height: 12),
+            _buildActionButtons(),
           ],
         ),
       ),
@@ -100,19 +96,7 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
   Widget _buildHeader() {
     return Row(
       children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: _getStatusColor().withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            _getStatusIcon(),
-            color: _getStatusColor(),
-            size: 20,
-          ),
-        ),
+        _buildStatusIcon(),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -128,147 +112,138 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
                 _getStatusText(),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: _getStatusColor(),
-                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
         ),
-        if (widget.progress.isActive)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getStatusColor().withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+        Text(
+          '${widget.progress.progressPercent.toStringAsFixed(1)}%',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusIcon() {
+    Widget icon;
+    Color color;
+
+    switch (widget.progress.status) {
+      case DownloadStatus.downloading:
+        icon = const CircularProgressIndicator(strokeWidth: 2);
+        color = Theme.of(context).colorScheme.primary;
+        break;
+      case DownloadStatus.paused:
+        icon = const Icon(Icons.pause_circle_outline);
+        color = Colors.orange;
+        break;
+      case DownloadStatus.completed:
+        icon = const Icon(Icons.check_circle);
+        color = Colors.green;
+        break;
+      case DownloadStatus.failed:
+        icon = const Icon(Icons.error);
+        color = Colors.red;
+        break;
+      case DownloadStatus.cancelled:
+        icon = const Icon(Icons.cancel);
+        color = Colors.grey;
+        break;
+      default:
+        icon = const Icon(Icons.download);
+        color = Theme.of(context).colorScheme.primary;
+    }
+
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: widget.progress.status == DownloadStatus.downloading
+          ? icon
+          : Icon(
+              (icon as Icon).icon,
+              color: color,
+              size: 24,
             ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    return AnimatedBuilder(
+      animation: _progressAnimation,
+      builder: (context, child) {
+        return LinearProgressIndicator(
+          value: _progressAnimation.value,
+          backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+          valueColor: AlwaysStoppedAnimation<Color>(
+            widget.progress.isFailed
+                ? Colors.red
+                : Theme.of(context).colorScheme.primary,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProgressDetails() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          widget.progress.formattedProgress,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (widget.progress.downloadSpeed != null)
+          Text(
+            widget.progress.downloadSpeed!,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        if (widget.progress.estimatedTimeRemaining != null)
+          Text(
+            widget.progress.estimatedTimeRemaining!,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCurrentFileInfo() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.file_download,
+            size: 16,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
             child: Text(
-              '${widget.progress.progressPercent.toStringAsFixed(1)}%',
+              widget.progress.currentFile!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: _getStatusColor(),
-                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-      ],
-    );
-  }
-
-  Widget _buildProgressSection() {
-    return Column(
-      children: [
-        AnimatedBuilder(
-          animation: _progressAnimation,
-          builder: (context, child) {
-            return LinearProgressIndicator(
-              value: _progressAnimation.value,
-              backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-              valueColor: AlwaysStoppedAnimation<Color>(_getStatusColor()),
-              minHeight: 6,
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              widget.progress.formattedProgress,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
-            ),
-            if (widget.progress.downloadSpeed != null)
-              Text(
-                widget.progress.downloadSpeed!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailsSection() {
-    return Column(
-      children: [
-        if (widget.progress.currentFile != null) ...[
-          Row(
-            children: [
-              Icon(
-                Icons.file_present,
-                size: 16,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  'Downloading: ${widget.progress.currentFile}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-        ],
-        Row(
-          children: [
-            Icon(
-              Icons.inventory,
-              size: 16,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Files: ${widget.progress.filesCompleted}/${widget.progress.totalFiles}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            if (widget.progress.estimatedTimeRemaining != null) ...[
-              const SizedBox(width: 16),
-              Icon(
-                Icons.schedule,
-                size: 16,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'ETA: ${widget.progress.estimatedTimeRemaining}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
-        if (widget.progress.error != null) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.errorContainer,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.onErrorContainer,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.progress.error!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onErrorContainer,
-                    ),
-                  ),
-                ),
-              ],
+          Text(
+            '${widget.progress.filesCompleted}/${widget.progress.totalFiles}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 
@@ -276,118 +251,90 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        if (widget.progress.isFailed && widget.onRetry != null)
-          TextButton.icon(
-            onPressed: widget.onRetry,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-          ),
-        
-        if (widget.progress.status == DownloadStatus.paused && widget.onResume != null)
-          TextButton.icon(
-            onPressed: widget.onResume,
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Resume'),
-          ),
-        
-        if (widget.progress.status == DownloadStatus.downloading && widget.onPause != null)
+        if (widget.progress.status == DownloadStatus.downloading) ...[
           TextButton.icon(
             onPressed: widget.onPause,
-            icon: const Icon(Icons.pause),
+            icon: const Icon(Icons.pause, size: 16),
             label: const Text('Pause'),
           ),
-        
-        if (widget.progress.isActive && widget.onCancel != null) ...[
           const SizedBox(width: 8),
           TextButton.icon(
-            onPressed: () => _showCancelDialog(),
-            icon: const Icon(Icons.close),
+            onPressed: widget.onCancel,
+            icon: const Icon(Icons.close, size: 16),
             label: const Text('Cancel'),
+          ),
+        ] else if (widget.progress.status == DownloadStatus.paused) ...[
+          TextButton.icon(
+            onPressed: widget.onResume,
+            icon: const Icon(Icons.play_arrow, size: 16),
+            label: const Text('Resume'),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: widget.onCancel,
+            icon: const Icon(Icons.close, size: 16),
+            label: const Text('Cancel'),
+          ),
+        ] else if (widget.progress.status == DownloadStatus.failed) ...[
+          TextButton.icon(
+            onPressed: widget.onRetry,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Retry'),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: widget.onCancel,
+            icon: const Icon(Icons.close, size: 16),
+            label: const Text('Remove'),
+          ),
+        ] else if (widget.progress.status == DownloadStatus.completed) ...[
+          Icon(
+            Icons.check_circle,
+            color: Colors.green,
+            size: 16,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Completed',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.green,
+            ),
           ),
         ],
       ],
     );
   }
 
-  bool _shouldShowActions() {
-    return widget.progress.isActive || 
-           widget.progress.isFailed || 
-           widget.progress.status == DownloadStatus.paused;
+  String _getStatusText() {
+    switch (widget.progress.status) {
+      case DownloadStatus.pending:
+        return 'Preparing download...';
+      case DownloadStatus.downloading:
+        return 'Downloading...';
+      case DownloadStatus.paused:
+        return 'Paused';
+      case DownloadStatus.completed:
+        return 'Download completed';
+      case DownloadStatus.failed:
+        return 'Download failed: ${widget.progress.error ?? 'Unknown error'}';
+      case DownloadStatus.cancelled:
+        return 'Download cancelled';
+    }
   }
 
   Color _getStatusColor() {
     switch (widget.progress.status) {
-      case DownloadStatus.pending:
-        return Colors.orange;
       case DownloadStatus.downloading:
-        return Colors.blue;
+      case DownloadStatus.pending:
+        return Theme.of(context).colorScheme.primary;
+      case DownloadStatus.paused:
+        return Colors.orange;
       case DownloadStatus.completed:
         return Colors.green;
       case DownloadStatus.failed:
         return Colors.red;
       case DownloadStatus.cancelled:
         return Colors.grey;
-      case DownloadStatus.paused:
-        return Colors.amber;
     }
-  }
-
-  IconData _getStatusIcon() {
-    switch (widget.progress.status) {
-      case DownloadStatus.pending:
-        return Icons.schedule;
-      case DownloadStatus.downloading:
-        return Icons.download;
-      case DownloadStatus.completed:
-        return Icons.check_circle;
-      case DownloadStatus.failed:
-        return Icons.error;
-      case DownloadStatus.cancelled:
-        return Icons.cancel;
-      case DownloadStatus.paused:
-        return Icons.pause_circle;
-    }
-  }
-
-  String _getStatusText() {
-    switch (widget.progress.status) {
-      case DownloadStatus.pending:
-        return 'Waiting to start...';
-      case DownloadStatus.downloading:
-        return 'Downloading...';
-      case DownloadStatus.completed:
-        return 'Download complete';
-      case DownloadStatus.failed:
-        return 'Download failed';
-      case DownloadStatus.cancelled:
-        return 'Download cancelled';
-      case DownloadStatus.paused:
-        return 'Download paused';
-    }
-  }
-
-  void _showCancelDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cancel Download'),
-        content: Text(
-          'Are you sure you want to cancel downloading "${widget.progress.packName}"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Keep Downloading'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              widget.onCancel?.call();
-            },
-            child: const Text('Cancel Download'),
-          ),
-        ],
-      ),
-    );
   }
 }

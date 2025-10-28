@@ -11,6 +11,7 @@ import 'package:polyread/core/services/file_service.dart';
 import 'package:polyread/features/reader/services/book_import_service.dart';
 import 'package:polyread/presentation/library/widgets/book_card.dart';
 import 'package:polyread/core/utils/constants.dart';
+import 'package:drift/drift.dart' hide Column;
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -134,7 +135,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       child: GridView.builder(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 0.7,
+          childAspectRatio: 0.75,
           crossAxisSpacing: AppConstants.defaultPadding,
           mainAxisSpacing: AppConstants.defaultPadding,
         ),
@@ -157,6 +158,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
   
   Future<void> _importBooks() async {
+    // Skip the problematic file picker and go directly to instructions
+    _showImportInstructions();
+  }
+  
+  Future<void> _tryFilePicker() async {
     setState(() => _isImporting = true);
     
     try {
@@ -169,7 +175,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       if (results.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No files selected')),
+            const SnackBar(content: Text('No files selected or file picker cancelled')),
           );
         }
         return;
@@ -254,6 +260,122 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             SnackBar(content: Text('Delete failed: ${e.toString()}')),
           );
         }
+      }
+    }
+  }
+  
+  void _showImportInstructions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Import Books'),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'The file picker has known issues on iOS Simulator.',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 12),
+              Text('🎯 For immediate testing:'),
+              Text('• Use "Add Sample Books" to get test content'),
+              Text('• Try the reading and navigation features'),
+              SizedBox(height: 12),
+              Text('📱 On real device:'),
+              Text('• File picker works properly'),
+              Text('• Can import from Files app, iCloud, etc.'),
+              SizedBox(height: 12),
+              Text('🔧 Alternative for simulator:'),
+              Text('• Download PDFs in Safari'),
+              Text('• Save to Files app first'),
+              Text('• Then try file picker'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _addSampleBooks();
+            },
+            icon: const Icon(Icons.library_add),
+            label: const Text('Add Sample Books'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _tryFilePicker();
+            },
+            child: const Text('Try File Picker'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Future<void> _addSampleBooks() async {
+    try {
+      final database = ref.read(databaseProvider);
+      
+      // Add sample books directly to database for testing
+      final sampleBooks = [
+        BooksCompanion.insert(
+          title: 'Sample PDF Book',
+          author: Value('Test Author'),
+          filePath: '/sample/path/book1.pdf',
+          fileType: 'pdf',
+          language: 'en',
+          fileSizeBytes: 1024 * 1024, // 1MB
+          importedAt: Value(DateTime.now()),
+        ),
+        BooksCompanion.insert(
+          title: 'Sample EPUB Novel',
+          author: Value('Demo Writer'),
+          filePath: '/sample/path/book2.epub',
+          fileType: 'epub',
+          language: 'en',
+          totalChapters: Value(15),
+          fileSizeBytes: 2 * 1024 * 1024, // 2MB
+          importedAt: Value(DateTime.now()),
+        ),
+        BooksCompanion.insert(
+          title: 'Learning Spanish',
+          author: Value('Language Expert'),
+          filePath: '/sample/path/spanish.pdf',
+          fileType: 'pdf',
+          language: 'es',
+          fileSizeBytes: 3 * 1024 * 1024, // 3MB
+          importedAt: Value(DateTime.now()),
+        ),
+      ];
+      
+      for (final book in sampleBooks) {
+        await database.into(database.books).insert(book);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Added 3 sample books for testing')),
+        );
+        setState(() {}); // Refresh the library
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add sample books: ${e.toString()}')),
+        );
       }
     }
   }

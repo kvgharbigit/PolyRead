@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/translation_service.dart';
 import '../models/dictionary_entry.dart';
+import '../models/translation_request.dart';
 
 class TranslationPopup extends ConsumerStatefulWidget {
   final String selectedText;
@@ -14,6 +15,9 @@ class TranslationPopup extends ConsumerStatefulWidget {
   final Offset position;
   final VoidCallback onClose;
   final Function(String word)? onAddToVocabulary;
+  final TranslationService? translationService;
+  final String? context; // Surrounding text for context display
+  final TextSelection? textSelection; // Original text selection
 
   const TranslationPopup({
     super.key,
@@ -23,6 +27,9 @@ class TranslationPopup extends ConsumerStatefulWidget {
     required this.position,
     required this.onClose,
     this.onAddToVocabulary,
+    this.translationService,
+    this.context,
+    this.textSelection,
   });
 
   @override
@@ -36,9 +43,11 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
   late Animation<double> _opacityAnimation;
   
   TranslationResponse? _currentResponse;
+  List<TranslationResponse> _allResponses = [];
   bool _isLoading = true;
   String? _error;
   int _currentResultIndex = 0;
+  int _currentProviderIndex = 0;
 
   @override
   void initState() {
@@ -82,15 +91,29 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
         _error = null;
       });
 
-      // Get translation service (would be provided via Riverpod in real app)
-      // For now, simulating the service call
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Simulate translation response
-      setState(() {
-        _currentResponse = _createMockResponse();
-        _isLoading = false;
-      });
+      if (widget.translationService != null) {
+        // Use real translation service
+        final response = await widget.translationService!.translateText(
+          text: widget.selectedText,
+          sourceLanguage: widget.sourceLanguage,
+          targetLanguage: widget.targetLanguage,
+        );
+        
+        setState(() {
+          _currentResponse = response;
+          _allResponses = [response];
+          _isLoading = false;
+        });
+      } else {
+        // Fallback to mock response for development
+        await Future.delayed(const Duration(milliseconds: 500));
+        final mockResponse = _createMockResponse();
+        setState(() {
+          _currentResponse = mockResponse;
+          _allResponses = [mockResponse];
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -130,9 +153,21 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final popupWidth = screenSize.width * 0.9;
+    final maxWidth = popupWidth.clamp(280.0, 400.0);
+    final maxHeight = screenSize.height * 0.6;
+    
+    // Calculate optimal position to keep popup on screen
+    final position = _calculateOptimalPosition(
+      screenSize: screenSize,
+      popupWidth: maxWidth,
+      maxHeight: maxHeight,
+    );
+
     return Positioned(
-      left: widget.position.dx,
-      top: widget.position.dy,
+      left: position.dx,
+      top: position.dy,
       child: AnimatedBuilder(
         animation: _animationController,
         builder: (context, child) {
@@ -144,8 +179,10 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
                 elevation: 8,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  width: 320,
-                  constraints: const BoxConstraints(maxHeight: 400),
+                  width: maxWidth,
+                  constraints: BoxConstraints(
+                    maxHeight: maxHeight,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(12),
@@ -157,6 +194,7 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildHeader(),
+                      if (widget.context != null) _buildContextDisplay(),
                       if (_isLoading) _buildLoadingContent(),
                       if (_error != null) _buildErrorContent(),
                       if (_currentResponse != null) _buildTranslationContent(),
@@ -169,6 +207,36 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
         },
       ),
     );
+  }
+
+  Offset _calculateOptimalPosition({
+    required Size screenSize,
+    required double popupWidth,
+    required double maxHeight,
+  }) {
+    const padding = 16.0;
+    double left = widget.position.dx;
+    double top = widget.position.dy;
+
+    // Adjust horizontal position
+    if (left + popupWidth + padding > screenSize.width) {
+      left = screenSize.width - popupWidth - padding;
+    }
+    if (left < padding) {
+      left = padding;
+    }
+
+    // Adjust vertical position
+    if (top + maxHeight + padding > screenSize.height) {
+      // Try positioning above the tap point
+      top = widget.position.dy - maxHeight - 20;
+      if (top < padding) {
+        // If still doesn't fit, position at center
+        top = (screenSize.height - maxHeight) / 2;
+      }
+    }
+
+    return Offset(left, top);
   }
 
   Widget _buildHeader() {
@@ -204,7 +272,7 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
             ),
           ),
           if (_currentResponse != null && !_isLoading)
-            _buildProviderIndicator(),
+            _buildProviderCycler(),
           IconButton(
             onPressed: widget.onClose,
             icon: Icon(
@@ -218,7 +286,7 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
     );
   }
 
-  Widget _buildProviderIndicator() {
+  Widget _buildProviderCycler() {
     if (_currentResponse == null) return const SizedBox.shrink();
 
     IconData icon;
@@ -247,29 +315,48 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
         color = Colors.grey;
     }
 
-    return Tooltip(
-      message: tooltip,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 4),
-            Text(
-              '${_currentResponse!.latencyMs}ms',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Try alternative providers button
+        if (widget.translationService != null)
+          IconButton(
+            onPressed: _tryAlternativeProviders,
+            icon: const Icon(Icons.refresh, size: 16),
+            tooltip: 'Try other providers',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(
+              minWidth: 32,
+              minHeight: 32,
             ),
-          ],
+          ),
+        
+        // Current provider indicator
+        Tooltip(
+          message: tooltip,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 4),
+                Text(
+                  '${_currentResponse!.latencyMs}ms',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -553,21 +640,37 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
   void _shareTranslation() {
     // Implementation for sharing translation
   }
-}
-
-// Import the missing classes for compilation
-class TranslationRequest {
-  final String text;
-  final String sourceLanguage;
-  final String targetLanguage;
-  final DateTime timestamp;
   
-  const TranslationRequest({
-    required this.text,
-    required this.sourceLanguage,
-    required this.targetLanguage,
-    required this.timestamp,
-  });
+  Future<void> _tryAlternativeProviders() async {
+    if (widget.translationService == null) return;
+    
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    
+    try {
+      // For now, just re-translate with the service
+      // In a full implementation, this would try different providers
+      // or force using a different provider than the current one
+      final response = await widget.translationService!.translateText(
+        text: widget.selectedText,
+        sourceLanguage: widget.sourceLanguage,
+        targetLanguage: widget.targetLanguage,
+        useCache: false, // Force fresh translation
+      );
+      
+      setState(() {
+        _currentResponse = response;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
 }
 
 class DictionaryLookupResult {
@@ -582,4 +685,6 @@ class DictionaryLookupResult {
     required this.entries,
     required this.latencyMs,
   });
+  
+  bool get hasResults => entries.isNotEmpty;
 }

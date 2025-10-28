@@ -34,12 +34,12 @@ class BookCard extends StatelessWidget {
             ),
             
             // Book info
-            Expanded(
-              flex: 2,
-              child: Padding(
+            Flexible(
+              child: Container(
                 padding: const EdgeInsets.all(AppConstants.smallPadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Title
                     Text(
@@ -63,30 +63,34 @@ class BookCard extends StatelessWidget {
                       ),
                     ],
                     
-                    const Spacer(),
+                    const SizedBox(height: 8),
                     
                     // File type and actions
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         // File type badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getFileTypeColor().withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            book.fileType.toUpperCase(),
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: _getFileTypeColor(),
-                              fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getFileTypeColor().withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              book.fileType.toUpperCase(),
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: _getFileTypeColor(),
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
+                        
+                        const SizedBox(width: 8),
                         
                         // Delete button
                         InkWell(

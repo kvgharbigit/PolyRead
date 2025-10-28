@@ -86,9 +86,9 @@ class SqlitePerformanceProof {
             )
           ''');
           
-          // Create FTS table for fast text search
+          // Create FTS table for fast text search (test-specific name)
           await db.execute('''
-            CREATE VIRTUAL TABLE dictionary_fts USING fts5(
+            CREATE VIRTUAL TABLE test_dictionary_fts USING fts5(
               lemma,
               definition,
               content='dictionary',
@@ -100,7 +100,7 @@ class SqlitePerformanceProof {
           await db.execute('''
             CREATE TRIGGER dictionary_ai AFTER INSERT ON dictionary
             BEGIN
-              INSERT INTO dictionary_fts(rowid, lemma, definition)
+              INSERT INTO test_dictionary_fts(rowid, lemma, definition)
               VALUES (new.id, new.lemma, new.definition);
             END
           ''');
@@ -108,7 +108,7 @@ class SqlitePerformanceProof {
           await db.execute('''
             CREATE TRIGGER dictionary_ad AFTER DELETE ON dictionary
             BEGIN
-              INSERT INTO dictionary_fts(dictionary_fts, rowid, lemma, definition)
+              INSERT INTO test_dictionary_fts(test_dictionary_fts, rowid, lemma, definition)
               VALUES('delete', old.id, old.lemma, old.definition);
             END
           ''');
@@ -116,9 +116,9 @@ class SqlitePerformanceProof {
           await db.execute('''
             CREATE TRIGGER dictionary_au AFTER UPDATE ON dictionary
             BEGIN
-              INSERT INTO dictionary_fts(dictionary_fts, rowid, lemma, definition)
+              INSERT INTO test_dictionary_fts(test_dictionary_fts, rowid, lemma, definition)
               VALUES('delete', old.id, old.lemma, old.definition);
-              INSERT INTO dictionary_fts(rowid, lemma, definition)
+              INSERT INTO test_dictionary_fts(rowid, lemma, definition)
               VALUES (new.id, new.lemma, new.definition);
             END
           ''');
@@ -232,8 +232,8 @@ class SqlitePerformanceProof {
       // Test FTS search
       final query = queries[i % queries.length];
       final result = await _testDatabase!.query(
-        'dictionary_fts',
-        where: 'dictionary_fts MATCH ?',
+        'test_dictionary_fts',
+        where: 'test_dictionary_fts MATCH ?',
         whereArgs: [query],
         limit: 10,
       );

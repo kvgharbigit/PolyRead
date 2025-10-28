@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:epubx/epubx.dart' as epubx;
 import 'package:pdfx/pdfx.dart';
+import 'package:image/image.dart' as img;
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/core/services/file_service.dart';
 import 'package:polyread/core/services/error_service.dart';
@@ -26,6 +27,9 @@ class BookImportService {
         type: FileType.custom,
         allowedExtensions: ['pdf', 'epub'],
         allowMultiple: true,
+        allowCompression: false,
+        withReadStream: false,
+        withData: false,
       );
       
       if (result == null || result.files.isEmpty) {
@@ -201,7 +205,8 @@ class BookImportService {
         
         // Try to get existing cover
         if (book.CoverImage != null) {
-          return Uint8List.fromList(book.CoverImage!);
+          final encoded = img.encodeJpg(book.CoverImage!);
+          return Uint8List.fromList(encoded);
         }
       } else if (fileType == '.pdf') {
         final document = await PdfDocument.openFile(filePath);

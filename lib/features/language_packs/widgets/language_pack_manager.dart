@@ -9,6 +9,29 @@ import '../models/download_progress.dart';
 import 'download_progress_card.dart';
 import 'storage_chart.dart';
 
+// Temporary model classes (to be moved to separate files)
+enum PackInstallationStatus { installed, updating, corrupted }
+
+class LanguagePackInstallation {
+  final String packId;
+  final String version;
+  final DateTime installedAt;
+  final DateTime lastUsed;
+  final PackInstallationStatus status;
+  final List<String> installedFiles;
+  final int totalSize;
+  
+  const LanguagePackInstallation({
+    required this.packId,
+    required this.version,
+    required this.installedAt,
+    required this.lastUsed,
+    required this.status,
+    required this.installedFiles,
+    required this.totalSize,
+  });
+}
+
 class LanguagePackManager extends ConsumerStatefulWidget {
   const LanguagePackManager({super.key});
 
@@ -264,6 +287,8 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
                 ),
               ],
             ],

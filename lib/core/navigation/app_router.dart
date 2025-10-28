@@ -9,6 +9,7 @@ import 'package:polyread/presentation/library/library_screen.dart';
 import 'package:polyread/presentation/onboarding/onboarding_screen.dart';
 import 'package:polyread/presentation/reader/reader_screen.dart';
 import 'package:polyread/presentation/settings/settings_screen.dart';
+import 'package:polyread/features/language_packs/widgets/language_pack_manager.dart';
 
 // Route paths
 class AppRoutes {
@@ -58,14 +59,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.languagePacks,
             name: 'language-packs',
-            builder: (context, state) => const LanguagePacksScreen(),
+            builder: (context, state) => const LanguagePackManager(),
           ),
           
           // Vocabulary screen
           GoRoute(
             path: AppRoutes.vocabulary,
             name: 'vocabulary',
-            builder: (context, state) => const VocabularyScreen(),
+            builder: (context, state) => const VocabularyPlaceholderScreen(),
           ),
         ],
       ),
@@ -192,28 +193,15 @@ class MainBottomNavigationBar extends ConsumerWidget {
   }
 }
 
-// Placeholder screens (to be implemented in later phases)
-class LanguagePacksScreen extends StatelessWidget {
-  const LanguagePacksScreen({super.key});
+// Placeholder for vocabulary screen (to be implemented)
+class VocabularyPlaceholderScreen extends StatelessWidget {
+  const VocabularyPlaceholderScreen({super.key});
   
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(
-        child: Text('Language Packs Screen\n(Phase 4)'),
-      ),
-    );
-  }
-}
-
-class VocabularyScreen extends StatelessWidget {
-  const VocabularyScreen({super.key});
-  
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Vocabulary Screen\n(Phase 5)'),
+        child: Text('Vocabulary Screen\n(Coming Soon)'),
       ),
     );
   }

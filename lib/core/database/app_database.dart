@@ -149,7 +149,7 @@ class AppDatabase extends _$AppDatabase {
       
       // Create FTS table for dictionary search
       await customStatement('''
-        CREATE VIRTUAL TABLE dictionary_fts USING fts5(
+        CREATE VIRTUAL TABLE IF NOT EXISTS dictionary_fts USING fts5(
           lemma,
           definition,
           content='dictionary_entries',
@@ -159,7 +159,7 @@ class AppDatabase extends _$AppDatabase {
       
       // Create triggers to keep FTS in sync with dictionary_entries
       await customStatement('''
-        CREATE TRIGGER dictionary_entries_ai AFTER INSERT ON dictionary_entries
+        CREATE TRIGGER IF NOT EXISTS dictionary_entries_ai AFTER INSERT ON dictionary_entries
         BEGIN
           INSERT INTO dictionary_fts(rowid, lemma, definition)
           VALUES (new.id, new.lemma, new.definition);
@@ -167,7 +167,7 @@ class AppDatabase extends _$AppDatabase {
       ''');
       
       await customStatement('''
-        CREATE TRIGGER dictionary_entries_ad AFTER DELETE ON dictionary_entries
+        CREATE TRIGGER IF NOT EXISTS dictionary_entries_ad AFTER DELETE ON dictionary_entries
         BEGIN
           INSERT INTO dictionary_fts(dictionary_fts, rowid, lemma, definition)
           VALUES('delete', old.id, old.lemma, old.definition);
@@ -175,7 +175,7 @@ class AppDatabase extends _$AppDatabase {
       ''');
       
       await customStatement('''
-        CREATE TRIGGER dictionary_entries_au AFTER UPDATE ON dictionary_entries
+        CREATE TRIGGER IF NOT EXISTS dictionary_entries_au AFTER UPDATE ON dictionary_entries
         BEGIN
           INSERT INTO dictionary_fts(dictionary_fts, rowid, lemma, definition)
           VALUES('delete', old.id, old.lemma, old.definition);
@@ -185,15 +185,15 @@ class AppDatabase extends _$AppDatabase {
       ''');
       
       // Create indexes for better performance
-      await customStatement('CREATE INDEX idx_books_language ON books(language)');
-      await customStatement('CREATE INDEX idx_books_file_type ON books(file_type)');
-      await customStatement('CREATE INDEX idx_reading_progress_book_id ON reading_progress(book_id)');
-      await customStatement('CREATE INDEX idx_vocabulary_book_id ON vocabulary_items(book_id)');
-      await customStatement('CREATE INDEX idx_vocabulary_next_review ON vocabulary_items(next_review)');
-      await customStatement('CREATE INDEX idx_dictionary_lemma ON dictionary_entries(lemma)');
-      await customStatement('CREATE INDEX idx_dictionary_language_pair ON dictionary_entries(language_pair)');
-      await customStatement('CREATE INDEX idx_language_packs_active ON language_packs(is_active)');
-      await customStatement('CREATE INDEX idx_user_settings_key ON user_settings(key)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_books_language ON books(language)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_books_file_type ON books(file_type)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_reading_progress_book_id ON reading_progress(book_id)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_vocabulary_book_id ON vocabulary_items(book_id)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_vocabulary_next_review ON vocabulary_items(next_review)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_lemma ON dictionary_entries(lemma)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_language_pair ON dictionary_entries(language_pair)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_language_packs_active ON language_packs(is_active)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_user_settings_key ON user_settings(key)');
     },
     onUpgrade: (Migrator m, int from, int to) async {
       // Handle future schema migrations here
