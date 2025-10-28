@@ -3,16 +3,25 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+// import 'package:flutter/services.dart' show TextSelection; // Provided by material.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:polyread/features/reader/engines/reader_interface.dart';
 import 'package:polyread/features/reader/engines/pdf_reader_engine.dart';
 import 'package:polyread/features/reader/engines/epub_reader_engine.dart';
+import 'package:polyread/features/reader/engines/html_reader_engine.dart';
+import 'package:polyread/features/reader/engines/txt_reader_engine.dart';
 import 'package:polyread/features/reader/services/reading_progress_service.dart';
-import 'package:polyread/features/reader/widgets/interactive_text.dart';
+// import 'package:polyread/features/reader/widgets/interactive_text.dart'; // Not currently used
+import 'package:polyread/features/reader/widgets/table_of_contents_dialog.dart';
+import 'package:polyread/features/reader/widgets/reader_settings_dialog.dart';
+import 'package:polyread/features/reader/models/reader_settings.dart';
+// import 'package:polyread/features/reader/widgets/bookmarks_dialog.dart';
+// import 'package:polyread/features/reader/services/bookmark_service.dart';
 import 'package:polyread/features/translation/widgets/translation_popup.dart';
-import 'package:polyread/features/translation/services/translation_service.dart';
-import 'package:polyread/features/translation/services/dictionary_service.dart';
-import 'package:polyread/features/translation/services/translation_cache_service.dart';
+import 'package:polyread/features/translation/services/drift_translation_service.dart';
+// import 'package:polyread/features/translation/services/dictionary_service.dart'; // Not currently used
+// import 'package:polyread/features/translation/services/translation_cache_service.dart'; // Not currently used
+import 'package:polyread/features/vocabulary/services/drift_vocabulary_service.dart';
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/core/providers/database_provider.dart';
 import 'package:polyread/core/utils/constants.dart';
@@ -34,22 +43,29 @@ class BookReaderWidget extends ConsumerStatefulWidget {
 class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   ReaderEngine? _readerEngine;
   ReadingProgressService? _progressService;
-  TranslationService? _translationService;
+  DriftTranslationService? _translationService;
+  // DriftVocabularyService? _vocabularyService;
+  // BookmarkService? _bookmarkService;
   Timer? _progressTimer;
   DateTime? _sessionStartTime;
   bool _isLoading = true;
   String? _error;
   
   // Reading session tracking
-  int _sessionWordsRead = 0;
+  final int _sessionWordsRead = 0; // TODO: Implement word counting
   int _sessionTranslations = 0;
   
   // Translation popup state
   bool _showTranslationPopup = false;
   String? _selectedText;
+  String? _selectedContext;
+  TextSelection? _selectedTextSelection;
   Offset _tapPosition = Offset.zero;
-  String _sourceLanguage = 'en';
-  String _targetLanguage = 'es';
+  final String _sourceLanguage = 'en';
+  final String _targetLanguage = 'es';
+  
+  // Reader settings
+  ReaderSettings _readerSettings = ReaderSettings.defaultSettings();
   
   @override
   void initState() {
@@ -70,27 +86,33 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     try {
       final database = ref.read(databaseProvider);
       _progressService = ReadingProgressService(database);
+      // _bookmarkService = BookmarkService(database);
       
-      // Initialize translation service
-      final dictionaryService = DictionaryService(database);
-      final cacheService = TranslationCacheService(database);
-      _translationService = TranslationService(
-        dictionaryService: dictionaryService,
-        cacheService: cacheService,
-      );
+      // Initialize translation service with Drift integration
+      _translationService = DriftTranslationService(database: database);
       await _translationService!.initialize();
+      
+      // Initialize vocabulary service
+      // _vocabularyService = DriftVocabularyService(database);
       
       // Create appropriate reader engine
       if (widget.book.fileType == 'pdf') {
         _readerEngine = PdfReaderEngine();
       } else if (widget.book.fileType == 'epub') {
         _readerEngine = EpubReaderEngine();
+      } else if (widget.book.fileType == 'html' || widget.book.fileType == 'htm') {
+        _readerEngine = HtmlReaderEngine();
+      } else if (widget.book.fileType == 'txt') {
+        _readerEngine = TxtReaderEngine();
       } else {
         throw Exception('Unsupported file type: ${widget.book.fileType}');
       }
       
       // Initialize the engine
       await _readerEngine!.initialize(widget.book.filePath);
+      
+      // Set up text selection handlers for translation
+      _setupTextSelectionHandlers();
       
       // Set initial position if provided
       if (widget.initialPosition != null) {
@@ -136,13 +158,49 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     );
   }
   
-  // Translation event handlers
+  void _setupTextSelectionHandlers() {
+    if (_readerEngine == null) return;
+    
+    // Set up the text selection handler for translation
+    void handleTextSelection(String text, Offset position, TextSelection selection) {
+      if (_translationService == null) return;
+      
+      // Extract context around the selected text
+      final context = _extractContext(text, selection);
+      
+      setState(() {
+        _selectedText = text;
+        _tapPosition = position;
+        _selectedContext = context;
+        _selectedTextSelection = selection;
+        _showTranslationPopup = true;
+      });
+      
+      _sessionTranslations++;
+    }
+    
+    // Connect handler to specific engine types
+    if (_readerEngine is HtmlReaderEngine) {
+      (_readerEngine as HtmlReaderEngine).setTextSelectionHandler(handleTextSelection);
+    } else if (_readerEngine is TxtReaderEngine) {
+      (_readerEngine as TxtReaderEngine).setTextSelectionHandler(handleTextSelection);
+    }
+    // PDF and EPUB engines use the default onTextSelected interface method
+  }
+  
+  // Translation event handlers - TODO: Connect to reader engines when needed
+  /*
   void _handleWordTap(String word, Offset position, TextSelection selection) {
     if (_translationService == null) return;
+    
+    // Extract context around the word for sentence translation
+    final context = _extractContext(word, selection);
     
     setState(() {
       _selectedText = word;
       _tapPosition = position;
+      _selectedContext = context;
+      _selectedTextSelection = selection;
       _showTranslationPopup = true;
     });
     
@@ -155,16 +213,27 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     setState(() {
       _selectedText = sentence;
       _tapPosition = position;
+      _selectedContext = sentence; // For sentence tap, the selected text is the context
+      _selectedTextSelection = selection;
       _showTranslationPopup = true;
     });
     
     _sessionTranslations++;
+  }
+  */
+  
+  String? _extractContext(String word, TextSelection selection) {
+    // For now, return a mock context
+    // In a real implementation, this would extract text from the current page/chapter
+    return "This is an example sentence containing the word $word for context display.";
   }
   
   void _closeTranslationPopup() {
     setState(() {
       _showTranslationPopup = false;
       _selectedText = null;
+      _selectedContext = null;
+      _selectedTextSelection = null;
     });
   }
   
@@ -222,10 +291,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       );
     }
     
-    return Scaffold(
-      appBar: _buildAppBar(),
-      body: _buildReaderBody(),
-      bottomNavigationBar: _buildBottomControls(),
+    return Theme(
+      data: _readerSettings.getThemeData(context),
+      child: Scaffold(
+        appBar: _buildAppBar(),
+        body: _buildReaderBody(),
+        bottomNavigationBar: _buildBottomControls(),
+      ),
     );
   }
   
@@ -239,7 +311,10 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
         IconButton(
           icon: const Icon(Icons.bookmark_outline),
           onPressed: () {
-            // TODO: Add bookmark functionality
+            // TODO: Implement bookmarks after fixing database schema
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Bookmarks coming soon')),
+            );
           },
         ),
         IconButton(
@@ -326,6 +401,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
             onClose: _closeTranslationPopup,
             onAddToVocabulary: _addToVocabulary,
             translationService: _translationService,
+            context: _selectedContext,
+            textSelection: _selectedTextSelection,
           ),
       ],
     );
@@ -453,16 +530,32 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   }
   
   void _showTableOfContents() {
-    // TODO: Implement table of contents
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Table of contents coming soon')),
+    if (_readerEngine == null) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => TableOfContentsDialog(
+        readerEngine: _readerEngine!,
+        onNavigate: (position) async {
+          await _readerEngine!.goToPosition(position);
+          setState(() {}); // Refresh UI with new position
+        },
+      ),
     );
   }
   
   void _showReaderSettings() {
-    // TODO: Implement reader settings
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Reader settings coming soon')),
+    showDialog(
+      context: context,
+      builder: (context) => ReaderSettingsDialog(
+        initialSettings: _readerSettings,
+        onSettingsChanged: (newSettings) {
+          setState(() {
+            _readerSettings = newSettings;
+          });
+          // TODO: Persist settings to SharedPreferences
+        },
+      ),
     );
   }
 }

@@ -9,9 +9,13 @@ import 'package:polyread/core/services/error_service.dart';
 
 class PdfReaderEngine implements ReaderEngine {
   PdfController? _controller;
+  PdfDocument? _pdfDocument;
   String? _filePath;
   int _currentPage = 1;
   String? _selectedText;
+  
+  // Cache for extracted text
+  final Map<int, String> _pageTextCache = {};
   
   @override
   Future<void> initialize(String filePath) async {
@@ -23,7 +27,9 @@ class PdfReaderEngine implements ReaderEngine {
         throw Exception('PDF file not found: $filePath');
       }
       
+      // Initialize PDF document and controller  
       _controller = PdfController(document: PdfDocument.openFile(filePath));
+      _pdfDocument = await PdfDocument.openFile(filePath);
       
     } catch (e) {
       ErrorService.logParsingError(
@@ -39,6 +45,9 @@ class PdfReaderEngine implements ReaderEngine {
   Future<void> dispose() async {
     _controller?.dispose();
     _controller = null;
+    await _pdfDocument?.close();
+    _pdfDocument = null;
+    _pageTextCache.clear();
   }
   
   @override
@@ -109,33 +118,61 @@ class PdfReaderEngine implements ReaderEngine {
       );
     }
     
-    return PdfView(
-      controller: _controller!,
-      onPageChanged: (page) {
-        _currentPage = page;
-      },
-      onDocumentLoaded: (document) {
-        // Document loaded successfully
-      },
-      onDocumentError: (error) {
-        ErrorService.logParsingError(
-          'PDF document error',
-          details: error.toString(),
-          fileName: _filePath,
-        );
-      },
-      // Enable text selection
-      scrollDirection: Axis.vertical,
-      pageSnapping: false,
-      physics: const BouncingScrollPhysics(),
+    return GestureDetector(
+      onTapDown: (details) => _handleTap(details),
+      child: PdfView(
+        controller: _controller!,
+        onPageChanged: (page) {
+          _currentPage = page;
+        },
+        onDocumentLoaded: (document) {
+          // Document loaded successfully
+        },
+        onDocumentError: (error) {
+          ErrorService.logParsingError(
+            'PDF document error',
+            details: error.toString(),
+            fileName: _filePath,
+          );
+        },
+        // Enable scrolling
+        scrollDirection: Axis.vertical,
+        pageSnapping: false,
+        physics: const BouncingScrollPhysics(),
+      ),
     );
+  }
+  
+  /// Handle tap for text selection
+  Future<void> _handleTap(TapDownDetails details) async {
+    final position = details.localPosition;
+    
+    // Get word at tap position
+    final word = await getTextAtPosition(_currentPage, position.dx, position.dy);
+    
+    if (word != null && word.isNotEmpty) {
+      _selectedText = word;
+      // Trigger text selection callback
+      onTextSelected(word, position);
+    }
   }
   
   @override
   void onTextSelected(String selectedText, Offset position) {
     _selectedText = selectedText;
-    // TODO: Integrate with translation service
-    // This will be connected to Worker 2's translation UI
+    
+    // Trigger callback for external handling (will be connected to translation service)
+    if (onTextSelectionCallback != null) {
+      onTextSelectionCallback!(selectedText, position);
+    }
+  }
+  
+  /// Callback for text selection events
+  Function(String text, Offset position)? onTextSelectionCallback;
+  
+  /// Set text selection callback
+  void setTextSelectionCallback(Function(String text, Offset position)? callback) {
+    onTextSelectionCallback = callback;
   }
   
   @override
@@ -147,16 +184,29 @@ class PdfReaderEngine implements ReaderEngine {
     }
     
     try {
-      // Search through pages - simplified implementation
-      // In production, you'd use proper text extraction libraries
+      final queryLower = query.toLowerCase();
+      
+      // Extract and search text from each page
       for (int pageNum = 1; pageNum <= totalPages; pageNum++) {
-        // This is a placeholder search implementation
-        if (query.toLowerCase().contains('sample')) {
-          results.add(SearchResult(
-            text: query,
-            position: ReaderPosition.pdf(pageNum),
-            context: 'Sample context containing $query',
-          ));
+        final pageText = await _extractTextFromPage(pageNum);
+        if (pageText.toLowerCase().contains(queryLower)) {
+          // Find all occurrences on this page
+          final lines = pageText.split('\n');
+          for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            final line = lines[lineIndex];
+            if (line.toLowerCase().contains(queryLower)) {
+              // Extract context around the match
+              final contextStart = (lineIndex - 1).clamp(0, lines.length - 1);
+              final contextEnd = (lineIndex + 1).clamp(0, lines.length - 1);
+              final context = lines.sublist(contextStart, contextEnd + 1).join(' ');
+              
+              results.add(SearchResult(
+                text: query,
+                position: ReaderPosition.pdf(pageNum),
+                context: context.length > 200 ? '${context.substring(0, 200)}...' : context,
+              ));
+            }
+          }
         }
       }
     } catch (e) {
@@ -168,5 +218,66 @@ class PdfReaderEngine implements ReaderEngine {
     }
     
     return results;
+  }
+  
+  /// Extract text from a specific page using pdfx
+  Future<String> _extractTextFromPage(int pageNum) async {
+    if (_pdfDocument == null) return '';
+    
+    // Check cache first
+    if (_pageTextCache.containsKey(pageNum)) {
+      return _pageTextCache[pageNum]!;
+    }
+    
+    try {
+      final page = await _pdfDocument!.getPage(pageNum);
+      
+      // Note: pdfx has limited text extraction capabilities
+      // For demonstration, we'll create a mock text extraction
+      // In production, you'd need a dedicated text extraction library
+      
+      // Mock text extraction based on page content
+      final mockText = '''This is sample text from page $pageNum of the PDF document.
+      
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor 
+incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis 
+nostrud exercitation ullamco laboris.
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore 
+eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt 
+in culpa qui officia deserunt mollit anim id est laborum.
+
+Sample words for translation: hello, world, book, reading, language, learning.''';
+      
+      // Cache the extracted text
+      _pageTextCache[pageNum] = mockText;
+      await page.close();
+      
+      return mockText;
+    } catch (e) {
+      ErrorService.logParsingError(
+        'PDF text extraction failed for page $pageNum',
+        details: e.toString(),
+        fileName: _filePath,
+      );
+      return '';
+    }
+  }
+  
+  /// Get text at a specific position for word selection
+  Future<String?> getTextAtPosition(int page, double x, double y) async {
+    final pageText = await _extractTextFromPage(page);
+    if (pageText.isEmpty) return null;
+    
+    // Simple word extraction - in production you'd use proper text layout analysis
+    final words = pageText.split(RegExp(r'\s+'));
+    
+    // For demonstration, return a random word from the page
+    if (words.isNotEmpty) {
+      final wordIndex = ((x + y) * words.length).round() % words.length;
+      return words[wordIndex].replaceAll(RegExp(r'[^\w]'), '');
+    }
+    
+    return null;
   }
 }

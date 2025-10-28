@@ -77,20 +77,25 @@ class DictionaryService {
     ''');
   }
   
-  /// Look up a word in the dictionary
+  /// Look up a word in the dictionary (supports bidirectional Wiktionary lookups)
   Future<List<DictionaryEntry>> lookupWord({
     required String word,
-    required String language,
+    required String sourceLanguage,
+    required String targetLanguage,
     int limit = 10,
   }) async {
     final stopwatch = Stopwatch()..start();
     
     try {
-      // First try exact match
+      // For bidirectional Wiktionary dictionaries, we need to check both:
+      // 1. Direct lookup (word in source language)
+      // 2. Reverse lookup (word appears in definitions for target language)
+      
+      // First try exact word match in the source language context
       final exactResults = await _database.query(
         _tableName,
-        where: 'word = ? AND language = ?',
-        whereArgs: [word.toLowerCase(), language],
+        where: 'word = ? AND (language = ? OR language = ?)',
+        whereArgs: [word.toLowerCase(), sourceLanguage, '$sourceLanguage-$targetLanguage'],
         orderBy: 'source_dictionary ASC',
         limit: limit,
       );
@@ -100,14 +105,21 @@ class DictionaryService {
         return exactResults.map((row) => DictionaryEntry.fromMap(row)).toList();
       }
       
-      // If no exact match, try FTS search
+      // If no exact match, try FTS search across both directions
       final ftsResults = await _database.rawQuery('''
         SELECT d.* FROM $_tableName d
         JOIN $_ftsTableName fts ON d.id = fts.rowid
-        WHERE $_ftsTableName MATCH ? AND d.language = ?
+        WHERE $_ftsTableName MATCH ? 
+        AND (d.language = ? OR d.language = ? OR d.language = ?)
         ORDER BY bm25($_ftsTableName) ASC
         LIMIT ?
-      ''', [word.toLowerCase(), language, limit]);
+      ''', [
+        word.toLowerCase(), 
+        sourceLanguage, 
+        targetLanguage,
+        '$sourceLanguage-$targetLanguage',
+        limit
+      ]);
       
       stopwatch.stop();
       return ftsResults.map((row) => DictionaryEntry.fromMap(row)).toList();
@@ -117,20 +129,29 @@ class DictionaryService {
     }
   }
   
-  /// Search dictionary entries with full-text search
+  /// Search dictionary entries with full-text search (supports bidirectional Wiktionary)
   Future<List<DictionaryEntry>> searchEntries({
     required String query,
-    required String language,
+    required String sourceLanguage,
+    required String targetLanguage,
     int limit = 20,
   }) async {
     try {
+      // Search across bidirectional Wiktionary dictionaries
       final results = await _database.rawQuery('''
         SELECT d.* FROM $_tableName d
         JOIN $_ftsTableName fts ON d.id = fts.rowid
-        WHERE $_ftsTableName MATCH ? AND d.language = ?
+        WHERE $_ftsTableName MATCH ? 
+        AND (d.language = ? OR d.language = ? OR d.language = ?)
         ORDER BY bm25($_ftsTableName) ASC
         LIMIT ?
-      ''', [query.toLowerCase(), language, limit]);
+      ''', [
+        query.toLowerCase(), 
+        sourceLanguage, 
+        targetLanguage,
+        '$sourceLanguage-$targetLanguage',
+        limit
+      ]);
       
       return results.map((row) => DictionaryEntry.fromMap(row)).toList();
     } catch (e) {
@@ -155,35 +176,40 @@ class DictionaryService {
   Future<void> addEntries(List<DictionaryEntry> entries, {
     Function(int processed, int total)? onProgress,
   }) async {
-    final batch = _database.batch();
     
     for (int i = 0; i < entries.length; i++) {
+      var batch = _database.batch();
+      
       batch.insert(
         _tableName,
         entries[i].toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
       
-      // Process in chunks of 1000 to avoid memory issues
-      if ((i + 1) % 1000 == 0 || i == entries.length - 1) {
-        await batch.commit(noResult: true);
-        batch = _database.batch();
+      // Process individually to avoid batch reassignment issues
+      await batch.commit(noResult: true);
+      
+      if ((i + 1) % 100 == 0) {
         onProgress?.call(i + 1, entries.length);
       }
     }
   }
   
-  /// Import StarDict format dictionary
+  /// Import StarDict format dictionary (handles bidirectional Wiktionary)
   Future<void> importStarDict({
     required String dictionaryName,
     required List<StarDictEntry> entries,
-    required String language,
+    required String sourceLanguage,
+    required String targetLanguage,
     Function(int processed, int total)? onProgress,
   }) async {
+    // For Wiktionary dictionaries, use compound language code to indicate bidirectional
+    final languageCode = '$sourceLanguage-$targetLanguage';
+    
     final dictionaryEntries = entries.map((starDictEntry) {
       return DictionaryEntry(
         word: starDictEntry.word,
-        language: language,
+        language: languageCode, // e.g., "fr-en" for French-English Wiktionary
         definition: starDictEntry.definition,
         pronunciation: starDictEntry.pronunciation,
         partOfSpeech: starDictEntry.partOfSpeech,

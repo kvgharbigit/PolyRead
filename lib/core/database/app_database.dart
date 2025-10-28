@@ -118,6 +118,32 @@ class LanguagePacks extends Table {
   DateTimeColumn get lastUsedAt => dateTime().nullable()();
 }
 
+// Bookmarks for specific positions in books
+class Bookmarks extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bookId => integer().references(Books, #id, onDelete: KeyAction.cascade)();
+  
+  // Position data (JSON serialized ReaderPosition)
+  TextColumn get position => text()(); // JSON position data for any format
+  
+  // Bookmark metadata
+  TextColumn get title => text().nullable()(); // User-defined bookmark name
+  TextColumn get note => text().nullable()(); // Optional user note
+  TextColumn get excerpt => text().nullable()(); // Text excerpt from the bookmark location
+  
+  // Visual markers
+  TextColumn get color => text().withDefault(const Constant('blue'))(); // Bookmark color
+  TextColumn get icon => text().withDefault(const Constant('bookmark'))(); // Icon name
+  
+  // Timestamps
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get lastAccessedAt => dateTime().nullable()();
+  
+  // Metadata for sorting and organization
+  BoolColumn get isQuickBookmark => boolean().withDefault(const Constant(false))(); // Auto-created vs user-created
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))(); // For manual ordering
+}
+
 // User settings and preferences
 class UserSettings extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -134,13 +160,14 @@ class UserSettings extends Table {
   DictionaryEntries,
   DictionaryFts,
   LanguagePacks,
+  Bookmarks,
   UserSettings,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -193,10 +220,18 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_lemma ON dictionary_entries(lemma)');
       await customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_language_pair ON dictionary_entries(language_pair)');
       await customStatement('CREATE INDEX IF NOT EXISTS idx_language_packs_active ON language_packs(is_active)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_bookmarks_book_id ON bookmarks(book_id)');
+      await customStatement('CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at)');
       await customStatement('CREATE INDEX IF NOT EXISTS idx_user_settings_key ON user_settings(key)');
     },
     onUpgrade: (Migrator m, int from, int to) async {
-      // Handle future schema migrations here
+      // TODO: Fix bookmarks table migration
+      // if (from < 2) {
+      //   // Add bookmarks table in schema version 2
+      //   await m.createTable(bookmarks);
+      //   await customStatement('CREATE INDEX IF NOT EXISTS idx_bookmarks_book_id ON bookmarks(book_id)');
+      //   await customStatement('CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at)');
+      // }
     },
   );
 

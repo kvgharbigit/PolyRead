@@ -3,6 +3,7 @@
 
 import 'package:sqflite/sqflite.dart';
 import '../models/translation_request.dart';
+import '../models/dictionary_entry.dart';
 import '../services/translation_service.dart';
 
 class TranslationCacheService {
@@ -234,7 +235,7 @@ class TranslationCacheService {
     return TranslationResponse(
       request: request,
       translatedText: row['translated_text'] as String?,
-      dictionaryEntries: _decodeDictionaryEntries(row['dictionary_entries'] as String?),
+      dictionaryEntries: _decodeDictionaryEntries(row['dictionary_entries'] as String?)?.cast<DictionaryEntry>(),
       providerId: row['provider_id'] as String?,
       latencyMs: row['latency_ms'] as int,
       success: (row['success'] as int) == 1,

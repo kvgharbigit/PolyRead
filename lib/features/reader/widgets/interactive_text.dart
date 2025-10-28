@@ -116,17 +116,13 @@ class _InteractiveTextState extends State<InteractiveText> {
   Offset _getWordPosition(int start, int end) {
     if (_textPainter == null) return Offset.zero;
 
-    final startPosition = _textPainter!.getPositionForOffset(
-      _textPainter!.getOffsetForCaret(TextPosition(offset: start), Rect.zero),
-    );
-    final endPosition = _textPainter!.getPositionForOffset(
-      _textPainter!.getOffsetForCaret(TextPosition(offset: end), Rect.zero),
-    );
+    final startOffset = _textPainter!.getOffsetForCaret(TextPosition(offset: start), Rect.zero);
+    final endOffset = _textPainter!.getOffsetForCaret(TextPosition(offset: end), Rect.zero);
 
     // Return the center point of the word
     return Offset(
-      (startPosition.dx + endPosition.dx) / 2,
-      (startPosition.dy + endPosition.dy) / 2,
+      (startOffset.dx + endOffset.dx) / 2,
+      (startOffset.dy + endOffset.dy) / 2,
     );
   }
 

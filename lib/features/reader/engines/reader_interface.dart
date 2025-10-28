@@ -1,6 +1,7 @@
 // Reader Interface
 // Common interface for PDF and EPUB readers
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 abstract class ReaderEngine {
@@ -89,6 +90,14 @@ class ReaderPosition {
     );
   }
   
+  /// Create from JSON string
+  factory ReaderPosition.fromJsonString(String jsonString) {
+    final json = Map<String, dynamic>.from(
+      jsonDecode(jsonString) as Map<String, dynamic>
+    );
+    return ReaderPosition.fromJson(json);
+  }
+  
   @override
   String toString() {
     if (pageNumber != null) {
@@ -114,13 +123,13 @@ class SearchResult {
 }
 
 /// Text selection data for translation
-class TextSelection {
+class ReaderTextSelection {
   final String text;
   final ReaderPosition position;
   final Rect bounds;
   final DateTime timestamp;
   
-  const TextSelection({
+  const ReaderTextSelection({
     required this.text,
     required this.position,
     required this.bounds,

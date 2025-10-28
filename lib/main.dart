@@ -3,20 +3,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/navigation/app_router.dart';
 import 'core/providers/settings_provider.dart';
+import 'core/providers/database_provider.dart';
+import 'core/database/app_database.dart';
 import 'core/services/settings_service.dart';
 import 'core/services/file_service.dart';
+import 'core/services/migration_service.dart';
 import 'core/providers/file_service_provider.dart';
+import 'core/services/dictionary_loader_service.dart';
 import 'core/utils/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize services
+  // Initialize core services
   final settingsService = SettingsService();
   await settingsService.initialize();
   
   final fileService = FileService();
   await fileService.initialize();
+  
+  // Initialize database (temporary container for migration)
+  final database = AppDatabase();
+  
+  // Run data migrations
+  final migrationService = MigrationService(
+    database: database,
+    fileService: fileService,
+  );
+  await migrationService.runMigrations();
+  
+  // Get migration stats
+  final stats = await migrationService.getFileStatusStats();
+  print('📊 File Status: $stats');
+  
+  // Initialize dictionary data
+  final dictionaryLoader = DictionaryLoaderService(database);
+  await dictionaryLoader.loadSampleDictionary();
+  final dictStats = await dictionaryLoader.getDictionaryStats();
+  print('📚 Dictionary: ${dictStats['totalEntries']} entries, ${dictStats['languagePairs']} language pairs');
   
   runApp(
     ProviderScope(

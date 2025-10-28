@@ -15,7 +15,7 @@ class TranslationPopup extends ConsumerStatefulWidget {
   final Offset position;
   final VoidCallback onClose;
   final Function(String word)? onAddToVocabulary;
-  final TranslationService? translationService;
+  final dynamic translationService; // Accept both TranslationService and DriftTranslationService
   final String? context; // Surrounding text for context display
   final TextSelection? textSelection; // Original text selection
 
@@ -398,56 +398,57 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
   }
 
   TextSpan _buildContextTextSpan() {
-    final context = widget.context!;
+    final contextText = widget.context!;
     final selectedText = widget.selectedText;
     final selection = widget.textSelection;
+    final theme = Theme.of(context);
 
     if (selection == null) {
       return TextSpan(
-        text: context,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        text: contextText,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       );
     }
 
     // Find the selected text in context and highlight it
-    final selectedStart = context.indexOf(selectedText);
+    final selectedStart = contextText.indexOf(selectedText);
     if (selectedStart == -1) {
       return TextSpan(
-        text: context,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        text: contextText,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       );
     }
 
     final selectedEnd = selectedStart + selectedText.length;
-    final beforeText = context.substring(0, selectedStart);
-    final afterText = context.substring(selectedEnd);
+    final beforeText = contextText.substring(0, selectedStart);
+    final afterText = contextText.substring(selectedEnd);
 
     return TextSpan(
       children: [
         if (beforeText.isNotEmpty)
           TextSpan(
             text: beforeText,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         TextSpan(
           text: selectedText,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.primary,
             fontWeight: FontWeight.bold,
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+            backgroundColor: theme.colorScheme.primaryContainer.withOpacity(0.5),
           ),
         ),
         if (afterText.isNotEmpty)
           TextSpan(
             text: afterText,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
       ],
@@ -526,49 +527,152 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
     final entries = _currentResponse!.dictionaryEntries!;
     if (entries.isEmpty) return const SizedBox.shrink();
 
+    final currentEntry = entries[_currentResultIndex];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(
-              Icons.menu_book,
-              size: 16,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Dictionary',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
+        // Dictionary header with word pair
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Word pair (source → target)
+              RichText(
+                text: TextSpan(
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: widget.selectedText,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' → ',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.7),
+                      ),
+                    ),
+                    TextSpan(
+                      text: currentEntry.definition.split('.').first, // First sentence as translation
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (entries.length > 1) ...[
-              const Spacer(),
-              Text(
-                '${_currentResultIndex + 1} of ${entries.length}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              
+              const SizedBox(height: 8),
+              
+              // Part of speech with cycling counter
+              if (currentEntry.partOfSpeech != null)
+                GestureDetector(
+                  onTap: entries.length > 1 ? _nextResult : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      entries.length > 1 
+                          ? '${_getPartOfSpeechEmoji(currentEntry.partOfSpeech!)} ${currentEntry.partOfSpeech} (${_currentResultIndex + 1}/${entries.length})'
+                          : '${_getPartOfSpeechEmoji(currentEntry.partOfSpeech!)} ${currentEntry.partOfSpeech}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
             ],
-          ],
+          ),
         ),
+        
         const SizedBox(height: 12),
-        _buildDictionaryEntry(entries[_currentResultIndex]),
+        
+        // Full definition
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  currentEntry.definition,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if (currentEntry.exampleSentence != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    currentEntry.exampleSentence!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                ],
+                if (currentEntry.pronunciation != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.volume_up,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        currentEntry.pronunciation!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        
+        // Cycling controls
         if (entries.length > 1) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               TextButton.icon(
                 onPressed: _currentResultIndex > 0 ? _previousResult : null,
-                icon: const Icon(Icons.chevron_left),
+                icon: const Icon(Icons.chevron_left, size: 16),
                 label: const Text('Previous'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
               TextButton.icon(
                 onPressed: _currentResultIndex < entries.length - 1 ? _nextResult : null,
                 label: const Text('Next'),
-                icon: const Icon(Icons.chevron_right),
+                icon: const Icon(Icons.chevron_right, size: 16),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ],
           ),
@@ -577,6 +681,22 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
     );
   }
 
+  String _getPartOfSpeechEmoji(String partOfSpeech) {
+    const emojiMap = {
+      'noun': '🏷️',
+      'verb': '⚡',
+      'adjective': '🎨',
+      'adverb': '🔄',
+      'pronoun': '👤',
+      'preposition': '📍',
+      'conjunction': '🔗',
+      'interjection': '❗',
+    };
+    return emojiMap[partOfSpeech.toLowerCase()] ?? '📝';
+  }
+
+  // TODO: Implement when needed for detailed dictionary view
+  /*
   Widget _buildDictionaryEntry(DictionaryEntry entry) {
     return Card(
       margin: EdgeInsets.zero,
@@ -646,45 +766,138 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
       ),
     );
   }
+  */
 
-  Widget _buildTranslationResult() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+  Widget _buildSentenceTranslation() {
+    // Always try to get sentence translation for context
+    return FutureBuilder<String?>(
+      future: _getSentenceTranslation(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data == null) {
+          return const SizedBox.shrink();
+        }
+
+        final sentenceTranslation = snapshot.data!;
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              _currentResponse!.source == TranslationSource.mlKit
-                  ? Icons.offline_bolt
-                  : Icons.cloud,
-              size: 16,
-              color: Theme.of(context).colorScheme.primary,
+            const SizedBox(height: 16),
+            
+            // Section divider
+            Divider(
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
             ),
-            const SizedBox(width: 8),
+            
+            const SizedBox(height: 8),
+            
+            // Sentence context header
             Text(
-              _currentResponse!.source == TranslationSource.mlKit
-                  ? 'ML Kit Translation'
-                  : 'Google Translate',
+              'Sentence Context',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 color: Theme.of(context).colorScheme.primary,
                 fontWeight: FontWeight.bold,
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              _currentResponse!.translatedText!,
-              style: Theme.of(context).textTheme.bodyLarge,
+            
+            const SizedBox(height: 12),
+            
+            // Translated sentence (prominent)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.green.withOpacity(0.3),
+                ),
+              ),
+              child: Text(
+                sentenceTranslation,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+            
+            const SizedBox(height: 8),
+            
+            // Original sentence context (if available)
+            if (widget.context != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.blue.withOpacity(0.3),
+                  ),
+                ),
+                child: RichText(
+                  text: _buildContextTextSpan(),
+                ),
+              ),
+          ],
+        );
+      },
     );
+  }
+
+  Future<String?> _getSentenceTranslation() async {
+    if (widget.translationService == null || widget.context == null) {
+      return null;
+    }
+
+    try {
+      // Extract sentence containing the selected word
+      final sentence = _extractSentenceFromContext();
+      if (sentence.isEmpty) return null;
+
+      final response = await widget.translationService!.translateText(
+        text: sentence,
+        sourceLanguage: widget.sourceLanguage,
+        targetLanguage: widget.targetLanguage,
+      );
+
+      return response.success ? response.translatedText : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  String _extractSentenceFromContext() {
+    if (widget.context == null) return '';
+    
+    final context = widget.context!;
+    final selectedText = widget.selectedText;
+    
+    // Find the selected text position
+    final selectedIndex = context.indexOf(selectedText);
+    if (selectedIndex == -1) return context;
+    
+    // Find sentence boundaries around the selected text
+    int sentenceStart = 0;
+    int sentenceEnd = context.length;
+    
+    // Look backwards for sentence start
+    for (int i = selectedIndex; i >= 0; i--) {
+      if (i < context.length - 1 && RegExp(r'[.!?]\s').hasMatch(context.substring(i, i + 2))) {
+        sentenceStart = i + 2;
+        break;
+      }
+    }
+    
+    // Look forwards for sentence end
+    for (int i = selectedIndex; i < context.length - 1; i++) {
+      if (RegExp(r'[.!?]\s').hasMatch(context.substring(i, i + 2))) {
+        sentenceEnd = i + 1;
+        break;
+      }
+    }
+    
+    return context.substring(sentenceStart, sentenceEnd).trim();
   }
 
   Widget _buildActionButtons() {
@@ -770,18 +983,3 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
   }
 }
 
-class DictionaryLookupResult {
-  final String query;
-  final String language;
-  final List<DictionaryEntry> entries;
-  final int latencyMs;
-  
-  const DictionaryLookupResult({
-    required this.query,
-    required this.language,
-    required this.entries,
-    required this.latencyMs,
-  });
-  
-  bool get hasResults => entries.isNotEmpty;
-}

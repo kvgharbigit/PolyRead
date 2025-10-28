@@ -21,35 +21,38 @@ final githubReleasesRepositoryProvider = Provider<GitHubReleasesRepository>((ref
 });
 
 /// Storage Management Service Provider
-final storageManagementServiceProvider = Provider<StorageManagementService>((ref) {
-  final database = ref.watch(databaseProvider);
-  return StorageManagementService(database: database);
-});
+/// TODO: Fix database type mismatch - service expects sqflite.Database but getting AppDatabase
+// final storageManagementServiceProvider = Provider<StorageManagementService>((ref) {
+//   final database = ref.watch(databaseProvider);
+//   return StorageManagementService(database: database);
+// });
 
 /// Pack Download Service Provider
 /// Combines GitHub repository and storage management
-final packDownloadServiceProvider = Provider<PackDownloadService>((ref) {
-  final repository = ref.watch(githubReleasesRepositoryProvider);
-  final storageService = ref.watch(storageManagementServiceProvider);
-  
-  return PackDownloadService(
-    repository: repository,
-    storageService: storageService,
-    maxConcurrentDownloads: 3, // Limit concurrent downloads
-  );
-});
+/// TODO: Fix after storage service is fixed
+// final packDownloadServiceProvider = Provider<PackDownloadService>((ref) {
+//   final repository = ref.watch(githubReleasesRepositoryProvider);
+//   final storageService = ref.watch(storageManagementServiceProvider);
+//   
+//   return PackDownloadService(
+//     repository: repository,
+//     storageService: storageService,
+//     maxConcurrentDownloads: 3, // Limit concurrent downloads
+//   );
+// });
 
 /// Language Pack Manager State Provider
 /// Manages available and installed language packs
-final languagePacksProvider = StateNotifierProvider<LanguagePacksNotifier, LanguagePacksState>((ref) {
-  final downloadService = ref.watch(packDownloadServiceProvider);
-  final repository = ref.watch(githubReleasesRepositoryProvider);
-  
-  return LanguagePacksNotifier(
-    downloadService: downloadService,
-    repository: repository,
-  );
-});
+/// TODO: Fix after download service is fixed
+// final languagePacksProvider = StateNotifierProvider<LanguagePacksNotifier, LanguagePacksState>((ref) {
+//   final downloadService = ref.watch(packDownloadServiceProvider);
+//   final repository = ref.watch(githubReleasesRepositoryProvider);
+//   
+//   return LanguagePacksNotifier(
+//     downloadService: downloadService,
+//     repository: repository,
+//   );
+// });
 
 /// Language Packs State
 class LanguagePacksState {

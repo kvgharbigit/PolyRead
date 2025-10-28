@@ -18,7 +18,9 @@ class FileService {
   late final Directory _languagePacksDir;
   
   Future<void> initialize() async {
-    _appDocDir = await getApplicationDocumentsDirectory();
+    // Use Application Support Directory for better persistence
+    // This directory persists between app updates and rebuilds
+    _appDocDir = await getApplicationSupportDirectory();
     _booksDir = Directory(p.join(_appDocDir.path, _booksFolder));
     _coversDir = Directory(p.join(_appDocDir.path, _coversFolder));
     _languagePacksDir = Directory(p.join(_appDocDir.path, _languagePacksFolder));
@@ -27,6 +29,11 @@ class FileService {
     await _booksDir.create(recursive: true);
     await _coversDir.create(recursive: true);
     await _languagePacksDir.create(recursive: true);
+    
+    print('📁 PolyRead file directories initialized:');
+    print('   Books: ${_booksDir.path}');
+    print('   Covers: ${_coversDir.path}');
+    print('   Language Packs: ${_languagePacksDir.path}');
   }
   
   // Book file operations
@@ -47,6 +54,7 @@ class FileService {
     }
   }
   
+  /// Check if a book file exists at the given path
   Future<bool> bookExists(String filePath) async {
     return await File(filePath).exists();
   }
@@ -128,6 +136,61 @@ class FileService {
     // Remove temporary files, old covers for deleted books, etc.
     // This would be called periodically or when storage is low
   }
+
+  /// Migrate books from old Documents directory to new Application Support directory
+  Future<List<String>> migrateExistingBooks() async {
+    final List<String> migratedFiles = [];
+    
+    try {
+      // Get old Documents directory
+      final oldDocDir = await getApplicationDocumentsDirectory();
+      final oldBooksDir = Directory(p.join(oldDocDir.path, _booksFolder));
+      
+      if (!await oldBooksDir.exists()) {
+        print('📁 No old books directory found, skipping migration');
+        return migratedFiles;
+      }
+      
+      print('📁 Migrating books from Documents to Application Support...');
+      
+      // List all files in old books directory
+      await for (final entity in oldBooksDir.list()) {
+        if (entity is File) {
+          final fileName = p.basename(entity.path);
+          final newPath = p.join(_booksDir.path, fileName);
+          
+          // Only migrate if file doesn't already exist in new location
+          if (!await File(newPath).exists()) {
+            try {
+              await entity.copy(newPath);
+              migratedFiles.add(newPath);
+              print('✅ Migrated: $fileName');
+            } catch (e) {
+              print('❌ Failed to migrate $fileName: $e');
+            }
+          }
+        }
+      }
+      
+      print('📁 Migration complete: ${migratedFiles.length} files migrated');
+    } catch (e) {
+      print('❌ Migration failed: $e');
+    }
+    
+    return migratedFiles;
+  }
+
+  /// Fix file paths in database by updating them to new location
+  Future<String?> findBookInNewLocation(String oldPath) async {
+    final fileName = p.basename(oldPath);
+    final newPath = p.join(_booksDir.path, fileName);
+    
+    if (await File(newPath).exists()) {
+      return newPath;
+    }
+    
+    return null;
+  }
   
   // File validation
   Future<bool> validateBookFile(String filePath) async {
@@ -135,7 +198,25 @@ class FileService {
     if (!await file.exists()) return false;
     
     final extension = p.extension(filePath).toLowerCase();
-    return extension == '.pdf' || extension == '.epub';
+    return extension == '.pdf' || extension == '.epub' || extension == '.html' || extension == '.htm' || extension == '.txt';
+  }
+  
+  /// Get the file type based on extension
+  FileType getFileType(String filePath) {
+    final extension = p.extension(filePath).toLowerCase();
+    switch (extension) {
+      case '.pdf':
+        return FileType.pdf;
+      case '.epub':
+        return FileType.epub;
+      case '.html':
+      case '.htm':
+        return FileType.html;
+      case '.txt':
+        return FileType.txt;
+      default:
+        return FileType.unknown;
+    }
   }
   
   Future<String> calculateFileChecksum(String filePath) async {
@@ -177,4 +258,12 @@ class StorageInfo {
   double get booksMB => booksBytes / (1024 * 1024);
   double get coversMB => coversBytes / (1024 * 1024);
   double get languagePacksMB => languagePacksBytes / (1024 * 1024);
+}
+
+enum FileType {
+  pdf,
+  epub,
+  html,
+  txt,
+  unknown,
 }

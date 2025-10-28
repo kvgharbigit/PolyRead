@@ -4,7 +4,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:path/path.dart' as path;
 import 'package:epubx/epubx.dart' as epubx;
 import 'package:pdfx/pdfx.dart';
@@ -23,9 +23,9 @@ class BookImportService {
   /// Import books from device storage
   Future<List<BookImportResult>> importBooksFromDevice() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'epub'],
+      final result = await file_picker.FilePicker.platform.pickFiles(
+        type: file_picker.FileType.custom,
+        allowedExtensions: ['pdf', 'epub', 'html', 'htm', 'txt'],
         allowMultiple: true,
         allowCompression: false,
         withReadStream: false,

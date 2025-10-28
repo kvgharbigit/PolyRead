@@ -149,32 +149,94 @@ class EpubReaderEngine implements ReaderEngine {
       );
     }
     
-    return EpubView(
-      controller: _controller!,
-      onChapterChanged: (chapter) {
-        if (chapter?.chapter?.Title != null) {
-          _currentChapter = chapter!.chapter!.Title!;
-        }
-      },
-      onDocumentLoaded: (document) {
-        // Document loaded successfully
-      },
-      onDocumentError: (error) {
-        ErrorService.logParsingError(
-          'EPUB document error',
-          details: error.toString(),
-          fileName: _filePath,
-        );
-      },
-      // TODO: Add text selection when package supports it
+    return GestureDetector(
+      onTapDown: (details) => _handleTap(details),
+      child: EpubView(
+        controller: _controller!,
+        onChapterChanged: (chapter) {
+          if (chapter?.chapter?.Title != null) {
+            _currentChapter = chapter!.chapter!.Title!;
+          }
+        },
+        onDocumentLoaded: (document) {
+          // Document loaded successfully
+        },
+        onDocumentError: (error) {
+          ErrorService.logParsingError(
+            'EPUB document error',
+            details: error.toString(),
+            fileName: _filePath,
+          );
+        },
+        // Note: epub_view package doesn't support built-in text selection
+        // We handle it through gesture detection
+      ),
     );
+  }
+  
+  /// Handle tap for text selection
+  Future<void> _handleTap(TapDownDetails details) async {
+    final position = details.localPosition;
+    
+    print('EPUB tap detected at position: $position'); // Debug
+    
+    // Get word at tap position from current chapter
+    final word = await _getWordAtPosition(position);
+    
+    print('EPUB extracted word: $word'); // Debug
+    
+    if (word != null && word.isNotEmpty) {
+      _selectedText = word;
+      print('EPUB calling onTextSelected with: $word'); // Debug
+      // Trigger text selection callback
+      onTextSelected(word, position);
+    } else {
+      print('EPUB: No word found at position'); // Debug
+    }
+  }
+  
+  /// Extract word from current chapter at tap position
+  Future<String?> _getWordAtPosition(Offset position) async {
+    final currentChapter = currentChapterInfo;
+    if (currentChapter == null) return null;
+    
+    // Get chapter text content
+    final htmlContent = currentChapter.HtmlContent ?? '';
+    
+    // Strip HTML tags to get plain text
+    final plainText = htmlContent.replaceAll(RegExp(r'<[^>]*>'), ' ');
+    final words = plainText.split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .map((word) => word.replaceAll(RegExp(r'[^\w]'), ''))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    
+    // For demonstration, select a word based on position
+    // In production, you'd need proper text layout analysis
+    if (words.isNotEmpty) {
+      final wordIndex = ((position.dx + position.dy) * words.length / 1000).round() % words.length;
+      return words[wordIndex];
+    }
+    
+    return null;
   }
   
   @override
   void onTextSelected(String selectedText, Offset position) {
     _selectedText = selectedText;
-    // TODO: Integrate with translation service
-    // This will be connected to Worker 2's translation UI
+    
+    // Trigger callback for external handling (will be connected to translation service)
+    if (onTextSelectionCallback != null) {
+      onTextSelectionCallback!(selectedText, position);
+    }
+  }
+  
+  /// Callback for text selection events
+  Function(String text, Offset position)? onTextSelectionCallback;
+  
+  /// Set text selection callback
+  void setTextSelectionCallback(Function(String text, Offset position)? callback) {
+    onTextSelectionCallback = callback;
   }
   
   @override

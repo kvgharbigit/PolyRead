@@ -262,7 +262,8 @@ class TranslationService {
     try {
       final entries = await _dictionaryService.lookupWord(
         word: word,
-        language: language,
+        sourceLanguage: language,
+        targetLanguage: language, // For now, use same language
         limit: 5,
       );
       

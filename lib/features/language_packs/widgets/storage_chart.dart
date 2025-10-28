@@ -178,10 +178,13 @@ class _StorageChartState extends State<StorageChart>
           ),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 150),
+          child: SingleChildScrollView(
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: [
             ...sortedPacks.map((entry) {
               final packId = entry.key;
               final size = entry.value;
@@ -198,7 +201,9 @@ class _StorageChartState extends State<StorageChart>
               _formatBytes(_currentQuota!.availableBytes),
               Colors.grey.shade300,
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ],
     );

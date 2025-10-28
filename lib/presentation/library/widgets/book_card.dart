@@ -34,80 +34,77 @@ class BookCard extends StatelessWidget {
             ),
             
             // Book info
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.all(AppConstants.smallPadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Title
-                    Text(
+            Container(
+              height: 66, // Fixed height to prevent overflow
+              padding: const EdgeInsets.all(AppConstants.smallPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Title
+                  Expanded(
+                    child: Text(
                       book.title,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
-                      maxLines: 2,
+                      maxLines: book.author != null ? 1 : 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    
-                    if (book.author != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        book.author!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey.shade600,
+                  ),
+                  
+                  if (book.author != null) ...[
+                    Text(
+                      book.author!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                  ] else
+                    const SizedBox(height: 4),
+                  
+                  // File type and actions
+                  Row(
+                    children: [
+                      // File type badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        decoration: BoxDecoration(
+                          color: _getFileTypeColor().withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          book.fileType.toUpperCase(),
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: _getFileTypeColor(),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      
+                      const Spacer(),
+                      
+                      // Delete button
+                      InkWell(
+                        onTap: onDelete,
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.delete_outline,
+                            size: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
                       ),
                     ],
-                    
-                    const SizedBox(height: 8),
-                    
-                    // File type and actions
-                    Row(
-                      children: [
-                        // File type badge
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getFileTypeColor().withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              book.fileType.toUpperCase(),
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: _getFileTypeColor(),
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        
-                        const SizedBox(width: 8),
-                        
-                        // Delete button
-                        InkWell(
-                          onTap: onDelete,
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(
-                              Icons.delete_outline,
-                              size: 16,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
