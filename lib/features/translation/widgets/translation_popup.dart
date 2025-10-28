@@ -360,6 +360,100 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
     );
   }
 
+  Widget _buildContextDisplay() {
+    if (widget.context == null || widget.context!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Context',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          RichText(
+            text: _buildContextTextSpan(),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  TextSpan _buildContextTextSpan() {
+    final context = widget.context!;
+    final selectedText = widget.selectedText;
+    final selection = widget.textSelection;
+
+    if (selection == null) {
+      return TextSpan(
+        text: context,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    // Find the selected text in context and highlight it
+    final selectedStart = context.indexOf(selectedText);
+    if (selectedStart == -1) {
+      return TextSpan(
+        text: context,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    final selectedEnd = selectedStart + selectedText.length;
+    final beforeText = context.substring(0, selectedStart);
+    final afterText = context.substring(selectedEnd);
+
+    return TextSpan(
+      children: [
+        if (beforeText.isNotEmpty)
+          TextSpan(
+            text: beforeText,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        TextSpan(
+          text: selectedText,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.bold,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+          ),
+        ),
+        if (afterText.isNotEmpty)
+          TextSpan(
+            text: afterText,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildLoadingContent() {
     return const Padding(
       padding: EdgeInsets.all(24),
@@ -413,10 +507,13 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Dictionary definitions on top with cycling
             if (_currentResponse!.dictionaryEntries != null)
-              _buildDictionaryResults()
-            else if (_currentResponse!.translatedText != null)
-              _buildTranslationResult(),
+              _buildDictionaryResults(),
+            
+            // Sentence translation below (always try to get sentence translation)
+            _buildSentenceTranslation(),
+            
             const SizedBox(height: 16),
             _buildActionButtons(),
           ],

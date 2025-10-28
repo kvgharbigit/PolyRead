@@ -69,8 +69,14 @@ class AppConstants {
   static const String networkErrorMessage = 'Network connection error. Please check your internet connection.';
   static const String fileErrorMessage = 'File access error. Please check file permissions.';
   
-  // URLs
-  static const String githubRepoUrl = 'https://github.com/polyread/polyread';
-  static const String issuesUrl = 'https://github.com/polyread/polyread/issues';
-  static const String languagePacksUrl = 'https://github.com/polyread/language-packs/releases';
+  // URLs and Repository Configuration
+  static const String githubOwner = 'kvgharbigit';
+  static const String githubRepository = 'PolyRead';
+  static const String githubRepoUrl = 'https://github.com/kvgharbigit/PolyRead';
+  static const String issuesUrl = 'https://github.com/kvgharbigit/PolyRead/issues';
+  static const String languagePacksUrl = 'https://github.com/kvgharbigit/PolyRead/releases';
+  
+  // Language Pack Configuration
+  static const String languagePacksReleaseTag = 'language-packs-v1.0';
+  static const String registryFileName = 'updated-registry.json';
 }
