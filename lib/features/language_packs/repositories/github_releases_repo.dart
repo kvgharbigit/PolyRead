@@ -102,8 +102,8 @@ class GitHubReleasesRepository {
       
       final manifests = <LanguagePackManifest>[];
       
-      // Only include one pack per language pair since they're bidirectional
-      final readyPacks = ['eng-spa', 'de-en']; // Available main packs only (bidirectional)
+      // Only include the most complete packs available
+      final readyPacks = ['de-en', 'eng-spa']; // Use larger eng-spa (11,598 entries vs es-en 4,497 entries)
       for (final packData in packsList) {
         final packId = packData['id'] as String?;
         
@@ -230,10 +230,10 @@ class GitHubReleasesRepository {
     
     return LanguagePackManifest(
       id: '$sourceCode-$targetCode',
-      name: '$sourceCode ↔ $targetCode Dictionary',
+      name: '$sourceCode ↔ $targetCode Dictionary (Bidirectional)',
       language: sourceCode,
-      version: packData['version'] ?? '1.0.0',
-      description: packData['description'] ?? 'Bidirectional dictionary for $sourceCode ↔ $targetCode translation',
+      version: packData['version'] ?? '2.0.0',
+      description: packData['description'] ?? 'Single bidirectional dictionary with optimized lookup for both $sourceCode ↔ $targetCode directions',
       totalSize: sqliteAsset['size'] ?? 0,
       files: [
         LanguagePackFile(
@@ -245,7 +245,7 @@ class GitHubReleasesRepository {
           downloadUrl: sqliteAsset['browser_download_url'],
         ),
       ],
-      supportedTargetLanguages: [targetCode],
+      supportedTargetLanguages: [targetCode, sourceCode], // Bidirectional support
       releaseDate: DateTime.parse(release['published_at']),
       author: 'PolyRead Team',
       license: 'CC BY-SA 4.0',

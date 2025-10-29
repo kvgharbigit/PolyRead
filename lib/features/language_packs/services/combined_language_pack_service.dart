@@ -188,10 +188,26 @@ class CombinedLanguagePackService {
     print('');
     print('CombinedLanguagePackService: 📊 INITIALIZING PROGRESS TRACKING...');
     
+    // Get actual file size from GitHub manifest
+    print('CombinedLanguagePackService: Fetching actual file size from GitHub...');
+    int actualTotalBytes = 50 * 1024 * 1024; // fallback estimate
+    try {
+      final manifests = await _repository.getAvailableLanguagePacks();
+      final manifest = manifests.firstWhere(
+        (m) => m.id == packId,
+        orElse: () => throw Exception('Pack not found in GitHub'),
+      );
+      actualTotalBytes = manifest.totalSize;
+      print('CombinedLanguagePackService: Got actual size from GitHub: $actualTotalBytes bytes (${(actualTotalBytes / 1024 / 1024).toStringAsFixed(1)} MB)');
+    } catch (e) {
+      print('CombinedLanguagePackService: Could not get actual size from GitHub: $e');
+      print('CombinedLanguagePackService: Using fallback size: ${(actualTotalBytes / 1024 / 1024).toStringAsFixed(1)} MB');
+    }
+    
     final progress = DownloadProgress.initial(
       packId: packId,
       packName: '$sourceLanguage ↔ $targetLanguage Language Pack',
-      totalBytes: 50 * 1024 * 1024, // Estimated 50MB total
+      totalBytes: actualTotalBytes, // Use actual GitHub file size
       totalFiles: 2, // Dictionary + ML Kit models
     ).copyWith(
       stageDescription: 'Preparing installation...',
@@ -375,23 +391,11 @@ class CombinedLanguagePackService {
       print('');
       print('CombinedLanguagePackService: 📋 STEP 4 - REGISTERING LANGUAGE PACKS...');
       
-      // Calculate actual downloaded size for registration
-      int actualSizeBytes = 0;
-      try {
-        // Get the actual size of downloaded files
-        final packDir = Directory('/tmp/language_packs/$packId'); // Adjust path as needed
-        if (await packDir.exists()) {
-          await for (final file in packDir.list(recursive: true)) {
-            if (file is File) {
-              actualSizeBytes += await file.length();
-            }
-          }
-        }
-        print('CombinedLanguagePackService: Calculated actual download size: $actualSizeBytes bytes (${(actualSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB)');
-      } catch (e) {
-        print('CombinedLanguagePackService: Could not calculate actual size, using estimate: $e');
-        actualSizeBytes = 50 * 1024 * 1024; // fallback to 50MB estimate
-      }
+      // Use the actual file size from the progress tracking
+      final currentProgress = _activeDownloads[packId];
+      int actualSizeBytes = currentProgress?.totalBytes ?? (50 * 1024 * 1024);
+      
+      print('CombinedLanguagePackService: Using actual file size from progress: $actualSizeBytes bytes (${(actualSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB)');
       
       try {
         print('CombinedLanguagePackService: Registering forward pack ($packId)...');

@@ -65,8 +65,16 @@ class LanguagePackRegistryService {
     for (final packData in packsData) {
       final pack = packData as Map<String, dynamic>;
       
-      // Only include main packs (not companion/legacy packs) for UI display to avoid duplicates
-      if (pack['pack_type'] == 'main') {
+      // Include main, bidirectional, and complete legacy packs (no companions) for UI display
+      final packType = pack['pack_type'] as String?;
+      final isHidden = pack['hidden'] == true;
+      final packId = pack['id'] as String;
+      
+      // Use the most complete packs available (prefer legacy eng-spa over smaller es-en)
+      final shouldInclude = (packType == 'main' || packType == 'bidirectional' || 
+                           (packType == 'legacy' && packId == 'eng-spa')) && !isHidden;
+      
+      if (shouldInclude) {
         packs.add(LanguagePackInfo(
           id: pack['id'] as String,
           name: pack['name'] as String,
@@ -80,7 +88,6 @@ class LanguagePackRegistryService {
           checksum: pack['checksum'] as String? ?? '',
           version: pack['version'] as String? ?? '1.0.0',
           packType: pack['pack_type'] as String? ?? 'main',
-          companionPackId: pack['companion_pack_id'] as String?,
           isAvailable: true,
           priority: _determinePriority(pack),
         ));
@@ -121,7 +128,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-fr',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -138,7 +144,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-it',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -155,7 +160,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-pt',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -172,7 +176,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-ru',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -189,7 +192,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-ko',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -206,7 +208,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-ja',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -223,7 +224,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-zh',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -240,7 +240,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-ar',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -257,7 +256,6 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'coming-soon',
-        companionPackId: 'en-hi',
         isAvailable: false,
         priority: 'coming-soon',
       ),
@@ -280,24 +278,22 @@ class LanguagePackRegistryService {
         checksum: '',
         version: '1.0.0',
         packType: 'main',
-        companionPackId: 'en-de',
         isAvailable: true,
         priority: 'high',
       ),
       LanguagePackInfo(
-        id: 'es-en',
-        name: '🇪🇸 Spanish ↔ 🇺🇸 English',
-        description: 'Wiktionary dictionary • 11,598 entries',
-        sourceLanguage: 'es',
-        targetLanguage: 'en',
+        id: 'eng-spa',
+        name: '🇪🇸 English ↔ Spanish',
+        description: 'Complete Wiktionary dictionary • 11,598 entries',
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
         entries: 11598,
-        sizeBytes: 455229,
-        sizeMb: 0.4,
+        sizeBytes: 22272519,
+        sizeMb: 21.2,
         downloadUrl: _registryUrl,
         checksum: '',
         version: '1.0.0',
-        packType: 'main',
-        companionPackId: 'en-es',
+        packType: 'legacy',
         isAvailable: true,
         priority: 'high',
       ),
@@ -318,7 +314,6 @@ class LanguagePackInfo {
   final String checksum;
   final String version;
   final String packType;
-  final String? companionPackId;
   final bool isAvailable;
   final String priority;
   
@@ -335,7 +330,6 @@ class LanguagePackInfo {
     required this.checksum,
     required this.version,
     required this.packType,
-    this.companionPackId,
     required this.isAvailable,
     required this.priority,
   });
