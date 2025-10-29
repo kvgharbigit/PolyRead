@@ -646,6 +646,37 @@ class CombinedLanguagePackService {
         onProgress?.call('Loading dictionary data...');
         print('CombinedLanguagePackService._installDictionaryPack: Dictionary data loading delegated to integration service');
         
+        // Actually call the integration service to load the dictionary data
+        try {
+          // Get the downloaded file path
+          final packDir = await _packService.getPackDirectory(matchingPack.id);
+          final zipFilePath = path.join(packDir.path, '${matchingPack.id}.sqlite.zip');
+          
+          print('CombinedLanguagePackService._installDictionaryPack: ZIP file path: $zipFilePath');
+          print('CombinedLanguagePackService._installDictionaryPack: ZIP file exists: ${await File(zipFilePath).exists()}');
+          
+          if (await File(zipFilePath).exists()) {
+            print('CombinedLanguagePackService._installDictionaryPack: Calling integration service to process ZIP file...');
+            final result = await _integrationService.installLanguagePack(matchingPack, zipFilePath);
+            
+            if (result.success) {
+              print('CombinedLanguagePackService._installDictionaryPack: ✅ Dictionary data loaded successfully');
+              print('CombinedLanguagePackService._installDictionaryPack: Dictionary installed: ${result.dictionaryInstalled}');
+              onProgress?.call('Dictionary data loaded successfully');
+            } else {
+              print('CombinedLanguagePackService._installDictionaryPack: ⚠️ Dictionary installation completed with warnings');
+              print('CombinedLanguagePackService._installDictionaryPack: Error: ${result.error}');
+              onProgress?.call('Dictionary installation completed with warnings');
+            }
+          } else {
+            print('CombinedLanguagePackService._installDictionaryPack: ❌ ZIP file not found at expected location');
+            onProgress?.call('Dictionary file not found, using basic setup');
+          }
+        } catch (e) {
+          print('CombinedLanguagePackService._installDictionaryPack: ❌ Error during dictionary data loading: $e');
+          onProgress?.call('Dictionary installation failed, continuing with basic setup');
+        }
+        
       } else {
         print('CombinedLanguagePackService._installDictionaryPack: ⚠️ No matching dictionary pack found');
         onProgress?.call('No dictionary pack found for $sourceLanguage-$targetLanguage, using basic setup');
