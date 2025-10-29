@@ -107,7 +107,7 @@ class GitHubReleasesRepository {
       
       final manifests = <LanguagePackManifest>[];
       
-      // Only include the most complete packs available
+      // Only include the most complete packs available - match what's actually in registry
       final readyPacks = ['de-en', 'eng-spa']; // Use larger eng-spa (11,598 entries vs es-en 4,497 entries)
       for (final packData in packsList) {
         final packId = packData['id'] as String?;

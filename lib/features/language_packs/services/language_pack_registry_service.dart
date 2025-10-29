@@ -71,8 +71,9 @@ class LanguagePackRegistryService {
       final packId = pack['id'] as String;
       
       // Use the most complete packs available (prefer legacy eng-spa over smaller es-en)
-      final shouldInclude = (packType == 'main' || packType == 'bidirectional' || 
-                           (packType == 'legacy' && packId == 'eng-spa')) && !isHidden;
+      // Include all non-companion packs that match our available files
+      final availableFiles = ['de-en', 'eng-spa']; // Match actual GitHub files
+      final shouldInclude = availableFiles.contains(packId) && packType != 'companion';
       
       if (shouldInclude) {
         packs.add(LanguagePackInfo(
