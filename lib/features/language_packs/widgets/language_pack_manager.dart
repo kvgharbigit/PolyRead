@@ -931,41 +931,91 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
 
   /// Get detailed information about an installed pack
   Future<Map<String, dynamic>> _getPackDetails(String sourceCode, String targetCode) async {
+    final packId = '$sourceCode-$targetCode';
+    print('');
+    print('🔍 _getPackDetails: Starting verification for $packId');
+    print('🔍 _getPackDetails: Source: $sourceCode, Target: $targetCode');
+    
     try {
-      final packId = '$sourceCode-$targetCode';
       final combinedService = ref.read(combinedLanguagePackServiceProvider);
       
       // Get pack statistics 
+      print('🔍 _getPackDetails: Fetching pack statistics...');
       final stats = await combinedService.getPackStatistics(
         sourceLanguage: sourceCode,
         targetLanguage: targetCode,
       );
+      print('🔍 _getPackDetails: Statistics retrieved: $stats');
       
       // Get pack info from database
+      print('🔍 _getPackDetails: Fetching pack from database...');
       final packService = DriftLanguagePackService(ref.read(db.databaseProvider));
       final packs = await packService.getInstalledPacks();
-      final pack = packs.firstWhere((p) => p.packId == packId, orElse: () => throw Exception('Pack not found'));
+      print('🔍 _getPackDetails: Found ${packs.length} installed packs');
       
-      // Calculate rough size from entries (estimation)
+      final pack = packs.firstWhere(
+        (p) => p.packId == packId, 
+        orElse: () => throw Exception('Pack $packId not found in database')
+      );
+      print('🔍 _getPackDetails: Found pack in database:');
+      print('  - Pack ID: ${pack.packId}');
+      print('  - Name: ${pack.name}');
+      print('  - Version: ${pack.version}');
+      print('  - Size Bytes: ${pack.sizeBytes}');
+      print('  - Installed At: ${pack.installedAt}');
+      print('  - Is Installed: ${pack.isInstalled}');
+      print('  - Is Active: ${pack.isActive}');
+      
+      // Calculate actual size from database record
+      final actualSizeMB = pack.sizeBytes > 0 
+          ? (pack.sizeBytes / 1024 / 1024).toStringAsFixed(1)
+          : 'Unknown';
+      
+      // Get entry count from stats
       final entries = stats['total_entries'] ?? 0;
-      final estimatedSizeMB = (entries * 50 / 1000).toStringAsFixed(1); // rough estimate
+      final fileCount = stats['file_count'] ?? 1;
       
-      return {
+      print('🔍 _getPackDetails: Calculated details:');
+      print('  - Entries: $entries');
+      print('  - Actual Size: $actualSizeMB MB (${pack.sizeBytes} bytes)');
+      print('  - File Count: $fileCount');
+      print('  - Install Date: ${pack.installedAt?.toIso8601String().split('T')[0]}');
+      
+      final result = {
         'entries': entries,
-        'sizeMB': estimatedSizeMB,
-        'files': stats['file_count'] ?? 1,
+        'sizeMB': actualSizeMB,
+        'files': fileCount,
         'version': pack.version,
         'installDate': pack.installedAt?.toIso8601String().split('T')[0] ?? 'Unknown',
+        'sizeBytes': pack.sizeBytes,
+        'isActive': pack.isActive,
       };
+      
+      print('🔍 _getPackDetails: Final result: $result');
+      print('🔍 _getPackDetails: ✅ Verification completed for $packId');
+      print('');
+      
+      return result;
     } catch (e) {
-      print('Error getting pack details: $e');
-      return {
+      print('🔍 _getPackDetails: ❌ Error getting pack details for $packId: $e');
+      print('🔍 _getPackDetails: Error type: ${e.runtimeType}');
+      print('🔍 _getPackDetails: Stack trace:');
+      print(StackTrace.current);
+      
+      final errorResult = {
         'entries': '?',
         'sizeMB': '?',
         'files': '?',
         'version': '?',
         'installDate': 'Unknown',
+        'sizeBytes': 0,
+        'isActive': false,
       };
+      
+      print('🔍 _getPackDetails: Returning error result: $errorResult');
+      print('');
+      
+      return errorResult;
     }
   }
 

@@ -375,8 +375,32 @@ class CombinedLanguagePackService {
       print('');
       print('CombinedLanguagePackService: 📋 STEP 4 - REGISTERING LANGUAGE PACKS...');
       
+      // Calculate actual downloaded size for registration
+      int actualSizeBytes = 0;
+      try {
+        // Get the actual size of downloaded files
+        final packDir = Directory('/tmp/language_packs/$packId'); // Adjust path as needed
+        if (await packDir.exists()) {
+          await for (final file in packDir.list(recursive: true)) {
+            if (file is File) {
+              actualSizeBytes += await file.length();
+            }
+          }
+        }
+        print('CombinedLanguagePackService: Calculated actual download size: $actualSizeBytes bytes (${(actualSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB)');
+      } catch (e) {
+        print('CombinedLanguagePackService: Could not calculate actual size, using estimate: $e');
+        actualSizeBytes = 50 * 1024 * 1024; // fallback to 50MB estimate
+      }
+      
       try {
         print('CombinedLanguagePackService: Registering forward pack ($packId)...');
+        print('CombinedLanguagePackService: Registration details:');
+        print('  - Pack ID: $packId');
+        print('  - Source: $sourceLanguage');
+        print('  - Target: $targetLanguage');
+        print('  - Size: $actualSizeBytes bytes (${(actualSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB)');
+        
         await _packService.registerLanguagePack(
           packId: packId,
           name: '$sourceLanguage ↔ $targetLanguage Language Pack',
@@ -385,11 +409,11 @@ class CombinedLanguagePackService {
           targetLanguage: targetLanguage,
           packType: 'combined',
           version: '1.0.0',
-          sizeBytes: 50 * 1024 * 1024,
+          sizeBytes: actualSizeBytes,
           downloadUrl: '',
           checksum: '',
         );
-        print('CombinedLanguagePackService: ✅ Forward pack registered successfully');
+        print('CombinedLanguagePackService: ✅ Forward pack registered successfully with actual size: ${(actualSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB');
         
         print('CombinedLanguagePackService: Marking forward pack as installed...');
         await _packService.markPackAsInstalled(packId);
