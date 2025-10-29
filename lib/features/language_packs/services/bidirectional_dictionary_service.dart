@@ -53,6 +53,19 @@ class BidirectionalDictionaryService {
 
     print('BidirectionalDictionaryService: Forward entries (${packRecord.sourceLanguage}->${packRecord.targetLanguage}): ${forwardEntryCount.length}');
     print('BidirectionalDictionaryService: Reverse entries (${packRecord.targetLanguage}->${packRecord.sourceLanguage}): ${reverseEntryCount.length}');
+    
+    // Debug: Check what entries actually exist in the database for this pack
+    final allEntries = await (_database.select(_database.dictionaryEntries)
+        ..limit(5))
+        .get();
+    print('BidirectionalDictionaryService: Sample of first 5 entries in database:');
+    for (final entry in allEntries) {
+      print('  - "${entry.writtenRep}" (${entry.sourceLanguage}->${entry.targetLanguage}) source: ${entry.source}');
+    }
+    
+    // Debug: Check total count in database
+    final totalEntries = await (_database.select(_database.dictionaryEntries)).get();
+    print('BidirectionalDictionaryService: Total entries in database: ${totalEntries.length}');
 
     final hasEntries = forwardEntryCount.isNotEmpty || reverseEntryCount.isNotEmpty;
     print('BidirectionalDictionaryService: Pack $packId ${hasEntries ? "HAS" : "DOES NOT HAVE"} dictionary entries');

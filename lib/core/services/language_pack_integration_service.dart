@@ -271,14 +271,14 @@ class LanguagePackIntegrationService {
           return DictionaryLoadResult(
             success: true,
             entriesLoaded: importResult.importedEntries,
-            message: importResult.message,
+            message: importResult.message ?? 'Import completed successfully',
           );
         } else {
           return DictionaryLoadResult(
             success: false,
             entriesLoaded: 0,
-            message: importResult.message,
-            error: importResult.error,
+            message: importResult.message ?? 'Import failed',
+            error: importResult.error ?? 'Unknown import error',
           );
         }
         

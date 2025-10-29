@@ -112,9 +112,6 @@ class DictionaryFts extends Table {
   
   @override
   String get tableName => 'dictionary_fts';
-  
-  @override
-  bool get withoutRowId => true;
 }
 
 class DictionaryFtsData {
@@ -211,20 +208,12 @@ class AppDatabase extends _$AppDatabase {
         )
       ''');
       
-      // Create triggers to keep FTS in sync with dictionary_entries and populate legacy fields
+      // Create triggers to keep FTS in sync with dictionary_entries
       await m.database.customStatement('''
         CREATE TRIGGER IF NOT EXISTS dictionary_entries_ai AFTER INSERT ON dictionary_entries
         BEGIN
           INSERT INTO dictionary_fts(written_rep, sense, trans_list)
           VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-          
-          -- Update legacy compatibility fields
-          UPDATE dictionary_entries SET 
-            lemma = new.written_rep,
-            definition = COALESCE(new.sense, ''),
-            part_of_speech = new.pos,
-            language_pair = new.source_language || '-' || new.target_language
-          WHERE id = new.id;
         END
       ''');
       
@@ -241,14 +230,6 @@ class AppDatabase extends _$AppDatabase {
           DELETE FROM dictionary_fts WHERE written_rep = old.written_rep AND sense = COALESCE(old.sense, '') AND trans_list = old.trans_list;
           INSERT INTO dictionary_fts(written_rep, sense, trans_list)
           VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-          
-          -- Update legacy compatibility fields
-          UPDATE dictionary_entries SET 
-            lemma = new.written_rep,
-            definition = COALESCE(new.sense, ''),
-            part_of_speech = new.pos,
-            language_pair = new.source_language || '-' || new.target_language
-          WHERE id = new.id;
         END
       ''');
       
@@ -354,14 +335,6 @@ class AppDatabase extends _$AppDatabase {
               DELETE FROM dictionary_fts WHERE written_rep = old.written_rep AND sense = COALESCE(old.sense, '') AND trans_list = old.trans_list;
               INSERT INTO dictionary_fts(written_rep, sense, trans_list)
               VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-              
-              -- Update legacy compatibility fields
-              UPDATE dictionary_entries SET 
-                lemma = new.written_rep,
-                definition = COALESCE(new.sense, ''),
-                part_of_speech = new.pos,
-                language_pair = new.source_language || '-' || new.target_language
-              WHERE id = new.id;
             END
           ''');
           

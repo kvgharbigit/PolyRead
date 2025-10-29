@@ -232,7 +232,9 @@ class SqliteImportService {
     int offset = 0;
     int totalImported = 0;
     
+    print('SqliteImport: Starting database transaction for batch import...');
     await _appDatabase.transaction(() async {
+      print('SqliteImport: Inside transaction, starting batch processing...');
       while (true) {
         // Fetch batch from source database
         final batchResults = await sourceDb.rawQuery('''
@@ -257,6 +259,7 @@ class SqliteImportService {
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
             dictionaryName: dictionaryName,
+            entryNumber: totalImported,
           );
           totalImported++;
         }
@@ -268,6 +271,16 @@ class SqliteImportService {
       }
     });
     
+    print('SqliteImport: Transaction completed. Verifying entries in database...');
+    
+    // Verify entries were actually inserted
+    final verificationCount = await (_appDatabase.select(_appDatabase.dictionaryEntries)
+        ..where((tbl) => tbl.source.equals(dictionaryName)))
+        .get();
+    
+    print('SqliteImport: Verification - Found ${verificationCount.length} entries in database for source "$dictionaryName"');
+    print('SqliteImport: Import reported: $totalImported, Database contains: ${verificationCount.length}');
+    
     return totalImported;
   }
   
@@ -277,6 +290,7 @@ class SqliteImportService {
     required String sourceLanguage,
     required String targetLanguage,
     required String dictionaryName,
+    required int entryNumber,
   }) async {
     try {
       final lemma = row['lemma'] as String? ?? '';
@@ -287,28 +301,43 @@ class SqliteImportService {
       
       if (lemma.isEmpty || definition.isEmpty) return;
       
-      // Create dictionary entry
+      // Debug: Log first few entries to understand language mapping
+      if (entryNumber < 3) {
+        print('SqliteImport: Entry #${entryNumber + 1}: "${lemma}" MANIFEST(${sourceLanguage}->${targetLanguage}) vs SQLITE(${rowSourceLanguage}->${rowTargetLanguage}) (direction: $direction)');
+      }
+      
+      // Create dictionary entry using MANIFEST language codes (not SQLite row codes)
+      // This ensures consistency with query expectations
       final companion = DictionaryEntriesCompanion.insert(
         writtenRep: lemma.toLowerCase(),
         sense: Value(definition),
         transList: definition, // Store definition as translation
         pos: const Value(null), // No part of speech in this format
-        sourceLanguage: rowSourceLanguage,
-        targetLanguage: rowTargetLanguage,
+        sourceLanguage: sourceLanguage, // Use manifest language codes
+        targetLanguage: targetLanguage, // Use manifest language codes
         frequency: const Value(1000), // Default frequency
         pronunciation: const Value(null),
         examples: const Value(null),
         source: Value(dictionaryName),
+        // Legacy compatibility fields
+        lemma: Value(lemma.toLowerCase()), // Fix: Explicitly set legacy lemma field
+        definition: Value(definition), // Fix: Explicitly set legacy definition field
+        partOfSpeech: const Value(null), // Fix: Explicitly set legacy partOfSpeech field
+        languagePair: Value('$sourceLanguage-$targetLanguage'), // Fix: Explicitly set legacy languagePair field
       );
       
-      await _appDatabase.into(_appDatabase.dictionaryEntries).insert(
+      final insertResult = await _appDatabase.into(_appDatabase.dictionaryEntries).insert(
         companion,
-        mode: InsertMode.insertOrIgnore, // Avoid duplicates
+        mode: InsertMode.insertOrIgnore, // Avoid duplicates (now that constraints are properly satisfied)
       );
+      
+      if (entryNumber < 3) {
+        print('SqliteImport: Entry #${entryNumber + 1} inserted with ID: $insertResult');
+      }
       
     } catch (e) {
       // Log error but continue with other entries
-      print('SqliteImport: Failed to import entry ${row['lemma']}: $e');
+      print('SqliteImport: Failed to import entry #${entryNumber + 1} "${row['lemma']}": $e');
     }
   }
 }

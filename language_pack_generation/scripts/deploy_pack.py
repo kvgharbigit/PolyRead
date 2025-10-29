@@ -145,7 +145,7 @@ class PackDeployer:
             return False
         
         # Load current registry
-        registry_path = Path.cwd() / "comprehensive-registry.json"
+        registry_path = self.base_dir.parent / "comprehensive-registry.json"
         
         if not registry_path.exists():
             self.logger.error(f"Registry not found: {registry_path}")

@@ -107,8 +107,7 @@ class GitHubReleasesRepository {
       
       final manifests = <LanguagePackManifest>[];
       
-      // Only include the most complete packs available - use standard naming convention
-      final readyPacks = ['de-en', 'es-en']; // Standard source-target naming convention
+      // Include all available packs from registry
       for (final packData in packsList) {
         final packId = packData['id'] as String?;
         
@@ -116,15 +115,11 @@ class GitHubReleasesRepository {
           continue;
         }
         
-        print('GitHubReleasesRepository: Checking pack: $packId (ready: ${readyPacks.contains(packId)})');
+        print('GitHubReleasesRepository: Checking pack: $packId');
         
-        // Only include packs that actually exist and are available
-        if (readyPacks.contains(packId)) {
-          print('GitHubReleasesRepository: Adding pack to manifests: $packId');
-          manifests.add(_createManifestFromRegistry(packId, packData, release));
-        } else {
-          print('GitHubReleasesRepository: Skipping pack (not in readyPacks): $packId');
-        }
+        // Include all packs from registry
+        print('GitHubReleasesRepository: Adding pack to manifests: $packId');
+        manifests.add(_createManifestFromRegistry(packId, packData, release));
       }
       
       print('GitHubReleasesRepository: Found ${manifests.length} available language packs');

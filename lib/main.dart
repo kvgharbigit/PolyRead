@@ -26,15 +26,20 @@ void main() async {
   final database = AppDatabase();
   
   // Run data migrations
-  final migrationService = MigrationService(
-    database: database,
-    fileService: fileService,
-  );
-  await migrationService.runMigrations();
-  
-  // Get migration stats
-  final stats = await migrationService.getFileStatusStats();
-  print('📊 File Status: $stats');
+  try {
+    final migrationService = MigrationService(
+      database: database,
+      fileService: fileService,
+    );
+    await migrationService.runMigrations();
+    
+    // Get migration stats
+    final stats = await migrationService.getFileStatusStats();
+    print('📊 File Status: $stats');
+  } catch (e) {
+    print('📊 Migration failed: $e');
+    // Continue app startup even if migration fails
+  }
   
   // Clear any existing fake/sample dictionaries
   try {
@@ -43,6 +48,7 @@ void main() async {
     print('📚 Dictionary: Cleared - real dictionaries will be downloaded when needed');
   } catch (e) {
     print('📚 Dictionary: Clear failed (migration in progress) - will be cleared after schema update: $e');
+    // Continue app startup even if dictionary clear fails
   }
   
   runApp(

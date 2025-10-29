@@ -1,13 +1,13 @@
 {
   "version": "2.0",
-  "timestamp": "2025-10-29T06:40:00Z",
+  "timestamp": "2025-10-29T02:55:52Z",
   "description": "PolyRead Language Pack Registry - Bidirectional System v2.0",
-  "total_language_pairs": 4,
-  "total_languages_supported": 5,
+  "total_language_pairs": 5,
+  "total_languages_supported": 6,
   "packs": [
     {
       "id": "de-en",
-      "name": "🇩🇪 German ↔ 🇺🇸 English",
+      "name": "\ud83c\udde9\ud83c\uddea German \u2194 \ud83c\uddfa\ud83c\uddf8 English",
       "description": "Bidirectional German-English dictionary with Wiktionary content",
       "source_language": "de",
       "target_language": "en",
@@ -29,7 +29,7 @@
     },
     {
       "id": "es-en",
-      "name": "🇪🇸 Spanish ↔ 🇺🇸 English", 
+      "name": "\ud83c\uddea\ud83c\uddf8 Spanish \u2194 \ud83c\uddfa\ud83c\uddf8 English",
       "description": "Bidirectional Spanish-English dictionary with Wiktionary content",
       "source_language": "es",
       "target_language": "en",
@@ -41,7 +41,7 @@
       "size_bytes": 1487456,
       "size_mb": 1.5,
       "entries": 29548,
-      "source": "Wiktionary", 
+      "source": "Wiktionary",
       "version": "2.0.0",
       "checksum": "",
       "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/es-en.sqlite.zip",
@@ -51,7 +51,7 @@
     },
     {
       "id": "fr-en",
-      "name": "🇫🇷 French ↔ 🇺🇸 English",
+      "name": "\ud83c\uddeb\ud83c\uddf7 French \u2194 \ud83c\uddfa\ud83c\uddf8 English",
       "description": "Bidirectional French-English dictionary with Wiktionary content",
       "source_language": "fr",
       "target_language": "en",
@@ -73,7 +73,7 @@
     },
     {
       "id": "it-en",
-      "name": "🇮🇹 Italian ↔ 🇺🇸 English",
+      "name": "\ud83c\uddee\ud83c\uddf9 Italian \u2194 \ud83c\uddfa\ud83c\uddf8 English",
       "description": "Bidirectional Italian-English dictionary with Wiktionary content",
       "source_language": "it",
       "target_language": "en",
@@ -92,53 +92,113 @@
       "created": "2025-10-29T02:18:00Z",
       "supports_bidirectional": true,
       "ml_kit_supported": true
+    },
+    {
+      "id": "pt-en",
+      "name": "\ud83c\uddf5\ud83c\uddf9 Portuguese \u2194 English",
+      "description": "Bidirectional Portuguese \u2194 English dictionary with Wiktionary content",
+      "source_language": "pt",
+      "target_language": "en",
+      "type": "bidirectional",
+      "pack_type": "main",
+      "hidden": false,
+      "format": "sqlite",
+      "file": "pt-en.sqlite.zip",
+      "size_bytes": 4124593,
+      "size_mb": 3.9,
+      "entries": 86951,
+      "source": "Wiktionary",
+      "version": "2.0.0",
+      "checksum": "845ffc9f725c7ce60327e5295fe3fe7b56ce94fc088566d127331e666abf4433",
+      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/pt-en.sqlite.zip",
+      "created": "2025-10-29T02:45:45Z",
+      "supports_bidirectional": true,
+      "ml_kit_supported": true
     }
   ],
   "supported_languages": [
     {
       "code": "de",
       "name": "German",
-      "supported_pairs": ["en"],
-      "main_packs": ["de-en"],
+      "supported_pairs": [
+        "en"
+      ],
+      "main_packs": [
+        "de-en"
+      ],
       "ml_kit_supported": true
     },
     {
-      "code": "es", 
+      "code": "es",
       "name": "Spanish",
-      "supported_pairs": ["en"],
-      "main_packs": ["es-en"],
+      "supported_pairs": [
+        "en"
+      ],
+      "main_packs": [
+        "es-en"
+      ],
       "ml_kit_supported": true
     },
     {
       "code": "fr",
       "name": "French",
-      "supported_pairs": ["en"],
-      "main_packs": ["fr-en"],
+      "supported_pairs": [
+        "en"
+      ],
+      "main_packs": [
+        "fr-en"
+      ],
       "ml_kit_supported": true
     },
     {
       "code": "it",
       "name": "Italian",
-      "supported_pairs": ["en"],
-      "main_packs": ["it-en"],
+      "supported_pairs": [
+        "en"
+      ],
+      "main_packs": [
+        "it-en"
+      ],
       "ml_kit_supported": true
     },
     {
       "code": "en",
-      "name": "English", 
-      "supported_pairs": ["de", "es", "fr", "it"],
-      "main_packs": ["de-en", "es-en", "fr-en", "it-en"],
+      "name": "English",
+      "supported_pairs": [
+        "de",
+        "es",
+        "fr",
+        "it",
+        "pt"
+      ],
+      "main_packs": [
+        "de-en",
+        "es-en",
+        "fr-en",
+        "it-en",
+        "pt-en"
+      ],
+      "ml_kit_supported": true
+    },
+    {
+      "code": "pt",
+      "name": "Portuguese",
+      "supported_pairs": [
+        "en"
+      ],
+      "main_packs": [
+        "pt-en"
+      ],
       "ml_kit_supported": true
     }
   ],
   "coming_soon": [
-    "Portuguese ↔ English",
-    "Russian ↔ English",
-    "Japanese ↔ English",
-    "Korean ↔ English",
-    "Chinese ↔ English",
-    "Arabic ↔ English",
-    "Hindi ↔ English"
+    "Russian \u2194 English",
+    "Japanese \u2194 English",
+    "Korean \u2194 English",
+    "Chinese \u2194 English",
+    "Arabic \u2194 English",
+    "Hindi \u2194 English"
   ],
   "technical_notes": {
     "bidirectional_approach": "Single database per language pair with direction field for optimal lookup",

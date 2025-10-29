@@ -72,9 +72,8 @@ class LanguagePackRegistryService {
       final isHidden = pack['hidden'] == true;
       final packId = pack['id'] as String;
       
-      // Available files on GitHub (using standard naming convention)
-      final availableFiles = ['de-en', 'es-en'];
-      final shouldInclude = availableFiles.contains(packId) && packType != 'companion';
+      // Include all non-companion packs
+      final shouldInclude = packType != 'companion' && !isHidden;
       
       if (shouldInclude) {
         foundPacks.add(packId);
