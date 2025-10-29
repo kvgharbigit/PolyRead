@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
+import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/services/dictionary_management_service.dart';
@@ -84,8 +85,8 @@ class CombinedLanguagePackService {
             await _database.update(_database.languagePacks)
               .replace(LanguagePacksCompanion(
                 packId: Value(packId),
-                isInstalled: const Value(false),
-                isActive: const Value(false),
+                isInstalled: Value(false),
+                isActive: Value(false),
               ));
               
             print('CombinedLanguagePackService: Marked $packId as not installed for clean reinstall');

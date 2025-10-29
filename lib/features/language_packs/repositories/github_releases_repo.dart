@@ -103,7 +103,7 @@ class GitHubReleasesRepository {
       final manifests = <LanguagePackManifest>[];
       
       // Only include packs that are "ready" and actually have files
-      final readyPacks = ['eng-spa', 'spa-eng']; // Only these actually exist
+      final readyPacks = ['eng-spa', 'spa-eng', 'de-en', 'en-de', 'es-en', 'en-es']; // Available packs
       for (final packData in packsList) {
         final packId = packData['id'] as String?;
         
@@ -111,8 +111,8 @@ class GitHubReleasesRepository {
           continue;
         }
         
-        // Only include ready packs that actually exist
-        if (readyPacks.contains(packId) && packData['status'] == 'ready') {
+        // Only include packs that actually exist and are available
+        if (readyPacks.contains(packId)) {
           manifests.add(_createManifestFromRegistry(packId, packData, release));
         }
       }

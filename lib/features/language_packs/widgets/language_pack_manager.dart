@@ -8,6 +8,7 @@ import '../models/download_progress.dart';
 import 'storage_chart.dart';
 import '../providers/language_packs_provider.dart';
 import '../services/drift_language_pack_service.dart';
+import '../services/language_pack_registry_service.dart' as registry_service;
 import '../../../core/providers/database_provider.dart' as db;
 
 
@@ -21,13 +22,27 @@ class LanguagePackManager extends ConsumerStatefulWidget {
 class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     with TickerProviderStateMixin {
   late TabController _tabController;
-  
-  
+  final registry_service.LanguagePackRegistryService _registryService = registry_service.LanguagePackRegistryService();
+  List<registry_service.LanguagePackInfo>? _availablePacks;
   
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadAvailablePacks();
+  }
+  
+  Future<void> _loadAvailablePacks() async {
+    try {
+      final packs = await _registryService.getAvailableLanguagePacks();
+      if (mounted) {
+        setState(() {
+          _availablePacks = packs;
+        });
+      }
+    } catch (e) {
+      print('LanguagePackManager: Failed to load available packs: $e');
+    }
   }
 
   @override
@@ -127,15 +142,84 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
         StreamBuilder<DownloadProgress>(
           stream: ref.watch(combinedLanguagePackServiceProvider).progressStream,
           builder: (context, progressSnapshot) {
-            // Rebuild when progress updates
-            return _buildLanguagePackTile('🇺🇸 English ↔ 🇪🇸 Spanish', 'en', 'es');
+            // Load available language packs from registry
+            return _buildAvailableLanguagePacks();
           },
         ),
       ],
     );
   }
 
-  Widget _buildLanguagePackTile(String label, String sourceCode, String targetCode) {
+  Widget _buildAvailableLanguagePacks() {
+    if (_availablePacks == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Column(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading available language packs...'),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    if (_availablePacks!.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Column(
+            children: [
+              Icon(Icons.warning, size: 48, color: Colors.orange),
+              SizedBox(height: 16),
+              Text('No language packs available'),
+              SizedBox(height: 8),
+              Text('Check your internet connection or try again later.'),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    return Column(
+      children: [
+        // Available packs section
+        Text(
+          'Available Language Packs',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Download dictionaries and offline translation models',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        // Available packs
+        ..._availablePacks!.map((pack) => _buildLanguagePackTile(
+          pack.displayLabel,
+          pack.sourceLanguage,
+          pack.targetLanguage,
+          description: pack.displayDescription,
+          priority: pack.priority,
+        )),
+      ],
+    );
+  }
+
+  Widget _buildLanguagePackTile(
+    String label, 
+    String sourceCode, 
+    String targetCode, {
+    String? description,
+    String priority = 'medium',
+  }) {
     final packId = '$sourceCode-$targetCode';
     final languagePacksState = ref.watch(languagePacksProvider);
     final combinedService = ref.watch(combinedLanguagePackServiceProvider);
@@ -157,6 +241,7 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     // Check download state
     final isDownloading = downloadProgress?.status == DownloadStatus.downloading;
     final isFailed = downloadProgress?.status == DownloadStatus.failed;
+    final isComingSoon = priority == 'coming-soon';
     
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -167,8 +252,10 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
               : isFailed
                   ? Colors.red.shade100
                   : isInstalled 
-                      ? Colors.green.shade100 
-                      : Theme.of(context).colorScheme.surfaceVariant,
+                      ? Colors.green.shade100
+                      : isComingSoon
+                          ? Colors.orange.shade100
+                          : Theme.of(context).colorScheme.surfaceVariant,
           child: isDownloading
               ? SizedBox(
                   width: 20,
@@ -184,13 +271,17 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
                   isFailed 
                       ? Icons.error 
                       : isInstalled 
-                          ? Icons.check 
-                          : Icons.download,
+                          ? Icons.check
+                          : isComingSoon
+                              ? Icons.schedule
+                              : Icons.download,
                   color: isFailed
                       ? Colors.red.shade700
                       : isInstalled 
-                          ? Colors.green.shade700 
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                          ? Colors.green.shade700
+                          : isComingSoon
+                              ? Colors.orange.shade700
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
         ),
         title: Text(
@@ -206,19 +297,23 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
                   ? 'Installation failed - Tap to retry'
                   : isInstalled 
                       ? 'Installed • Bidirectional support'
-                      : 'Dictionary + ML Kit models • ~50MB',
+                      : isComingSoon
+                          ? description ?? 'Coming soon'
+                          : description ?? 'Dictionary + ML Kit models • ~50MB',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: isDownloading
                 ? Theme.of(context).colorScheme.primary
                 : isFailed
                     ? Colors.red.shade700
                     : isInstalled 
-                        ? Colors.green.shade700 
-                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        ? Colors.green.shade700
+                        : isComingSoon
+                            ? Colors.orange.shade700
+                            : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
           ),
         ),
-        trailing: _buildActionWidget(isInstalled, isDownloading, isFailed, downloadProgress, sourceCode, targetCode),
-        onTap: isInstalled || isDownloading ? null : () => _installLanguagePair(sourceCode, targetCode),
+        trailing: _buildActionWidget(isInstalled, isDownloading, isFailed, downloadProgress, sourceCode, targetCode, isComingSoon),
+        onTap: isInstalled || isDownloading || isComingSoon ? null : () => _installLanguagePair(sourceCode, targetCode),
       ),
     );
   }
@@ -384,7 +479,8 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     bool isFailed,
     DownloadProgress? downloadProgress,
     String sourceCode, 
-    String targetCode
+    String targetCode,
+    bool isComingSoon,
   ) {
     if (isDownloading && downloadProgress != null) {
       // Show cancel button during download
@@ -440,6 +536,15 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
             ),
           ),
         ],
+      );
+    } else if (isComingSoon) {
+      // Show coming soon indicator
+      return TextButton(
+        onPressed: null,
+        child: Text(
+          'Coming Soon',
+          style: TextStyle(color: Colors.orange.shade700),
+        ),
       );
     } else {
       // Show install button for available packs
@@ -515,6 +620,7 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
 
   // Action methods
   Future<void> _refreshAvailablePacks() async {
+    await _loadAvailablePacks();
     await ref.read(languagePacksProvider.notifier).refresh();
   }
 
