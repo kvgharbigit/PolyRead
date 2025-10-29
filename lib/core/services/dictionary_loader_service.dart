@@ -11,16 +11,24 @@ class DictionaryLoaderService {
   
   DictionaryLoaderService(this._database);
   
-  /// Load sample dictionary data for testing
-  Future<void> loadSampleDictionary() async {
+  /// DISABLED: Load sample dictionary data for testing
+  /// Sample dictionaries are not supported - only real downloaded dictionaries
+  Future<void> loadSampleDictionary({bool forceReload = false}) async {
+    throw Exception('Sample dictionaries are not supported. Please download real dictionary data from language packs.');
     try {
       // Check if dictionary data already exists
       final existingCount = await (_database.select(_database.dictionaryEntries)
           ..limit(1)).get();
       
-      if (existingCount.isNotEmpty) {
-        print('Dictionary data already loaded');
+      if (existingCount.isNotEmpty && !forceReload) {
+        print('Dictionary data already loaded (${existingCount.length} entries found)');
         return;
+      }
+      
+      // Clear existing data if force reload is requested
+      if (forceReload && existingCount.isNotEmpty) {
+        print('Force reload requested, clearing existing dictionary data...');
+        await clearDictionary();
       }
       
       // Sample English-Spanish dictionary entries
@@ -34,9 +42,9 @@ class DictionaryLoaderService {
           (i + batchSize).clamp(0, sampleEntries.length),
         );
         
-        await _database.batch((batch) {
-          for (final entry in sampleEntries) {
-            batch.insert(_database.dictionaryEntries, entry);
+        await _database.batch((batchUpdater) {
+          for (final entry in batch) {
+            batchUpdater.insert(_database.dictionaryEntries, entry);
           }
         });
       }
@@ -183,6 +191,48 @@ class DictionaryLoaderService {
         'examples': ['Answer the phone.', 'My phone is ringing.'],
         'synonyms': ['telephone', 'mobile', 'cell'],
       },
+      'for': {
+        'definition': 'para, por',
+        'pos': 'preposition',
+        'examples': ['This is for you.', 'I work for a company.'],
+        'synonyms': ['intended for', 'in favor of'],
+      },
+      'autobiography': {
+        'definition': 'autobiografía',
+        'pos': 'noun',
+        'examples': ['He wrote his autobiography.', 'The autobiography was fascinating.'],
+        'synonyms': ['memoir', 'life story', 'personal history'],
+      },
+      'the': {
+        'definition': 'el, la, los, las',
+        'pos': 'article',
+        'examples': ['The book is interesting.', 'I saw the movie.'],
+        'synonyms': [],
+      },
+      'and': {
+        'definition': 'y',
+        'pos': 'conjunction',
+        'examples': ['You and me.', 'Books and movies.'],
+        'synonyms': ['plus', 'also'],
+      },
+      'of': {
+        'definition': 'de',
+        'pos': 'preposition',
+        'examples': ['A book of poems.', 'The color of the sky.'],
+        'synonyms': ['from', 'belonging to'],
+      },
+      'to': {
+        'definition': 'a, hacia',
+        'pos': 'preposition',
+        'examples': ['Go to school.', 'Listen to music.'],
+        'synonyms': ['toward', 'in direction of'],
+      },
+      'in': {
+        'definition': 'en',
+        'pos': 'preposition',
+        'examples': ['In the house.', 'In the morning.'],
+        'synonyms': ['inside', 'within'],
+      },
     };
     
     // Create dictionary entries
@@ -190,14 +240,21 @@ class DictionaryLoaderService {
       final word = entry.key;
       final data = entry.value;
       
+      // Create WikiDict-style pipe-separated translations: primary translation | synonyms
+      final primaryTranslation = data['definition'] as String;
+      final synonyms = data['synonyms'] as List<String>? ?? [];
+      final translations = [primaryTranslation, ...synonyms].join(' | ');
+      
       entries.add(DictionaryEntriesCompanion.insert(
-        lemma: word,
-        definition: data['definition'] as String,
-        partOfSpeech: Value(data['pos'] as String),
-        languagePair: 'en-es',
-        frequency: Value(word.length < 5 ? 1000 : 500), // Simple frequency heuristic
+        writtenRep: word,
+        lexentry: Value('${word}_${(data['pos'] as String).toUpperCase()}_01'),
+        sense: Value('Sample definition: ${data['definition']}'),
+        transList: translations, // WikiDict pipe-separated format: "agua | liquid | H2O"
+        pos: Value(data['pos'] as String),
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        frequency: Value(word.length < 5 ? 1000 : 500),
         examples: Value(jsonEncode(data['examples'])),
-        synonyms: Value(jsonEncode(data['synonyms'])),
         source: const Value('PolyRead Sample Dictionary'),
       ));
     }
@@ -208,17 +265,22 @@ class DictionaryLoaderService {
       final spanishDefinition = entry.value['definition'] as String;
       final pos = entry.value['pos'] as String;
       
-      // Handle multiple Spanish translations
+      // Handle multiple Spanish translations - create reverse WikiDict entries
       final spanishWords = spanishDefinition.split(', ');
       for (final spanishWord in spanishWords) {
+        // For reverse direction, English word becomes primary translation
+        final reverseTranslations = englishWord; // Could add English synonyms here if available
+        
         entries.add(DictionaryEntriesCompanion.insert(
-          lemma: spanishWord,
-          definition: englishWord,
-          partOfSpeech: Value(pos),
-          languagePair: 'es-en',
+          writtenRep: spanishWord,
+          lexentry: Value('${spanishWord}_${pos.toUpperCase()}_01'),
+          sense: Value('Palabra en inglés: $englishWord'),
+          transList: reverseTranslations, // English translation
+          pos: Value(pos),
+          sourceLanguage: 'es',
+          targetLanguage: 'en',
           frequency: Value(spanishWord.length < 5 ? 1000 : 500),
           examples: Value(jsonEncode(['Ejemplo: $spanishWord.'])),
-          synonyms: Value(jsonEncode([])),
           source: const Value('PolyRead Sample Dictionary'),
         ));
       }

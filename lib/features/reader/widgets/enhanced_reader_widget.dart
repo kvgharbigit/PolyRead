@@ -70,7 +70,9 @@ class _EnhancedReaderWidgetState extends ConsumerState<EnhancedReaderWidget> {
       await _readerEngine!.initialize(widget.filePath);
 
       // Set up text selection callback for translation
+      print('EnhancedReader: About to setup text selection callback');
       _setupTextSelectionCallback();
+      print('EnhancedReader: Callback setup complete');
 
       setState(() {
         _isInitialized = true;
@@ -86,25 +88,37 @@ class _EnhancedReaderWidgetState extends ConsumerState<EnhancedReaderWidget> {
   void _setupTextSelectionCallback() {
     final readerEngine = _readerEngine;
     
+    print('EnhancedReader: Setting up text selection callback for ${readerEngine.runtimeType}');
+    
     // All readers now support the consistent callback interface
     if (readerEngine is PdfReaderEngine) {
+      print('EnhancedReader: Setting PDF callback');
       readerEngine.setTextSelectionCallback(_handleTextSelection);
     } else if (readerEngine is EpubReaderEngine) {
+      print('EnhancedReader: Setting EPUB callback');
       readerEngine.setTextSelectionCallback(_handleTextSelection);
     } else if (readerEngine is HtmlReaderEngine) {
+      print('EnhancedReader: Setting HTML callback');
       readerEngine.setTextSelectionCallback(_handleTextSelection);
     } else if (readerEngine is TxtReaderEngine) {
+      print('EnhancedReader: Setting TXT callback');
       readerEngine.setTextSelectionCallback(_handleTextSelection);
     }
   }
 
   void _handleTextSelection(String selectedText, Offset position) {
+    print('EnhancedReader: _handleTextSelection called with: $selectedText at $position');
+    
     final translationService = ref.read(readerTranslationServiceProvider);
     final settings = ref.read(settingsProvider);
 
+    print('EnhancedReader: Setting current book ID: ${widget.bookId}');
+    
     // Set current book for vocabulary creation
     translationService.setCurrentBook(widget.bookId);
 
+    print('EnhancedReader: Calling translationService.handleTextSelection');
+    
     // Handle text selection with translation
     translationService.handleTextSelection(
       selectedText: selectedText,
@@ -119,6 +133,89 @@ class _EnhancedReaderWidgetState extends ConsumerState<EnhancedReaderWidget> {
     // TODO: Extract surrounding text for better translation context
     // For now, return null
     return null;
+  }
+
+  Widget _buildModelDownloadPrompt(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic translationService,
+  ) {
+    final settings = ref.read(settingsProvider);
+    
+    return Positioned(
+      left: translationService.selectionPosition!.dx - 150,
+      top: translationService.selectionPosition!.dy - 100,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 300,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.download_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Translation Models Needed',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => translationService.clearSelection(),
+                    icon: const Icon(Icons.close),
+                    iconSize: 18,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Download ${settings.defaultSourceLanguage}→${settings.defaultTargetLanguage} translation models for offline translation.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => translationService.clearSelection(),
+                    child: const Text('Skip'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      await translationService.downloadModelsAndRetry(
+                        sourceLanguage: settings.defaultSourceLanguage,
+                        targetLanguage: settings.defaultTargetLanguage,
+                      );
+                    },
+                    icon: const Icon(Icons.download, size: 18),
+                    label: const Text('Download'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -182,10 +279,16 @@ class _EnhancedReaderWidgetState extends ConsumerState<EnhancedReaderWidget> {
               return const SizedBox.shrink();
             }
 
+            // Show download prompt if models are missing
+            if (translationService.needsModelDownload) {
+              return _buildModelDownloadPrompt(context, ref, translationService);
+            }
+
+            // Show normal translation popup
             return EnhancedTranslationPopup(
               selectedText: translationService.selectedText!,
               sourceLanguage: ref.read(settingsProvider).defaultSourceLanguage,
-              targetLanguage: ref.read(settingsProvider).defaultTargetLanguage,
+              targetLanguage: ref.read(settingsProvider).defaultTargetLanguage, // This will become homeLanguage
               position: translationService.selectionPosition!,
               onClose: () => translationService.clearSelection(),
               onAddToVocabulary: (word) => translationService.addToVocabulary(),

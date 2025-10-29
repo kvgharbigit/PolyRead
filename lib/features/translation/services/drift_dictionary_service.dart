@@ -20,19 +20,28 @@ class DriftDictionaryService {
     final stopwatch = Stopwatch()..start();
     
     try {
-      // Create language pair patterns for bidirectional lookup
-      final languagePairs = [
-        '$sourceLanguage-$targetLanguage',
-        '$targetLanguage-$sourceLanguage',
-        sourceLanguage,
-        targetLanguage,
-      ];
+      // First check if database has any entries at all
+      final totalCount = await (_database.selectOnly(_database.dictionaryEntries)
+          ..addColumns([_database.dictionaryEntries.id.count()]))
+          .getSingle();
+      final totalEntries = totalCount.read(_database.dictionaryEntries.id.count()) ?? 0;
       
-      // First try exact match
+      print('DriftDictionary: Total entries in database: $totalEntries');
+      
+      if (totalEntries == 0) {
+        print('DriftDictionary: Database is empty! Dictionary needs to be loaded.');
+        stopwatch.stop();
+        return [];
+      }
+      
+      // First try exact match using Wiktionary format
+      print('DriftDictionary: Looking for exact match of "${word.toLowerCase()}" (${sourceLanguage} -> ${targetLanguage})');
+      
       final exactQuery = _database.select(_database.dictionaryEntries)
         ..where((e) => 
-          e.lemma.equals(word.toLowerCase()) & 
-          e.languagePair.isIn(languagePairs)
+          e.writtenRep.equals(word.toLowerCase()) & 
+          e.sourceLanguage.equals(sourceLanguage) &
+          e.targetLanguage.equals(targetLanguage)
         )
         ..orderBy([
           (e) => OrderingTerm(expression: e.frequency, mode: OrderingMode.desc),
@@ -40,32 +49,57 @@ class DriftDictionaryService {
         ..limit(limit);
       
       final exactResults = await exactQuery.get();
+      print('DriftDictionary: Exact match found ${exactResults.length} results');
       
       if (exactResults.isNotEmpty) {
         stopwatch.stop();
         return exactResults.map((row) => _convertToModelEntry(row)).toList();
       }
       
-      // If no exact match, try FTS search
-      final ftsResults = await _database.customSelect('''
-        SELECT de.* FROM dictionary_entries de
-        JOIN dictionary_fts fts ON de.id = fts.rowid
-        WHERE dictionary_fts MATCH ? AND de.language_pair IN (?, ?, ?, ?)
-        ORDER BY bm25(dictionary_fts) ASC, de.frequency DESC
-        LIMIT ?
-      ''', variables: [
-        Variable(word.toLowerCase()),
-        Variable('$sourceLanguage-$targetLanguage'),
-        Variable('$targetLanguage-$sourceLanguage'),
-        Variable(sourceLanguage),
-        Variable(targetLanguage),
-        Variable(limit),
-      ]).get();
-      
-      stopwatch.stop();
-      return ftsResults.map((row) => _convertToModelEntryFromMap(row.data)).toList();
+      // If no exact match, try FTS search using Wiktionary format
+      try {
+        final ftsResults = await _database.customSelect('''
+          SELECT de.* FROM dictionary_entries de
+          JOIN dictionary_fts fts ON de.id = fts.rowid
+          WHERE dictionary_fts MATCH ? 
+            AND de.source_language = ? 
+            AND de.target_language = ?
+          ORDER BY bm25(dictionary_fts) ASC, de.frequency DESC
+          LIMIT ?
+        ''', variables: [
+          Variable(word.toLowerCase()),
+          Variable(sourceLanguage),
+          Variable(targetLanguage),
+          Variable(limit),
+        ]).get();
+        
+        print('DriftDictionary: FTS search found ${ftsResults.length} results');
+        stopwatch.stop();
+        return ftsResults.map((row) => _convertToModelEntryFromMap(row.data)).toList();
+      } catch (ftsError) {
+        print('DriftDictionary: FTS search failed: $ftsError, falling back to basic search');
+        
+        // Fallback: try basic LIKE search using Wiktionary format
+        final likeQuery = _database.select(_database.dictionaryEntries)
+          ..where((e) => 
+            e.writtenRep.like('%${word.toLowerCase()}%') & 
+            e.sourceLanguage.equals(sourceLanguage) &
+            e.targetLanguage.equals(targetLanguage)
+          )
+          ..orderBy([
+            (e) => OrderingTerm(expression: e.frequency, mode: OrderingMode.desc),
+          ])
+          ..limit(limit);
+        
+        final likeResults = await likeQuery.get();
+        print('DriftDictionary: LIKE search found ${likeResults.length} results');
+        
+        stopwatch.stop();
+        return likeResults.map((row) => _convertToModelEntry(row)).toList();
+      }
     } catch (e) {
       stopwatch.stop();
+      print('DriftDictionary: Lookup failed with error: $e');
       throw DictionaryException('Dictionary lookup failed: $e');
     }
   }
@@ -110,15 +144,21 @@ class DriftDictionaryService {
   /// Add a single dictionary entry
   Future<int> addEntry(model.DictionaryEntry entry) async {
     try {
+      // Parse language pair (e.g., "en-es" -> source: "en", target: "es")
+      final languageParts = (entry.language ?? 'unknown-unknown').split('-');
+      final sourceLanguage = languageParts.isNotEmpty ? languageParts[0] : 'unknown';
+      final targetLanguage = languageParts.length > 1 ? languageParts[1] : 'unknown';
+      
       final companion = DictionaryEntriesCompanion.insert(
-        lemma: entry.word,
-        definition: entry.definition,
-        partOfSpeech: Value(entry.partOfSpeech),
-        languagePair: entry.language ?? 'unknown',
+        writtenRep: entry.word, // Use Wiktionary writtenRep field
+        sense: Value(entry.definition), // Use Wiktionary sense field
+        transList: entry.definition, // For now, use definition as translation (TODO: support pipe-separated)
+        pos: Value(entry.partOfSpeech), // Use Wiktionary pos field
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
         frequency: const Value(1000), // Default frequency
         pronunciation: Value(entry.pronunciation),
         examples: Value(entry.exampleSentence),
-        synonyms: Value(null), // TODO: Add synonyms support
         source: Value(entry.sourceDictionary),
       );
       
@@ -175,11 +215,11 @@ class DriftDictionaryService {
     try {
       final countResults = await _database.customSelect('''
         SELECT 
-          language_pair,
+          source_language || '-' || target_language as language_pair,
           source,
           COUNT(*) as entry_count
         FROM dictionary_entries 
-        GROUP BY language_pair, source
+        GROUP BY source_language, target_language, source
       ''').get();
       
       final totalResult = await _database.customSelect('''
@@ -229,33 +269,101 @@ class DriftDictionaryService {
     }
   }
   
+  /// Debug method to check database state
+  Future<void> debugDatabaseState() async {
+    try {
+      // Get total count
+      final allEntries = await _database.select(_database.dictionaryEntries).get();
+      print('DriftDictionary Debug: Total entries: ${allEntries.length}');
+      
+      if (allEntries.isNotEmpty) {
+        print('DriftDictionary Debug: First 5 entries:');
+        for (int i = 0; i < allEntries.length && i < 5; i++) {
+          final entry = allEntries[i];
+          print('  ${i + 1}. "${entry.writtenRep}" (${entry.sourceLanguage}-${entry.targetLanguage}) -> "${entry.sense ?? entry.transList}"');
+        }
+      }
+      
+      // Check specific test words
+      final testWords = ['for', 'hello', 'autobiography'];
+      for (final word in testWords) {
+        final results = await (_database.select(_database.dictionaryEntries)
+          ..where((e) => e.writtenRep.equals(word.toLowerCase()))).get();
+        print('DriftDictionary Debug: Word "$word" found ${results.length} times');
+      }
+      
+      // Check language pairs (using Wiktionary format)
+      final languagePairsResult = await _database.customSelect('''
+        SELECT source_language, target_language, COUNT(*) as count 
+        FROM dictionary_entries 
+        GROUP BY source_language, target_language
+      ''').get();
+      
+      print('DriftDictionary Debug: Language pairs:');
+      for (final row in languagePairsResult) {
+        final sourceLang = row.data['source_language'];
+        final targetLang = row.data['target_language'];
+        final count = row.data['count'];
+        print('  $sourceLang->$targetLang: $count entries');
+      }
+      
+    } catch (e) {
+      print('DriftDictionary Debug: Error checking database state: $e');
+    }
+  }
+  
   // Private helper methods
   
   model.DictionaryEntry _convertToModelEntry(DictionaryEntry row) {
+    // Parse pipe-separated translations from WikiDict format
+    final translations = row.transList.split(' | ')
+        .where((t) => t.trim().isNotEmpty)
+        .map((t) => t.trim())
+        .toList();
+    
+    // Primary translation is the first one, rest become synonyms
+    final primaryTranslation = translations.isNotEmpty ? translations.first : row.sense ?? '';
+    final synonyms = translations.length > 1 ? translations.skip(1).toList() : <String>[];
+    
     return model.DictionaryEntry(
       id: row.id,
-      word: row.lemma,
-      language: row.languagePair,
-      definition: row.definition,
+      word: row.writtenRep, // Use Wiktionary writtenRep field
+      language: '${row.sourceLanguage}-${row.targetLanguage}', // Construct language pair
+      definition: primaryTranslation, // Primary translation from transList
       pronunciation: row.pronunciation,
-      partOfSpeech: row.partOfSpeech,
+      partOfSpeech: row.pos, // Use Wiktionary pos field
       exampleSentence: row.examples,
       sourceDictionary: row.source ?? 'Unknown',
-      createdAt: DateTime.now(), // TODO: Add created_at field to schema
+      createdAt: row.createdAt,
+      // Add synonyms from pipe-separated list
+      synonyms: synonyms,
     );
   }
   
   model.DictionaryEntry _convertToModelEntryFromMap(Map<String, Object?> data) {
+    // Parse pipe-separated translations from WikiDict format
+    final transListRaw = data['trans_list'] as String? ?? '';
+    final translations = transListRaw.split(' | ')
+        .where((t) => t.trim().isNotEmpty)
+        .map((t) => t.trim())
+        .toList();
+    
+    // Primary translation is the first one, rest become synonyms
+    final primaryTranslation = translations.isNotEmpty ? translations.first : data['sense'] as String? ?? '';
+    final synonyms = translations.length > 1 ? translations.skip(1).toList() : <String>[];
+    
     return model.DictionaryEntry(
       id: data['id'] as int?,
-      word: data['lemma'] as String,
-      language: data['language_pair'] as String,
-      definition: data['definition'] as String,
+      word: data['written_rep'] as String, // Use Wiktionary writtenRep field
+      language: '${data['source_language']}-${data['target_language']}', // Construct language pair
+      definition: primaryTranslation, // Primary translation from transList
       pronunciation: data['pronunciation'] as String?,
-      partOfSpeech: data['part_of_speech'] as String?,
+      partOfSpeech: data['pos'] as String?, // Use Wiktionary pos field
       exampleSentence: data['examples'] as String?,
       sourceDictionary: data['source'] as String? ?? 'Unknown',
-      createdAt: DateTime.now(),
+      createdAt: DateTime.tryParse(data['created_at'] as String? ?? '') ?? DateTime.now(),
+      // Add synonyms from pipe-separated list
+      synonyms: synonyms,
     );
   }
 }

@@ -13,8 +13,8 @@ final dictionaryLoaderProvider = Provider<DictionaryLoaderService>((ref) {
 
 /// Provider for dictionary initialization state
 final dictionaryInitializationProvider = FutureProvider<void>((ref) async {
-  final loaderService = ref.watch(dictionaryLoaderProvider);
-  await loaderService.loadSampleDictionary();
+  // No automatic dictionary loading - users must download real dictionaries
+  return;
 });
 
 /// Provider for dictionary statistics

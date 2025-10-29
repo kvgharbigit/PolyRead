@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:polyread/features/reader/engines/reader_interface.dart';
 import 'package:polyread/features/reader/widgets/interactive_text.dart';
+import 'package:polyread/features/reader/services/reader_settings_service.dart';
+import 'package:polyread/features/reader/models/reader_settings.dart';
 
 class TxtReaderEngine implements ReaderEngine {
   String? _filePath;
@@ -17,11 +19,12 @@ class TxtReaderEngine implements ReaderEngine {
   int _totalPages = 0;
   double _progress = 0.0;
   String? _selectedText;
+  ReaderEngineSettings? _settings;
   
-  // Reading configuration
-  static const int linesPerPage = 30;
-  static const double fontSize = 16.0;
-  static const double lineHeight = 1.5;
+  // Reading configuration (can be overridden by settings)
+  int _linesPerPage = 30;
+  double _fontSize = 16.0;
+  double _lineHeight = 1.5;
   
   // Text selection tracking
   final ValueNotifier<String?> selectedTextNotifier = ValueNotifier<String?>(null);
@@ -115,20 +118,23 @@ class TxtReaderEngine implements ReaderEngine {
       );
     }
     
+    // Get current text style based on settings
+    final textStyle = _getTextStyle();
+    final backgroundColor = _getBackgroundColor();
+    final margins = _settings?.pageMargins ?? 16.0;
+    
     // Return just the content area to match other readers
     return Container(
-      padding: const EdgeInsets.all(16.0),
+      color: backgroundColor,
+      padding: EdgeInsets.all(margins),
       child: SingleChildScrollView(
         controller: _scrollController,
         child: InteractiveTextWidget(
           text: _getCurrentPageText(),
           onWordTap: _handleWordTap,
           onSentenceTap: _handleSentenceTap,
-          style: const TextStyle(
-            fontSize: fontSize,
-            height: lineHeight,
-            fontFamily: 'serif',
-          ),
+          style: textStyle,
+          textAlign: _settings?.textAlign ?? TextAlign.left,
         ),
       ),
     );
@@ -187,7 +193,7 @@ class TxtReaderEngine implements ReaderEngine {
       // Calculate how many lines this text will take (considering word wrap)
       final estimatedLines = max(1, (line.length / 80).ceil());
       
-      if (linesInCurrentPage + estimatedLines > linesPerPage && currentPage.isNotEmpty) {
+      if (linesInCurrentPage + estimatedLines > _linesPerPage && currentPage.isNotEmpty) {
         // Start new page
         _pages.add(currentPage.toString());
         currentPage.clear();
@@ -234,6 +240,12 @@ class TxtReaderEngine implements ReaderEngine {
     _selectedText = selectedText;
     selectedTextNotifier.value = selectedText;
     
+    // Trigger consistent callback interface (same as PDF/EPUB)
+    if (onTextSelectionCallback != null) {
+      onTextSelectionCallback!(selectedText, position);
+    }
+    
+    // Keep advanced handler for backward compatibility
     if (_textSelectionHandler != null) {
       final textSelection = TextSelection(
         baseOffset: 0,
@@ -246,6 +258,88 @@ class TxtReaderEngine implements ReaderEngine {
   /// Set a custom text selection handler for advanced functionality
   void setTextSelectionHandler(void Function(String text, Offset position, TextSelection selection)? handler) {
     _textSelectionHandler = handler;
+  }
+
+  /// Apply reader settings to the engine
+  Future<void> applySettings(ReaderEngineSettings settings) async {
+    _settings = settings;
+    
+    // Update internal configuration based on settings
+    _fontSize = settings.fontSize;
+    _lineHeight = settings.lineHeight;
+    
+    // Recalculate pages based on new line height and font size
+    _processContent();
+  }
+
+  /// Get text style based on current settings
+  TextStyle _getTextStyle() {
+    if (_settings == null) {
+      return TextStyle(
+        fontSize: _fontSize,
+        height: _lineHeight,
+        fontFamily: 'serif',
+      );
+    }
+    
+    String? fontFamily;
+    switch (_settings!.fontFamily) {
+      case 'System Default':
+        fontFamily = null;
+        break;
+      case 'Georgia':
+      case 'Times New Roman':
+      case 'Arial':
+      case 'Helvetica':
+      case 'Open Sans':
+      case 'Roboto':
+        fontFamily = _settings!.fontFamily;
+        break;
+      default:
+        fontFamily = null;
+    }
+    
+    return TextStyle(
+      fontSize: _settings!.fontSize,
+      height: _settings!.lineHeight,
+      fontFamily: fontFamily,
+      color: _getTextColor(),
+    );
+  }
+
+  /// Get background color based on theme
+  Color _getBackgroundColor() {
+    if (_settings == null) return Colors.white;
+    
+    if (_settings!.theme == ReaderTheme.light) {
+      return const Color(0xFFFFFFFF);
+    } else if (_settings!.theme == ReaderTheme.sepia) {
+      return const Color(0xFFFDF6E3);
+    } else if (_settings!.theme == ReaderTheme.dark) {
+      return const Color(0xFF1A1A1A);
+    } else if (_settings!.theme == ReaderTheme.custom) {
+      final brightness = (_settings!.brightness * 255).round();
+      return Color.fromRGBO(brightness, brightness, brightness, 1.0);
+    }
+    return Colors.white;
+  }
+
+  /// Get text color based on theme
+  Color _getTextColor() {
+    if (_settings == null) return Colors.black;
+    
+    if (_settings!.theme == ReaderTheme.light) {
+      return const Color(0xFF000000);
+    } else if (_settings!.theme == ReaderTheme.sepia) {
+      return const Color(0xFF5D4E37);
+    } else if (_settings!.theme == ReaderTheme.dark) {
+      return const Color(0xFFFFFFFF);
+    } else if (_settings!.theme == ReaderTheme.custom) {
+      return _settings!.brightness > 0.5 
+          ? const Color(0xFF000000) 
+          : const Color(0xFFFFFFFF);
+    }
+    return Colors.black;
   }
 
   void _handleWordTap(String word, Offset position) {
@@ -285,6 +379,41 @@ class TxtReaderEngine implements ReaderEngine {
       }
     }
   }
+  
+  @override
+  String? extractContextAroundWord(String word, {int contextWords = 10}) {
+    if (_textContent == null) return null;
+    
+    // Find the word in the current page text
+    final currentPageText = _getCurrentPageText();
+    final wordIndex = currentPageText.toLowerCase().indexOf(word.toLowerCase());
+    
+    if (wordIndex == -1) return null;
+    
+    // Split into words
+    final words = currentPageText.split(RegExp(r'\s+'));
+    
+    // Find the word position in the word array
+    int wordPosition = -1;
+    int charCount = 0;
+    
+    for (int i = 0; i < words.length; i++) {
+      if (charCount <= wordIndex && charCount + words[i].length > wordIndex) {
+        wordPosition = i;
+        break;
+      }
+      charCount += words[i].length + 1; // +1 for space
+    }
+    
+    if (wordPosition == -1) return null;
+    
+    // Extract context around the word
+    final startIndex = (wordPosition - contextWords).clamp(0, words.length);
+    final endIndex = (wordPosition + contextWords + 1).clamp(0, words.length);
+    
+    final contextWords_list = words.sublist(startIndex, endIndex);
+    return contextWords_list.join(' ');
+  }
 }
 
 // Interactive Text Widget for word-level selection
@@ -293,6 +422,7 @@ class InteractiveTextWidget extends StatefulWidget {
   final Function(String, Offset) onWordTap;
   final Function(String, Offset) onSentenceTap;
   final TextStyle? style;
+  final TextAlign textAlign;
 
   const InteractiveTextWidget({
     super.key,
@@ -300,6 +430,7 @@ class InteractiveTextWidget extends StatefulWidget {
     required this.onWordTap,
     required this.onSentenceTap,
     this.style,
+    this.textAlign = TextAlign.left,
   });
 
   @override
@@ -314,6 +445,7 @@ class _InteractiveTextWidgetState extends State<InteractiveTextWidget> {
     return SelectableText.rich(
       _buildTextSpan(),
       style: widget.style,
+      textAlign: widget.textAlign,
       onSelectionChanged: (selection, cause) {
         if (selection != null && selection.textInside(widget.text).isNotEmpty) {
           final selectedText = selection.textInside(widget.text);

@@ -160,8 +160,6 @@ class BookmarkModel {
   });
   
   /// Create from Drift database row
-  /// TODO: Implement when Bookmarks table is properly configured in Drift
-  /*
   factory BookmarkModel.fromDrift(Bookmark row) {
     return BookmarkModel(
       id: row.id,
@@ -178,7 +176,11 @@ class BookmarkModel {
       sortOrder: row.sortOrder,
     );
   }
-  */
+  
+  /// Alias for fromDrift for consistency
+  factory BookmarkModel.fromRow(Bookmark row) {
+    return BookmarkModel.fromDrift(row);
+  }
   
   /// Create a copy with modified values
   BookmarkModel copyWith({

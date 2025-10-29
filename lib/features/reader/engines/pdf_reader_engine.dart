@@ -264,20 +264,49 @@ Sample words for translation: hello, world, book, reading, language, learning.''
     }
   }
   
+  @override
+  String? extractContextAroundWord(String word, {int contextWords = 10}) {
+    // Extract context from current page text
+    final pageText = _pageTextCache[_currentPage];
+    if (pageText == null) return null;
+    
+    final words = pageText.split(RegExp(r'\s+'));
+    final wordIndex = words.indexWhere((w) => w.toLowerCase().contains(word.toLowerCase()));
+    
+    if (wordIndex == -1) return null;
+    
+    // Extract context around the word
+    final startIndex = (wordIndex - contextWords).clamp(0, words.length);
+    final endIndex = (wordIndex + contextWords + 1).clamp(0, words.length);
+    
+    return words.sublist(startIndex, endIndex).join(' ');
+  }
+
   /// Get text at a specific position for word selection
   Future<String?> getTextAtPosition(int page, double x, double y) async {
     final pageText = await _extractTextFromPage(page);
     if (pageText.isEmpty) return null;
     
-    // Simple word extraction - in production you'd use proper text layout analysis
-    final words = pageText.split(RegExp(r'\s+'));
+    // Split into words and find the most likely word based on position
+    final words = pageText.split(RegExp(r'\s+'))
+        .where((word) => word.trim().isNotEmpty)
+        .map((word) => word.replaceAll(RegExp(r'[^\w]'), ''))
+        .where((word) => word.isNotEmpty)
+        .toList();
     
-    // For demonstration, return a random word from the page
-    if (words.isNotEmpty) {
-      final wordIndex = ((x + y) * words.length).round() % words.length;
-      return words[wordIndex].replaceAll(RegExp(r'[^\w]'), '');
-    }
+    if (words.isEmpty) return null;
     
-    return null;
+    // Use position to select word - this is a simplified approach
+    // In production, you'd use proper PDF text layout analysis
+    final normalizedX = (x / 400).clamp(0.0, 1.0); // Assume 400px width
+    final normalizedY = (y / 600).clamp(0.0, 1.0); // Assume 600px height
+    
+    // Use a combination of x and y to pick a reasonable word
+    final wordIndex = ((normalizedX + normalizedY * 0.3) * words.length).floor() % words.length;
+    
+    final selectedWord = words[wordIndex];
+    print('PDF: Selected word "$selectedWord" at position ($x, $y)');
+    
+    return selectedWord;
   }
 }

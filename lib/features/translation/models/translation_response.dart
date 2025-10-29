@@ -4,50 +4,119 @@
 import 'package:polyread/features/translation/models/translation_request.dart';
 import 'package:polyread/features/translation/models/dictionary_entry.dart';
 
+/// ML Kit translation result
+class MlKitResult {
+  final String translatedText;
+  final String providerId;
+  final int latencyMs;
+  final bool success;
+  final String? error;
+  
+  const MlKitResult({
+    required this.translatedText,
+    required this.providerId,
+    this.latencyMs = 0,
+    this.success = true,
+    this.error,
+  });
+  
+  Map<String, dynamic> toJson() => {
+    'translatedText': translatedText,
+    'providerId': providerId,
+    'latencyMs': latencyMs,
+    'success': success,
+    'error': error,
+  };
+  
+  factory MlKitResult.fromJson(Map<String, dynamic> json) => MlKitResult(
+    translatedText: json['translatedText'] as String,
+    providerId: json['providerId'] as String,
+    latencyMs: json['latencyMs'] as int? ?? 0,
+    success: json['success'] as bool? ?? true,
+    error: json['error'] as String?,
+  );
+}
+
+/// Server translation result
+class ServerResult {
+  final String translatedText;
+  final String providerId;
+  final int latencyMs;
+  final bool success;
+  final String? error;
+  
+  const ServerResult({
+    required this.translatedText,
+    required this.providerId,
+    this.latencyMs = 0,
+    this.success = true,
+    this.error,
+  });
+  
+  Map<String, dynamic> toJson() => {
+    'translatedText': translatedText,
+    'providerId': providerId,
+    'latencyMs': latencyMs,
+    'success': success,
+    'error': error,
+  };
+  
+  factory ServerResult.fromJson(Map<String, dynamic> json) => ServerResult(
+    translatedText: json['translatedText'] as String,
+    providerId: json['providerId'] as String,
+    latencyMs: json['latencyMs'] as int? ?? 0,
+    success: json['success'] as bool? ?? true,
+    error: json['error'] as String?,
+  );
+}
+
 enum TranslationSource {
   dictionary,
   mlKit,
   server,
   cache,
+  error,
+  modelsNotDownloaded,
 }
 
 class TranslationResponse {
   final TranslationRequest request;
   final String translatedText;
   final TranslationSource source;
-  final double confidence;
   final DateTime timestamp;
-  final DictionaryResult? dictionaryResult;
+  final DictionaryLookupResult? dictionaryResult;
   final MlKitResult? mlKitResult;
   final ServerResult? serverResult;
   final Duration? responseTime;
+  final String? error;
+  final String? providerId;
 
   const TranslationResponse({
     required this.request,
     required this.translatedText,
     required this.source,
-    required this.confidence,
     required this.timestamp,
     this.dictionaryResult,
     this.mlKitResult,
     this.serverResult,
     this.responseTime,
+    this.error,
+    this.providerId,
   });
 
   /// Create response from dictionary lookup
   factory TranslationResponse.fromDictionary({
     required TranslationRequest request,
-    required DictionaryResult dictionaryResult,
+    required DictionaryLookupResult dictionaryResult,
   }) {
     final primaryTranslation = dictionaryResult.entries.isNotEmpty
-        ? dictionaryResult.entries.first.translations.first
+        ? dictionaryResult.entries.first.definition
         : request.text;
 
     return TranslationResponse(
       request: request,
       translatedText: primaryTranslation,
       source: TranslationSource.dictionary,
-      confidence: 0.9,
       timestamp: DateTime.now(),
       dictionaryResult: dictionaryResult,
     );
@@ -62,7 +131,6 @@ class TranslationResponse {
       request: request,
       translatedText: mlKitResult.translatedText,
       source: TranslationSource.mlKit,
-      confidence: mlKitResult.confidence,
       timestamp: DateTime.now(),
       mlKitResult: mlKitResult,
     );
@@ -77,7 +145,6 @@ class TranslationResponse {
       request: request,
       translatedText: serverResult.translatedText,
       source: TranslationSource.server,
-      confidence: serverResult.confidence,
       timestamp: DateTime.now(),
       serverResult: serverResult,
     );
@@ -91,28 +158,73 @@ class TranslationResponse {
     );
   }
 
+  /// Create response from any provider result
+  factory TranslationResponse.fromProvider({
+    required TranslationRequest request,
+    required dynamic result,
+  }) {
+    if (result is MlKitResult) {
+      return TranslationResponse.fromMlKit(request: request, mlKitResult: result);
+    } else if (result is ServerResult) {
+      return TranslationResponse.fromServer(request: request, serverResult: result);
+    } else {
+      throw ArgumentError('Unsupported provider result type: ${result.runtimeType}');
+    }
+  }
+
+  /// Create error response
+  factory TranslationResponse.error({
+    required TranslationRequest request,
+    required String error,
+  }) {
+    return TranslationResponse(
+      request: request,
+      translatedText: '',
+      source: TranslationSource.error,
+      timestamp: DateTime.now(),
+      error: error,
+    );
+  }
+
+  /// Create models not downloaded response
+  factory TranslationResponse.modelsNotDownloaded({
+    required TranslationRequest request,
+    required String providerId,
+  }) {
+    return TranslationResponse(
+      request: request,
+      translatedText: '',
+      source: TranslationSource.modelsNotDownloaded,
+      timestamp: DateTime.now(),
+      providerId: providerId,
+      error: 'Translation models not downloaded for $providerId',
+    );
+  }
+
   /// Create a copy with modified values
   TranslationResponse copyWith({
     TranslationRequest? request,
     String? translatedText,
     TranslationSource? source,
-    double? confidence,
     DateTime? timestamp,
-    DictionaryResult? dictionaryResult,
+    DictionaryLookupResult? dictionaryResult,
     MlKitResult? mlKitResult,
     ServerResult? serverResult,
     Duration? responseTime,
+    String? error,
+    String? providerId,
   }) {
     return TranslationResponse(
       request: request ?? this.request,
       translatedText: translatedText ?? this.translatedText,
       source: source ?? this.source,
-      confidence: confidence ?? this.confidence,
       timestamp: timestamp ?? this.timestamp,
       dictionaryResult: dictionaryResult ?? this.dictionaryResult,
       mlKitResult: mlKitResult ?? this.mlKitResult,
       serverResult: serverResult ?? this.serverResult,
       responseTime: responseTime ?? this.responseTime,
+      error: error ?? this.error,
+      providerId: providerId ?? this.providerId,
     );
   }
 
@@ -122,12 +234,13 @@ class TranslationResponse {
       'request': request.toMap(),
       'translatedText': translatedText,
       'source': source.name,
-      'confidence': confidence,
       'timestamp': timestamp.toIso8601String(),
       'dictionaryResult': dictionaryResult?.toJson(),
       'mlKitResult': mlKitResult?.toJson(),
       'serverResult': serverResult?.toJson(),
       'responseTime': responseTime?.inMilliseconds,
+      'error': error,
+      'providerId': providerId,
     };
   }
 
@@ -140,10 +253,9 @@ class TranslationResponse {
         (s) => s.name == json['source'],
         orElse: () => TranslationSource.server,
       ),
-      confidence: (json['confidence'] as num).toDouble(),
       timestamp: DateTime.parse(json['timestamp'] as String),
       dictionaryResult: json['dictionaryResult'] != null
-          ? DictionaryResult.fromJson(json['dictionaryResult'] as Map<String, dynamic>)
+          ? DictionaryLookupResult.fromJson(json['dictionaryResult'] as Map<String, dynamic>)
           : null,
       mlKitResult: json['mlKitResult'] != null
           ? MlKitResult.fromJson(json['mlKitResult'] as Map<String, dynamic>)
@@ -154,69 +266,14 @@ class TranslationResponse {
       responseTime: json['responseTime'] != null
           ? Duration(milliseconds: json['responseTime'] as int)
           : null,
+      error: json['error'] as String?,
+      providerId: json['providerId'] as String?,
     );
   }
 
   @override
   String toString() {
-    return 'TranslationResponse(${request.text} → $translatedText, source: $source, confidence: $confidence)';
+    return 'TranslationResponse(${request.text} → $translatedText, source: $source)';
   }
 }
 
-/// ML Kit translation result
-class MlKitResult {
-  final String translatedText;
-  final double confidence;
-  final String modelVersion;
-
-  const MlKitResult({
-    required this.translatedText,
-    required this.confidence,
-    required this.modelVersion,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'translatedText': translatedText,
-      'confidence': confidence,
-      'modelVersion': modelVersion,
-    };
-  }
-
-  factory MlKitResult.fromJson(Map<String, dynamic> json) {
-    return MlKitResult(
-      translatedText: json['translatedText'] as String,
-      confidence: (json['confidence'] as num).toDouble(),
-      modelVersion: json['modelVersion'] as String,
-    );
-  }
-}
-
-/// Server translation result
-class ServerResult {
-  final String translatedText;
-  final double confidence;
-  final String provider;
-
-  const ServerResult({
-    required this.translatedText,
-    required this.confidence,
-    required this.provider,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'translatedText': translatedText,
-      'confidence': confidence,
-      'provider': provider,
-    };
-  }
-
-  factory ServerResult.fromJson(Map<String, dynamic> json) {
-    return ServerResult(
-      translatedText: json['translatedText'] as String,
-      confidence: (json['confidence'] as num).toDouble(),
-      provider: json['provider'] as String,
-    );
-  }
-}

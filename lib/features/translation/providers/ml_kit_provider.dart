@@ -135,6 +135,7 @@ class MlKitTranslationProvider implements TranslationProvider {
     required String sourceLanguage,
     required String targetLanguage,
     bool wifiOnly = true,
+    Function(double progress)? onProgress,
   }) async {
     try {
       final modelManager = OnDeviceTranslatorModelManager();
@@ -152,28 +153,36 @@ class MlKitTranslationProvider implements TranslationProvider {
         );
       }
       
-      // Download missing models
-      final downloadTasks = <Future<void>>[];
+      // Download missing models with progress tracking
+      final totalDownloads = (!sourceDownloaded ? 1 : 0) + (!targetDownloaded ? 1 : 0);
+      var completedDownloads = 0;
       
       if (!sourceDownloaded) {
-        downloadTasks.add(modelManager.downloadModel(
+        onProgress?.call(0.1); // Starting download
+        await modelManager.downloadModel(
           sourceLanguage,
           isWifiRequired: wifiOnly,
-        ));
+        );
+        completedDownloads++;
+        onProgress?.call(completedDownloads / totalDownloads * 0.8 + 0.1); // 80% progress per model
       }
       
       if (!targetDownloaded) {
-        downloadTasks.add(modelManager.downloadModel(
+        if (sourceDownloaded) onProgress?.call(0.1); // Starting first download
+        await modelManager.downloadModel(
           targetLanguage,
           isWifiRequired: wifiOnly,
-        ));
+        );
+        completedDownloads++;
+        onProgress?.call(completedDownloads / totalDownloads * 0.8 + 0.1);
       }
       
-      await Future.wait(downloadTasks);
-      
       // Verify downloads
+      onProgress?.call(0.95); // Almost complete
       final finalSourceDownloaded = await modelManager.isModelDownloaded(sourceLanguage);
       final finalTargetDownloaded = await modelManager.isModelDownloaded(targetLanguage);
+      
+      onProgress?.call(1.0); // Complete
       
       return ModelDownloadResult(
         success: finalSourceDownloaded && finalTargetDownloaded,

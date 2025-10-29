@@ -4,13 +4,13 @@
 import '../providers/translation_provider.dart';
 import '../providers/ml_kit_provider.dart';
 import '../providers/server_provider.dart';
-import '../services/dictionary_service.dart';
+import '../services/drift_dictionary_service.dart';
 import '../services/translation_cache_service.dart';
 import '../models/dictionary_entry.dart';
 import '../models/translation_request.dart';
 
 class TranslationService {
-  final DictionaryService _dictionaryService;
+  final DriftDictionaryService _dictionaryService;
   final TranslationCacheService _cacheService;
   final List<TranslationProvider> _providers;
   
@@ -18,7 +18,7 @@ class TranslationService {
   late final ServerTranslationProvider _serverProvider;
   
   TranslationService({
-    required DictionaryService dictionaryService,
+    required DriftDictionaryService dictionaryService,
     required TranslationCacheService cacheService,
   }) : _dictionaryService = dictionaryService,
        _cacheService = cacheService,
@@ -30,7 +30,7 @@ class TranslationService {
   
   /// Initialize all translation providers
   Future<void> initialize() async {
-    await _dictionaryService.initialize();
+    // DriftDictionaryService doesn't need initialization - database is already set up
     await _cacheService.initialize();
     
     for (final provider in _providers) {
@@ -70,6 +70,7 @@ class TranslationService {
       final dictionaryResult = await _tryDictionaryLookup(
         text, 
         sourceLanguage,
+        targetLanguage,
       );
       
       if (dictionaryResult.hasResults) {
@@ -255,15 +256,16 @@ class TranslationService {
   
   Future<DictionaryLookupResult> _tryDictionaryLookup(
     String word, 
-    String language,
+    String sourceLanguage,
+    String targetLanguage,
   ) async {
     final stopwatch = Stopwatch()..start();
     
     try {
       final entries = await _dictionaryService.lookupWord(
         word: word,
-        sourceLanguage: language,
-        targetLanguage: language, // For now, use same language
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage, // Use proper target language for bidirectional lookup
         limit: 5,
       );
       
@@ -271,7 +273,7 @@ class TranslationService {
       
       return DictionaryLookupResult(
         query: word,
-        language: language,
+        language: '$sourceLanguage-$targetLanguage',
         entries: entries,
         latencyMs: stopwatch.elapsedMilliseconds,
       );
@@ -279,7 +281,7 @@ class TranslationService {
       stopwatch.stop();
       return DictionaryLookupResult(
         query: word,
-        language: language,
+        language: '$sourceLanguage-$targetLanguage',
         entries: [],
         latencyMs: stopwatch.elapsedMilliseconds,
       );

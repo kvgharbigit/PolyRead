@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:polyread/features/reader/engines/reader_interface.dart';
+import 'package:polyread/features/reader/services/reader_settings_service.dart';
+import 'package:polyread/features/reader/models/reader_settings.dart';
 
 class HtmlReaderEngine implements ReaderEngine {
   late WebViewController _webViewController;
@@ -15,6 +17,7 @@ class HtmlReaderEngine implements ReaderEngine {
   final int _totalPages = 1; // HTML is treated as single page
   double _progress = 0.0;
   String? _selectedText;
+  ReaderEngineSettings? _settings;
   
   // Text selection tracking
   final ValueNotifier<String?> selectedTextNotifier = ValueNotifier<String?>(null);
@@ -33,6 +36,11 @@ class HtmlReaderEngine implements ReaderEngine {
     }
     
     _htmlContent = await file.readAsString();
+    
+    // Apply settings styles if available
+    if (_settings != null) {
+      _htmlContent = _applySettingsToHtml(_htmlContent!);
+    }
     
     // Inject JavaScript for text selection and translation
     _htmlContent = _injectInteractiveScript(_htmlContent!);
@@ -152,6 +160,35 @@ class HtmlReaderEngine implements ReaderEngine {
   /// Set a custom text selection handler for advanced functionality
   void setTextSelectionHandler(void Function(String text, Offset position, TextSelection selection)? handler) {
     _textSelectionHandler = handler;
+  }
+
+  /// Apply reader settings to the engine
+  Future<void> applySettings(ReaderEngineSettings settings) async {
+    _settings = settings;
+    
+    if (_htmlContent != null) {
+      // Re-apply settings to HTML content
+      final updatedContent = _applySettingsToHtml(_htmlContent!);
+      await _webViewController.loadHtmlString(updatedContent);
+    }
+  }
+
+  /// Apply settings styles to HTML content
+  String _applySettingsToHtml(String htmlContent) {
+    if (_settings == null) return htmlContent;
+    
+    final cssStyles = _settings!.getCssStyles();
+    
+    // Inject CSS styles
+    final styleTag = '<style type="text/css">$cssStyles</style>';
+    
+    if (htmlContent.contains('</head>')) {
+      return htmlContent.replaceFirst('</head>', '$styleTag</head>');
+    } else if (htmlContent.contains('<body')) {
+      return htmlContent.replaceFirst('<body', '$styleTag<body');
+    } else {
+      return '$styleTag$htmlContent';
+    }
   }
 
   @override
@@ -309,8 +346,7 @@ window.addEventListener('load', _updateProgress);
           _selectedText = data['text'] as String?;
           selectedTextNotifier.value = _selectedText;
           
-          // Notify parent widget about text selection
-          if (_textSelectionHandler != null && _selectedText != null) {
+          if (_selectedText != null) {
             final position = data['position'] as Map<String, dynamic>?;
             final offset = position != null 
                 ? Offset(
@@ -319,12 +355,20 @@ window.addEventListener('load', _updateProgress);
                   )
                 : Offset.zero;
             
-            final textSelection = TextSelection(
-              baseOffset: (data['startOffset'] as num?)?.toInt() ?? 0,
-              extentOffset: (data['endOffset'] as num?)?.toInt() ?? 0,
-            );
+            // Trigger consistent callback interface (same as PDF/EPUB/TXT)
+            if (onTextSelectionCallback != null) {
+              onTextSelectionCallback!(_selectedText!, offset);
+            }
             
-            _textSelectionHandler!(_selectedText!, offset, textSelection);
+            // Also trigger advanced handler if available
+            if (_textSelectionHandler != null) {
+              final textSelection = TextSelection(
+                baseOffset: (data['startOffset'] as num?)?.toInt() ?? 0,
+                extentOffset: (data['endOffset'] as num?)?.toInt() ?? 0,
+              );
+              
+              _textSelectionHandler!(_selectedText!, offset, textSelection);
+            }
           }
           break;
           
@@ -332,8 +376,7 @@ window.addEventListener('load', _updateProgress);
           _selectedText = data['text'] as String?;
           selectedTextNotifier.value = _selectedText;
           
-          // Handle word tap
-          if (_textSelectionHandler != null && _selectedText != null) {
+          if (_selectedText != null) {
             final position = data['position'] as Map<String, dynamic>?;
             final offset = position != null 
                 ? Offset(
@@ -342,18 +385,45 @@ window.addEventListener('load', _updateProgress);
                   )
                 : Offset.zero;
             
-            final textSelection = TextSelection(
-              baseOffset: (data['startOffset'] as num?)?.toInt() ?? 0,
-              extentOffset: (data['endOffset'] as num?)?.toInt() ?? 0,
-            );
+            // Trigger consistent callback interface (same as PDF/EPUB/TXT)
+            if (onTextSelectionCallback != null) {
+              onTextSelectionCallback!(_selectedText!, offset);
+            }
             
-            _textSelectionHandler!(_selectedText!, offset, textSelection);
+            // Also trigger advanced handler if available
+            if (_textSelectionHandler != null) {
+              final textSelection = TextSelection(
+                baseOffset: (data['startOffset'] as num?)?.toInt() ?? 0,
+                extentOffset: (data['endOffset'] as num?)?.toInt() ?? 0,
+              );
+              
+              _textSelectionHandler!(_selectedText!, offset, textSelection);
+            }
           }
           break;
       }
     } catch (e) {
       print('Error handling text selection: $e');
     }
+  }
+
+  @override
+  String? extractContextAroundWord(String word, {int contextWords = 10}) {
+    // Extract context from HTML content
+    if (_htmlContent == null) return null;
+    
+    // Remove HTML tags and extract text
+    final text = _htmlContent!.replaceAll(RegExp(r'<[^>]*>'), ' ');
+    final words = text.split(RegExp(r'\s+'));
+    
+    final wordIndex = words.indexWhere((w) => w.toLowerCase().contains(word.toLowerCase()));
+    if (wordIndex == -1) return null;
+    
+    // Extract context around the word
+    final startIndex = (wordIndex - contextWords).clamp(0, words.length);
+    final endIndex = (wordIndex + contextWords + 1).clamp(0, words.length);
+    
+    return words.sublist(startIndex, endIndex).join(' ');
   }
 
   // Simple JSON parser for basic cases

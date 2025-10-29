@@ -11,6 +11,7 @@ class DictionaryEntry {
   final String? exampleSentence;
   final String sourceDictionary;
   final DateTime createdAt;
+  final List<String> synonyms; // Added for WikiDict pipe-separated translations
   
   const DictionaryEntry({
     this.id,
@@ -22,10 +23,15 @@ class DictionaryEntry {
     this.exampleSentence,
     required this.sourceDictionary,
     required this.createdAt,
+    this.synonyms = const [], // Default to empty list
   });
   
   /// Create DictionaryEntry from database map
   factory DictionaryEntry.fromMap(Map<String, dynamic> map) {
+    // Parse synonyms if available
+    final synonymsList = map['synonyms'] as List<dynamic>? ?? [];
+    final synonyms = synonymsList.map((s) => s.toString()).toList();
+    
     return DictionaryEntry(
       id: map['id'] as int?,
       word: map['word'] as String,
@@ -36,6 +42,7 @@ class DictionaryEntry {
       exampleSentence: map['example_sentence'] as String?,
       sourceDictionary: map['source_dictionary'] as String,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
+      synonyms: synonyms,
     );
   }
   
@@ -51,6 +58,7 @@ class DictionaryEntry {
       'example_sentence': exampleSentence,
       'source_dictionary': sourceDictionary,
       'created_at': createdAt.millisecondsSinceEpoch,
+      'synonyms': synonyms,
     };
   }
   
@@ -65,6 +73,7 @@ class DictionaryEntry {
     String? exampleSentence,
     String? sourceDictionary,
     DateTime? createdAt,
+    List<String>? synonyms,
   }) {
     return DictionaryEntry(
       id: id ?? this.id,
@@ -76,6 +85,7 @@ class DictionaryEntry {
       exampleSentence: exampleSentence ?? this.exampleSentence,
       sourceDictionary: sourceDictionary ?? this.sourceDictionary,
       createdAt: createdAt ?? this.createdAt,
+      synonyms: synonyms ?? this.synonyms,
     );
   }
   
@@ -124,4 +134,28 @@ class DictionaryLookupResult {
   
   /// Get the best (first) result
   DictionaryEntry? get bestResult => entries.isNotEmpty ? entries.first : null;
+  
+  /// Convert to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'query': query,
+      'language': language,
+      'entries': entries.map((e) => e.toMap()).toList(),
+      'latencyMs': latencyMs,
+      'fromCache': fromCache,
+    };
+  }
+  
+  /// Create from JSON
+  factory DictionaryLookupResult.fromJson(Map<String, dynamic> json) {
+    return DictionaryLookupResult(
+      query: json['query'] as String,
+      language: json['language'] as String,
+      entries: (json['entries'] as List<dynamic>)
+          .map((e) => DictionaryEntry.fromMap(e as Map<String, dynamic>))
+          .toList(),
+      latencyMs: json['latencyMs'] as int? ?? 0,
+      fromCache: json['fromCache'] as bool? ?? false,
+    );
+  }
 }

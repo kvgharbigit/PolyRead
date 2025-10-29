@@ -4,15 +4,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:polyread/features/reader/services/reader_translation_service.dart';
 import 'package:polyread/features/translation/services/translation_service.dart';
-import 'package:polyread/features/translation/services/dictionary_service.dart';
+import 'package:polyread/features/translation/services/drift_dictionary_service.dart';
 import 'package:polyread/features/translation/services/translation_cache_service.dart';
 import 'package:polyread/features/vocabulary/services/vocabulary_service.dart';
 import 'package:polyread/core/providers/database_provider.dart';
 
 // Translation service dependencies
-final dictionaryServiceProvider = Provider<DictionaryService>((ref) {
+final dictionaryServiceProvider = Provider<DriftDictionaryService>((ref) {
   final database = ref.watch(databaseProvider);
-  return DictionaryService(database);
+  return DriftDictionaryService(database);
 });
 
 final translationCacheServiceProvider = Provider<TranslationCacheService>((ref) {

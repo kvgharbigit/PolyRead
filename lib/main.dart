@@ -36,11 +36,14 @@ void main() async {
   final stats = await migrationService.getFileStatusStats();
   print('📊 File Status: $stats');
   
-  // Initialize dictionary data
-  final dictionaryLoader = DictionaryLoaderService(database);
-  await dictionaryLoader.loadSampleDictionary();
-  final dictStats = await dictionaryLoader.getDictionaryStats();
-  print('📚 Dictionary: ${dictStats['totalEntries']} entries, ${dictStats['languagePairs']} language pairs');
+  // Clear any existing fake/sample dictionaries
+  try {
+    final dictionaryLoader = DictionaryLoaderService(database);
+    await dictionaryLoader.clearDictionary(); // Remove fake data
+    print('📚 Dictionary: Cleared - real dictionaries will be downloaded when needed');
+  } catch (e) {
+    print('📚 Dictionary: Clear failed (migration in progress) - will be cleared after schema update: $e');
+  }
   
   runApp(
     ProviderScope(

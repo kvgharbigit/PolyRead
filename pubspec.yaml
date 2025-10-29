@@ -41,6 +41,9 @@ dependencies:
   crypto: ^3.0.5
   webview_flutter: ^4.4.2
   flutter_tts: ^4.1.0
+  wakelock_plus: ^1.2.8
+  archive: ^3.4.10
+  sqlite3: ^2.9.3
 
 dev_dependencies:
   flutter_test:

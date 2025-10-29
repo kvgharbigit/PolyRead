@@ -15,8 +15,10 @@ import 'package:polyread/features/reader/services/reading_progress_service.dart'
 import 'package:polyread/features/reader/widgets/table_of_contents_dialog.dart';
 import 'package:polyread/features/reader/widgets/reader_settings_dialog.dart';
 import 'package:polyread/features/reader/models/reader_settings.dart';
-// import 'package:polyread/features/reader/widgets/bookmarks_dialog.dart';
-// import 'package:polyread/features/reader/services/bookmark_service.dart';
+import 'package:polyread/features/reader/services/reader_settings_service.dart';
+import 'package:polyread/features/reader/services/auto_scroll_service.dart';
+import 'package:polyread/features/reader/widgets/bookmarks_dialog.dart';
+import 'package:polyread/features/reader/services/bookmark_service.dart';
 import 'package:polyread/features/translation/widgets/translation_popup.dart';
 import 'package:polyread/features/translation/services/drift_translation_service.dart';
 // import 'package:polyread/features/translation/services/dictionary_service.dart'; // Not currently used
@@ -24,6 +26,7 @@ import 'package:polyread/features/translation/services/drift_translation_service
 import 'package:polyread/features/vocabulary/services/drift_vocabulary_service.dart';
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/core/providers/database_provider.dart';
+import 'package:polyread/core/providers/settings_provider.dart';
 import 'package:polyread/core/utils/constants.dart';
 
 class BookReaderWidget extends ConsumerStatefulWidget {
@@ -45,7 +48,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   ReadingProgressService? _progressService;
   DriftTranslationService? _translationService;
   // DriftVocabularyService? _vocabularyService;
-  // BookmarkService? _bookmarkService;
+  BookmarkService? _bookmarkService;
+  ReaderSettingsService? _settingsService;
+  AutoScrollService? _autoScrollService;
   Timer? _progressTimer;
   DateTime? _sessionStartTime;
   bool _isLoading = true;
@@ -61,8 +66,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   String? _selectedContext;
   TextSelection? _selectedTextSelection;
   Offset _tapPosition = Offset.zero;
-  final String _sourceLanguage = 'en';
-  final String _targetLanguage = 'es';
+  String _sourceLanguage = 'en'; // Will be set from book/settings
+  String _homeLanguage = 'en'; // User's home language from settings
   
   // Reader settings
   ReaderSettings _readerSettings = ReaderSettings.defaultSettings();
@@ -79,6 +84,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     _progressTimer?.cancel();
     _readerEngine?.dispose();
     _translationService?.dispose();
+    _settingsService?.dispose();
+    _autoScrollService?.dispose();
     super.dispose();
   }
   
@@ -86,11 +93,36 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     try {
       final database = ref.read(databaseProvider);
       _progressService = ReadingProgressService(database);
-      // _bookmarkService = BookmarkService(database);
+      _bookmarkService = BookmarkService(database);
+      
+      // Initialize settings service
+      _settingsService = ReaderSettingsService();
+      await _settingsService!.initialize();
+      _readerSettings = _settingsService!.currentSettings;
+      
+      // Get language settings
+      final appSettings = ref.read(settingsProvider);
+      _homeLanguage = appSettings.defaultTargetLanguage;
+      _sourceLanguage = appSettings.defaultSourceLanguage == 'auto' ? 'en' : appSettings.defaultSourceLanguage;
+      
+      print('BookReader: Language settings - Source: $_sourceLanguage, Home: $_homeLanguage');
+      
+      // Alert user if target language is not English
+      if (_homeLanguage != 'en') {
+        print('BookReader: WARNING - Target language is set to "$_homeLanguage" instead of "en" (English)');
+        print('BookReader: This will translate TO $_homeLanguage instead of TO English');
+        print('BookReader: Change your target language to "en" in settings if you want translations to English');
+      }
+      
+      // Initialize auto-scroll service
+      _autoScrollService = AutoScrollService();
       
       // Initialize translation service with Drift integration
       _translationService = DriftTranslationService(database: database);
       await _translationService!.initialize();
+      
+      // Set context for dialog prompts (will be updated in build method)
+      _translationService!.setContext(context);
       
       // Initialize vocabulary service
       // _vocabularyService = DriftVocabularyService(database);
@@ -110,6 +142,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       
       // Initialize the engine
       await _readerEngine!.initialize(widget.book.filePath);
+      
+      // Apply current settings to the engine
+      await _applySettingsToEngine();
       
       // Set up text selection handlers for translation
       _setupTextSelectionHandlers();
@@ -162,8 +197,15 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     if (_readerEngine == null) return;
     
     // Set up the text selection handler for translation
-    void handleTextSelection(String text, Offset position, TextSelection selection) {
-      if (_translationService == null) return;
+    void handleTextSelection(String text, Offset position, TextSelection selection) async {
+      print('BookReader: handleTextSelection called with "$text"');
+      
+      if (_translationService == null) {
+        print('BookReader: Translation service is null!');
+        return;
+      }
+      
+      print('BookReader: Translation service available, processing...');
       
       // Extract context around the selected text
       final context = _extractContext(text, selection);
@@ -176,6 +218,11 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
         _showTranslationPopup = true;
       });
       
+      print('BookReader: Translation popup shown, starting translation...');
+      
+      // Note: Translation will be performed by the TranslationPopup widget
+      // No need to call translation service here as it would duplicate the call
+      
       _sessionTranslations++;
     }
     
@@ -184,8 +231,21 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       (_readerEngine as HtmlReaderEngine).setTextSelectionHandler(handleTextSelection);
     } else if (_readerEngine is TxtReaderEngine) {
       (_readerEngine as TxtReaderEngine).setTextSelectionHandler(handleTextSelection);
+    } else if (_readerEngine is EpubReaderEngine) {
+      // Set up callback for EPUB engine
+      print('BookReader: Setting EPUB text selection callback');
+      (_readerEngine as EpubReaderEngine).setTextSelectionCallback((text, position) {
+        print('BookReader: EPUB callback triggered with text: "$text"');
+        handleTextSelection(text, position, TextSelection(baseOffset: 0, extentOffset: text.length));
+      });
+    } else if (_readerEngine is PdfReaderEngine) {
+      // Set up callback for PDF engine  
+      print('BookReader: Setting PDF text selection callback');
+      (_readerEngine as PdfReaderEngine).setTextSelectionCallback((text, position) {
+        print('BookReader: PDF callback triggered with text: $text');
+        handleTextSelection(text, position, TextSelection(baseOffset: 0, extentOffset: text.length));
+      });
     }
-    // PDF and EPUB engines use the default onTextSelected interface method
   }
   
   // Translation event handlers - TODO: Connect to reader engines when needed
@@ -223,9 +283,15 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   */
   
   String? _extractContext(String word, TextSelection selection) {
-    // For now, return a mock context
-    // In a real implementation, this would extract text from the current page/chapter
-    return "This is an example sentence containing the word $word for context display.";
+    // Use the reader engine to extract context around the word
+    if (_readerEngine == null) return null;
+    
+    try {
+      return _readerEngine!.extractContextAroundWord(word, contextWords: 8);
+    } catch (e) {
+      print('BookReader: Failed to extract context: $e');
+      return null;
+    }
   }
   
   void _closeTranslationPopup() {
@@ -243,9 +309,57 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       SnackBar(content: Text('Added "$word" to vocabulary')),
     );
   }
+
+  Future<void> _toggleBookmark() async {
+    if (_bookmarkService == null || _readerEngine == null) return;
+    
+    try {
+      final currentPosition = _readerEngine!.currentPosition;
+      final result = await _bookmarkService!.toggleBookmark(
+        bookId: widget.book.id,
+        position: currentPosition,
+        title: null, // Will generate default title
+        excerpt: _readerEngine!.getSelectedText(), // Use current selection if available
+      );
+      
+      final message = result.wasAdded
+          ? 'Bookmark added at ${result.bookmark.displayTitle}'
+          : 'Bookmark removed from ${result.bookmark.displayTitle}';
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error managing bookmark: $e')),
+      );
+    }
+  }
+
+  void _showBookmarks() {
+    if (_bookmarkService == null || _readerEngine == null) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => BookmarksDialog(
+        bookId: widget.book.id,
+        bookTitle: widget.book.title,
+        bookmarkService: _bookmarkService!,
+        currentPosition: _readerEngine!.currentPosition,
+        onNavigate: (position) async {
+          await _readerEngine!.goToPosition(position);
+          setState(() {}); // Refresh UI with new position
+        },
+      ),
+    );
+  }
   
   @override
   Widget build(BuildContext context) {
+    // Update translation service context for dialog prompts
+    _translationService?.setContext(context);
+    
     if (_isLoading) {
       return const Scaffold(
         body: Center(
@@ -310,11 +424,14 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       actions: [
         IconButton(
           icon: const Icon(Icons.bookmark_outline),
-          onPressed: () {
-            // TODO: Implement bookmarks after fixing database schema
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Bookmarks coming soon')),
-            );
+          onPressed: () async {
+            if (_bookmarkService != null && _readerEngine != null) {
+              await _toggleBookmark();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Bookmark service not available')),
+              );
+            }
           },
         ),
         IconButton(
@@ -329,6 +446,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
               case 'toc':
                 _showTableOfContents();
                 break;
+              case 'bookmarks':
+                _showBookmarks();
+                break;
               case 'settings':
                 _showReaderSettings();
                 break;
@@ -340,6 +460,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
               child: ListTile(
                 leading: Icon(Icons.list),
                 title: Text('Table of Contents'),
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'bookmarks',
+              child: ListTile(
+                leading: Icon(Icons.bookmarks),
+                title: Text('Bookmarks'),
               ),
             ),
             const PopupMenuItem(
@@ -396,13 +523,11 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
           TranslationPopup(
             selectedText: _selectedText!,
             sourceLanguage: _sourceLanguage,
-            targetLanguage: _targetLanguage,
+            targetLanguage: _homeLanguage,
             position: _tapPosition,
             onClose: _closeTranslationPopup,
-            onAddToVocabulary: _addToVocabulary,
             translationService: _translationService,
             context: _selectedContext,
-            textSelection: _selectedTextSelection,
           ),
       ],
     );
@@ -549,13 +674,51 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       context: context,
       builder: (context) => ReaderSettingsDialog(
         initialSettings: _readerSettings,
-        onSettingsChanged: (newSettings) {
-          setState(() {
-            _readerSettings = newSettings;
-          });
-          // TODO: Persist settings to SharedPreferences
+        onSettingsChanged: (newSettings) async {
+          await _updateSettings(newSettings);
         },
       ),
     );
+  }
+
+  /// Apply settings to the current reader engine
+  Future<void> _applySettingsToEngine() async {
+    if (_readerEngine == null || _settingsService == null) return;
+    
+    final engineSettings = _settingsService!.getEngineSettings(widget.book.fileType);
+    
+    // Apply settings based on engine type
+    if (_readerEngine is HtmlReaderEngine) {
+      await (_readerEngine as HtmlReaderEngine).applySettings(engineSettings);
+    } else if (_readerEngine is TxtReaderEngine) {
+      await (_readerEngine as TxtReaderEngine).applySettings(engineSettings);
+    }
+    // PDF and EPUB engines would need similar integration
+  }
+
+  /// Update settings and apply them
+  Future<void> _updateSettings(ReaderSettings newSettings) async {
+    if (_settingsService == null) return;
+    
+    // Update settings service
+    await _settingsService!.updateSettings(newSettings);
+    
+    // Update local state
+    setState(() {
+      _readerSettings = newSettings;
+    });
+    
+    // Apply new settings to the current engine
+    await _applySettingsToEngine();
+    
+    // Handle auto-scroll settings
+    if (newSettings.autoScroll && _autoScrollService != null && _readerEngine != null) {
+      _autoScrollService!.startAutoScroll(
+        readerEngine: _readerEngine!,
+        speed: newSettings.autoScrollSpeed,
+      );
+    } else if (!newSettings.autoScroll) {
+      _autoScrollService?.stopAutoScroll();
+    }
   }
 }

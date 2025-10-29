@@ -1,8 +1,5 @@
 // Bookmark Service
 // Manages bookmarks with database persistence using Drift
-// TODO: Implement when Bookmarks table is properly configured in Drift
-
-/*
 import 'package:drift/drift.dart';
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/features/reader/engines/reader_interface.dart';
@@ -30,10 +27,10 @@ class BookmarkService {
       title: Value(title),
       note: Value(note),
       excerpt: Value(excerpt),
-      color: color.name,
-      icon: icon.name,
-      isQuickBookmark: isQuickBookmark,
-      sortOrder: await _getNextSortOrder(bookId),
+      color: Value(color.name),
+      icon: Value(icon.name),
+      isQuickBookmark: Value(isQuickBookmark),
+      sortOrder: Value(await _getNextSortOrder(bookId)),
     );
     
     return await _database.into(_database.bookmarks).insert(bookmarksCompanion);
@@ -49,7 +46,7 @@ class BookmarkService {
       ]);
     
     final results = await query.get();
-    return results.map((row) => BookmarkModel.fromDrift(row)).toList();
+    return results.map((row) => BookmarkModel.fromRow(row)).toList();
   }
   
   /// Get recent bookmarks across all books
@@ -61,7 +58,7 @@ class BookmarkService {
       ..limit(limit);
     
     final results = await query.get();
-    return results.map((row) => BookmarkModel.fromDrift(row)).toList();
+    return results.map((row) => BookmarkModel.fromRow(row)).toList();
   }
   
   /// Update bookmark
@@ -103,7 +100,7 @@ class BookmarkService {
       );
     
     final result = await query.getSingleOrNull();
-    return result != null ? BookmarkModel.fromDrift(result) : null;
+    return result != null ? BookmarkModel.fromRow(result) : null;
   }
   
   /// Toggle bookmark at position (add if doesn't exist, remove if exists)
@@ -184,15 +181,16 @@ class BookmarkService {
     required int bookId,
     required String query,
   }) async {
-    final results = await _database.select(_database.bookmarks)
-      .where((b) => 
+    final dbQuery = _database.select(_database.bookmarks)
+      ..where((b) => 
         b.bookId.equals(bookId) & 
         (b.title.like('%$query%') | 
          b.note.like('%$query%') |
-         b.excerpt.like('%$query%'))
-      ).get();
+         b.excerpt.like('%$query%')));
     
-    return results.map((row) => BookmarkModel.fromDrift(row)).toList();
+    final results = await dbQuery.get();
+    
+    return results.map((row) => BookmarkModel.fromRow(row)).toList();
   }
   
   /// Import bookmarks from another format
@@ -235,7 +233,7 @@ class BookmarkService {
     final result = await (_database.select(_database.bookmarks)
       ..where((b) => b.id.equals(bookmarkId))).getSingleOrNull();
     
-    return result != null ? BookmarkModel.fromDrift(result) : null;
+    return result != null ? BookmarkModel.fromRow(result) : null;
   }
   
   String _generateDefaultTitle(ReaderPosition position) {
@@ -274,4 +272,3 @@ class BookmarkStats {
     this.lastBookmarkDate,
   });
 }
-*/

@@ -4,9 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:polyread/features/translation/models/translation_request.dart';
-import 'package:polyread/features/translation/models/translation_response.dart';
+import 'package:polyread/features/translation/models/translation_response.dart' as response_model;
 import 'package:polyread/features/translation/services/translation_service.dart';
-import 'package:polyread/features/translation/services/dictionary_service.dart';
 import 'package:polyread/features/translation/services/translation_cache_service.dart';
 import 'package:polyread/features/vocabulary/services/vocabulary_service.dart';
 import 'package:polyread/features/vocabulary/models/vocabulary_item.dart';
@@ -21,6 +20,8 @@ class ReaderTranslationService extends ChangeNotifier {
   TranslationResponse? _currentTranslation;
   bool _isTranslating = false;
   String? _error;
+  bool _needsModelDownload = false;
+  String? _missingModelProvider;
   
   // Text selection state
   String? _selectedText;
@@ -43,6 +44,8 @@ class ReaderTranslationService extends ChangeNotifier {
   String? get selectedText => _selectedText;
   Offset? get selectionPosition => _selectionPosition;
   bool get hasSelection => _selectedText != null && _selectedText!.isNotEmpty;
+  bool get needsModelDownload => _needsModelDownload;
+  String? get missingModelProvider => _missingModelProvider;
 
   /// Initialize the service
   Future<void> initialize() async {
@@ -95,6 +98,8 @@ class ReaderTranslationService extends ChangeNotifier {
 
     _isTranslating = true;
     _error = null;
+    _needsModelDownload = false;
+    _missingModelProvider = null;
     notifyListeners();
 
     try {
@@ -110,6 +115,15 @@ class ReaderTranslationService extends ChangeNotifier {
         sourceLanguage: sourceLanguage,
         targetLanguage: targetLanguage,
       );
+
+      // Check if models need to be downloaded
+      if (_currentTranslation!.source == TranslationSource.modelsNotDownloaded) {
+        _needsModelDownload = true;
+        _missingModelProvider = _currentTranslation!.providerId;
+        _error = _currentTranslation!.error;
+      } else if (_currentTranslation!.source == TranslationSource.error) {
+        _error = _currentTranslation!.error;
+      }
 
       _isTranslating = false;
       notifyListeners();
@@ -178,7 +192,36 @@ class ReaderTranslationService extends ChangeNotifier {
     _currentTranslation = null;
     _error = null;
     _isTranslating = false;
+    _needsModelDownload = false;
+    _missingModelProvider = null;
     notifyListeners();
+  }
+
+  /// Trigger download of missing models and retry translation
+  Future<void> downloadModelsAndRetry({
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    if (!_needsModelDownload || _missingModelProvider == null) {
+      return;
+    }
+
+    try {
+      // TODO: Implement actual model download logic
+      // For now, just retry the translation
+      _needsModelDownload = false;
+      _missingModelProvider = null;
+      notifyListeners();
+
+      // Retry translation
+      await translateSelection(
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
+      );
+    } catch (e) {
+      _error = 'Failed to download models: $e';
+      notifyListeners();
+    }
   }
 
   /// Get translation suggestions for current selection

@@ -74,23 +74,31 @@ class SqlitePerformanceProof {
         path,
         version: 1,
         onCreate: (db, version) async {
-          // Create dictionary table with FTS
+          // Create dictionary table with Wiktionary-compatible structure
           await db.execute('''
             CREATE TABLE dictionary (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              lemma TEXT NOT NULL,
-              definition TEXT NOT NULL,
-              part_of_speech TEXT,
-              language_pair TEXT,
-              frequency INTEGER DEFAULT 0
+              written_rep TEXT NOT NULL,
+              lexentry TEXT,
+              sense TEXT,
+              trans_list TEXT NOT NULL,
+              pos TEXT,
+              domain TEXT,
+              source_language TEXT NOT NULL,
+              target_language TEXT NOT NULL,
+              frequency INTEGER DEFAULT 0,
+              pronunciation TEXT,
+              examples TEXT,
+              source TEXT
             )
           ''');
           
-          // Create FTS table for fast text search (test-specific name)
+          // Create FTS table for fast text search (Wiktionary-compatible)
           await db.execute('''
             CREATE VIRTUAL TABLE test_dictionary_fts USING fts5(
-              lemma,
-              definition,
+              written_rep,
+              sense,
+              trans_list,
               content='dictionary',
               content_rowid='id'
             )
@@ -100,32 +108,32 @@ class SqlitePerformanceProof {
           await db.execute('''
             CREATE TRIGGER dictionary_ai AFTER INSERT ON dictionary
             BEGIN
-              INSERT INTO test_dictionary_fts(rowid, lemma, definition)
-              VALUES (new.id, new.lemma, new.definition);
+              INSERT INTO test_dictionary_fts(rowid, written_rep, sense, trans_list)
+              VALUES (new.id, new.written_rep, COALESCE(new.sense, ''), new.trans_list);
             END
           ''');
           
           await db.execute('''
             CREATE TRIGGER dictionary_ad AFTER DELETE ON dictionary
             BEGIN
-              INSERT INTO test_dictionary_fts(test_dictionary_fts, rowid, lemma, definition)
-              VALUES('delete', old.id, old.lemma, old.definition);
+              INSERT INTO test_dictionary_fts(test_dictionary_fts, rowid, written_rep, sense, trans_list)
+              VALUES('delete', old.id, old.written_rep, COALESCE(old.sense, ''), old.trans_list);
             END
           ''');
           
           await db.execute('''
             CREATE TRIGGER dictionary_au AFTER UPDATE ON dictionary
             BEGIN
-              INSERT INTO test_dictionary_fts(test_dictionary_fts, rowid, lemma, definition)
-              VALUES('delete', old.id, old.lemma, old.definition);
-              INSERT INTO test_dictionary_fts(rowid, lemma, definition)
-              VALUES (new.id, new.lemma, new.definition);
+              INSERT INTO test_dictionary_fts(test_dictionary_fts, rowid, written_rep, sense, trans_list)
+              VALUES('delete', old.id, old.written_rep, COALESCE(old.sense, ''), old.trans_list);
+              INSERT INTO test_dictionary_fts(rowid, written_rep, sense, trans_list)
+              VALUES (new.id, new.written_rep, COALESCE(new.sense, ''), new.trans_list);
             END
           ''');
           
           // Create indexes for performance
-          await db.execute('CREATE INDEX idx_lemma ON dictionary(lemma)');
-          await db.execute('CREATE INDEX idx_language_pair ON dictionary(language_pair)');
+          await db.execute('CREATE INDEX idx_written_rep ON dictionary(written_rep)');
+          await db.execute('CREATE INDEX idx_source_target_lang ON dictionary(source_language, target_language)');
         },
       );
       
@@ -158,10 +166,12 @@ class SqlitePerformanceProof {
     // Generate sample dictionary entries
     for (int i = 0; i < entryCount; i++) {
       batch.insert('dictionary', {
-        'lemma': 'word_$i',
-        'definition': 'Definition for word $i - a sample definition with multiple words to test FTS performance',
-        'part_of_speech': _getRandomPartOfSpeech(i),
-        'language_pair': 'en-es',
+        'written_rep': 'word_$i',
+        'sense': 'Definition for word $i - a sample definition with multiple words to test FTS performance',
+        'trans_list': 'Spanish translation for word $i',
+        'pos': _getRandomPartOfSpeech(i),
+        'source_language': 'en',
+        'target_language': 'es',
         'frequency': i % 1000,
       });
       
@@ -195,7 +205,7 @@ class SqlitePerformanceProof {
       // Test exact match lookup
       final result = await _testDatabase!.query(
         'dictionary',
-        where: 'lemma = ?',
+        where: 'written_rep = ?',
         whereArgs: ['word_${i % 1000}'],
         limit: 1,
       );
@@ -261,7 +271,7 @@ class SqlitePerformanceProof {
     final futures = List.generate(10, (index) async {
       final result = await _testDatabase!.query(
         'dictionary',
-        where: 'lemma LIKE ?',
+        where: 'written_rep LIKE ?',
         whereArgs: ['word_${index}%'],
         limit: 5,
       );

@@ -1,26 +1,40 @@
 // Language Pack Integration Service
 // Connects downloaded language packs to translation and dictionary services
+// Enhanced to work with DictionaryManagementService
 
 import 'dart:io';
 import 'dart:convert';
 import 'package:path/path.dart' as path;
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/core/services/dictionary_loader_service.dart';
+import 'package:polyread/core/services/dictionary_management_service.dart';
 import 'package:polyread/features/language_packs/models/language_pack_manifest.dart';
 import 'package:polyread/core/services/error_service.dart';
+import 'package:polyread/features/language_packs/services/zip_extraction_service.dart';
+import 'package:polyread/features/language_packs/services/sqlite_import_service.dart';
+import 'package:drift/drift.dart';
 
 class LanguagePackIntegrationService {
   final AppDatabase _database;
   final DictionaryLoaderService _dictionaryLoader;
+  final DictionaryManagementService _dictionaryManagementService;
+  final ZipExtractionService _zipExtractor;
+  final SqliteImportService _sqliteImporter;
 
   LanguagePackIntegrationService({
     required AppDatabase database,
     required DictionaryLoaderService dictionaryLoader,
+    DictionaryManagementService? dictionaryManagementService,
+    ZipExtractionService? zipExtractor,
+    SqliteImportService? sqliteImporter,
   }) : _database = database,
-       _dictionaryLoader = dictionaryLoader;
+       _dictionaryLoader = dictionaryLoader,
+       _dictionaryManagementService = dictionaryManagementService ?? DictionaryManagementService(database),
+       _zipExtractor = zipExtractor ?? ZipExtractionService(),
+       _sqliteImporter = sqliteImporter ?? SqliteImportService(database);
 
   /// Install a downloaded language pack into the system
-  Future<void> installLanguagePack(LanguagePackManifest manifest, String downloadPath) async {
+  Future<LanguagePackInstallationResult> installLanguagePack(LanguagePackManifest manifest, String downloadPath) async {
     try {
       print('Installing language pack: ${manifest.name}');
 
@@ -30,14 +44,27 @@ class LanguagePackIntegrationService {
         throw Exception('Language pack directory not found: $downloadPath');
       }
 
+      var dictionaryInstalled = false;
+      var modelsInstalled = false;
+
       // 2. Load dictionary data if this is a dictionary pack
       if (manifest.packType == 'dictionary' || manifest.packType == 'combined') {
-        await _loadDictionaryFromPack(manifest, downloadPath);
+        final result = await _loadDictionaryFromPack(manifest, downloadPath);
+        dictionaryInstalled = result.success;
+        
+        if (result.success) {
+          // Trigger dictionary management service to update availability status
+          final availability = await _dictionaryManagementService.getAvailabilityStatus(
+            sourceLanguage: manifest.sourceLanguage,
+            targetLanguage: manifest.targetLanguage,
+          );
+          print('Dictionary availability after installation: ${availability.isAvailable}');
+        }
       }
 
       // 3. Install ML Kit models if this is a translation model pack
       if (manifest.packType == 'translation_model' || manifest.packType == 'combined') {
-        await _installTranslationModels(manifest, downloadPath);
+        modelsInstalled = await _installTranslationModels(manifest, downloadPath);
       }
 
       // 4. Update pack status in database
@@ -45,69 +72,217 @@ class LanguagePackIntegrationService {
 
       print('Successfully installed language pack: ${manifest.name}');
 
+      return LanguagePackInstallationResult(
+        success: true,
+        packId: manifest.id,
+        dictionaryInstalled: dictionaryInstalled,
+        modelsInstalled: modelsInstalled,
+        message: 'Language pack ${manifest.name} installed successfully',
+      );
+
     } catch (e) {
       ErrorService.logDatabaseError(
         'Failed to install language pack ${manifest.name}',
         details: e.toString(),
       );
-      rethrow;
+      
+      return LanguagePackInstallationResult(
+        success: false,
+        packId: manifest.id,
+        dictionaryInstalled: false,
+        modelsInstalled: false,
+        message: 'Failed to install ${manifest.name}: $e',
+        error: e.toString(),
+      );
     }
   }
 
   /// Load dictionary data from a language pack
-  Future<void> _loadDictionaryFromPack(LanguagePackManifest manifest, String packPath) async {
+  Future<DictionaryLoadResult> _loadDictionaryFromPack(LanguagePackManifest manifest, String packPath) async {
     try {
-      // Look for dictionary JSON file
+      print('Loading dictionary from pack: ${manifest.name}');
+      
+      // First try to find and extract .sqlite.zip files
+      final packDir = Directory(packPath);
+      final zipFiles = await packDir.list().where((file) => 
+        file is File && file.path.endsWith('.sqlite.zip')
+      ).toList();
+      
+      if (zipFiles.isNotEmpty) {
+        print('Found ${zipFiles.length} SQLite ZIP file(s), extracting...');
+        
+        var totalEntriesLoaded = 0;
+        
+        for (final zipFile in zipFiles) {
+          final result = await _loadDictionaryFromSqliteZip(
+            zipFilePath: zipFile.path,
+            manifest: manifest,
+          );
+          
+          if (result.success) {
+            totalEntriesLoaded += result.entriesLoaded;
+          }
+        }
+        
+        if (totalEntriesLoaded > 0) {
+          return DictionaryLoadResult(
+            success: true,
+            entriesLoaded: totalEntriesLoaded,
+            message: 'Dictionary loaded successfully from SQLite files: $totalEntriesLoaded entries',
+          );
+        }
+      }
+      
+      // Fallback: Look for dictionary JSON file (legacy format)
       final dictionaryFile = File(path.join(packPath, 'dictionary.json'));
       
       if (await dictionaryFile.exists()) {
-        print('Loading dictionary from ${dictionaryFile.path}');
+        print('Loading dictionary from JSON file: ${dictionaryFile.path}');
         
         // Read and parse dictionary JSON
         final jsonContent = await dictionaryFile.readAsString();
         final dictionaryData = jsonDecode(jsonContent) as Map<String, dynamic>;
         
         // Load entries into database
-        await _loadDictionaryEntries(dictionaryData, manifest);
-      } else {
-        print('No dictionary.json found in pack, skipping dictionary loading');
+        final entriesLoaded = await _loadDictionaryEntries(dictionaryData, manifest);
+        
+        return DictionaryLoadResult(
+          success: true,
+          entriesLoaded: entriesLoaded,
+          message: 'Dictionary loaded successfully from JSON: $entriesLoaded entries',
+        );
       }
+      
+      print('No dictionary files found in pack');
+      return DictionaryLoadResult(
+        success: false,
+        entriesLoaded: 0,
+        message: 'No dictionary files (.sqlite.zip or dictionary.json) found in pack',
+      );
+      
     } catch (e) {
       ErrorService.logDatabaseError(
         'Failed to load dictionary from pack ${manifest.name}',
         details: e.toString(),
       );
-      // Don't rethrow - pack can still be partially useful
+      
+      return DictionaryLoadResult(
+        success: false,
+        entriesLoaded: 0,
+        message: 'Failed to load dictionary: $e',
+        error: e.toString(),
+      );
+    }
+  }
+  
+  /// Load dictionary from SQLite ZIP file
+  Future<DictionaryLoadResult> _loadDictionaryFromSqliteZip({
+    required String zipFilePath,
+    required LanguagePackManifest manifest,
+  }) async {
+    try {
+      print('Processing SQLite ZIP: $zipFilePath');
+      
+      // Create temporary directory for extraction
+      final tempDir = await Directory.systemTemp.createTemp('dictionary_import_');
+      
+      try {
+        // Extract the SQLite file from ZIP
+        final extractedSqlitePath = await _zipExtractor.extractDictionarySqlite(
+          zipFilePath: zipFilePath,
+          destinationDir: tempDir.path,
+          onProgress: (message) => print('Extraction: $message'),
+        );
+        
+        if (extractedSqlitePath == null) {
+          throw Exception('No SQLite file found in ZIP archive');
+        }
+        
+        print('Extracted SQLite file: $extractedSqlitePath');
+        
+        // Import the SQLite data into app database
+        final importResult = await _sqliteImporter.importWiktionarySqlite(
+          sqliteFilePath: extractedSqlitePath,
+          sourceLanguage: manifest.sourceLanguage,
+          targetLanguage: manifest.targetLanguage,
+          dictionaryName: manifest.name,
+          onProgress: (message, progress) => print('Import: $message ($progress%)'),
+        );
+        
+        if (importResult.success) {
+          print('Successfully imported ${importResult.importedEntries} entries');
+          return DictionaryLoadResult(
+            success: true,
+            entriesLoaded: importResult.importedEntries,
+            message: importResult.message,
+          );
+        } else {
+          return DictionaryLoadResult(
+            success: false,
+            entriesLoaded: 0,
+            message: importResult.message,
+            error: importResult.error,
+          );
+        }
+        
+      } finally {
+        // Clean up temporary directory
+        try {
+          await tempDir.delete(recursive: true);
+        } catch (e) {
+          print('Warning: Failed to cleanup temp directory: $e');
+        }
+      }
+      
+    } catch (e) {
+      print('Failed to load dictionary from SQLite ZIP: $e');
+      return DictionaryLoadResult(
+        success: false,
+        entriesLoaded: 0,
+        message: 'Failed to load dictionary from SQLite: $e',
+        error: e.toString(),
+      );
     }
   }
 
   /// Load dictionary entries from parsed JSON data
-  Future<void> _loadDictionaryEntries(Map<String, dynamic> data, LanguagePackManifest manifest) async {
+  Future<int> _loadDictionaryEntries(Map<String, dynamic> data, LanguagePackManifest manifest) async {
     final entries = data['entries'] as List<dynamic>? ?? [];
     final languagePair = '${manifest.sourceLanguage}-${manifest.targetLanguage}';
     
     print('Loading ${entries.length} dictionary entries for $languagePair');
     
     final batchEntries = <DictionaryEntriesCompanion>[];
+    var totalInserted = 0;
     
     for (final entryData in entries) {
       final entry = entryData as Map<String, dynamic>;
       
+      // Handle Wiktionary format: pipe-separated translations
+      final translations = entry['translations'] as dynamic;
+      final transList = translations is List 
+          ? translations.join(' | ') 
+          : translations?.toString() ?? entry['translation']?.toString() ?? '';
+      
       batchEntries.add(DictionaryEntriesCompanion.insert(
-        lemma: entry['word'] as String,
-        definition: entry['translation'] as String,
-        partOfSpeech: Value(entry['pos'] as String?),
-        languagePair: languagePair,
-        frequency: entry['frequency'] as int? ?? 0,
+        writtenRep: entry['word'] as String,
+        lexentry: Value(entry['lexentry'] as String?),
+        sense: Value(entry['definition'] as String? ?? entry['sense'] as String?),
+        transList: transList,
+        pos: Value(entry['pos'] as String?),
+        domain: Value(entry['domain'] as String?),
+        sourceLanguage: manifest.sourceLanguage,
+        targetLanguage: manifest.targetLanguage,
+        frequency: Value(entry['frequency'] as int? ?? 0),
         pronunciation: Value(entry['pronunciation'] as String?),
         examples: Value(entry['examples'] != null ? jsonEncode(entry['examples']) : null),
-        synonyms: Value(entry['synonyms'] != null ? jsonEncode(entry['synonyms']) : null),
         source: Value(manifest.name),
       ));
       
       // Insert in batches of 100
       if (batchEntries.length >= 100) {
         await _insertDictionaryBatch(batchEntries);
+        totalInserted += batchEntries.length;
         batchEntries.clear();
       }
     }
@@ -115,9 +290,11 @@ class LanguagePackIntegrationService {
     // Insert remaining entries
     if (batchEntries.isNotEmpty) {
       await _insertDictionaryBatch(batchEntries);
+      totalInserted += batchEntries.length;
     }
     
-    print('Successfully loaded ${entries.length} dictionary entries');
+    print('Successfully loaded $totalInserted dictionary entries');
+    return totalInserted;
   }
 
   /// Insert a batch of dictionary entries
@@ -130,7 +307,7 @@ class LanguagePackIntegrationService {
   }
 
   /// Install translation models (placeholder for ML Kit integration)
-  Future<void> _installTranslationModels(LanguagePackManifest manifest, String packPath) async {
+  Future<bool> _installTranslationModels(LanguagePackManifest manifest, String packPath) async {
     try {
       print('Installing translation models for ${manifest.name}');
       
@@ -140,16 +317,21 @@ class LanguagePackIntegrationService {
         // TODO: Integrate with ML Kit model installation
         // For now, just log that models are available
         print('Translation models found in pack, ready for ML Kit integration');
+        
+        // Register language pair as available for translation
+        await _registerLanguagePair(manifest);
+        return true;
+      } else {
+        print('No translation models found in pack');
+        return false;
       }
-      
-      // Register language pair as available for translation
-      await _registerLanguagePair(manifest);
       
     } catch (e) {
       ErrorService.logDatabaseError(
         'Failed to install translation models for ${manifest.name}',
         details: e.toString(),
       );
+      return false;
     }
   }
 
@@ -158,9 +340,9 @@ class LanguagePackIntegrationService {
     // Update language pack record to mark as active
     await (_database.update(_database.languagePacks)
         ..where((pack) => pack.packId.equals(manifest.id)))
-        .write(const LanguagePacksCompanion(
+        .write(LanguagePacksCompanion(
           isActive: Value(true),
-          lastUsedAt: Value.absent(),
+          lastUsedAt: Value(DateTime.now()),
         ));
   }
 
@@ -178,10 +360,10 @@ class LanguagePackIntegrationService {
         packType: manifest.packType,
         version: manifest.version,
         sizeBytes: manifest.totalSize,
-        downloadUrl: manifest.downloadUrl,
-        checksum: manifest.checksum,
-        isInstalled: isInstalled,
-        isActive: isInstalled,
+        downloadUrl: manifest.downloadUrl ?? '',
+        checksum: manifest.checksum ?? '',
+        isInstalled: Value(isInstalled),
+        isActive: Value(isInstalled),
         installedAt: Value(isInstalled ? now : null),
         lastUsedAt: Value(isInstalled ? now : null),
       ),
@@ -201,7 +383,7 @@ class LanguagePackIntegrationService {
       // Update pack status
       await (_database.update(_database.languagePacks)
           ..where((pack) => pack.packId.equals(packId)))
-          .write(const LanguagePacksCompanion(
+          .write(LanguagePacksCompanion(
             isInstalled: Value(false),
             isActive: Value(false),
             installedAt: Value(null),
@@ -244,4 +426,52 @@ class LanguagePackIntegrationService {
     final pairs = await getAvailableLanguagePairs();
     return pairs.contains('$sourceLanguage-$targetLanguage');
   }
+
+  /// Get dictionary management service for external use
+  DictionaryManagementService get dictionaryManagementService => _dictionaryManagementService;
+
+  /// Test dictionary functionality after language pack installation
+  Future<DictionaryTestResult> testDictionaryAfterInstallation({
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    return await _dictionaryManagementService.testDictionary(
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+    );
+  }
+}
+
+// Result classes for language pack integration
+
+class LanguagePackInstallationResult {
+  final bool success;
+  final String packId;
+  final bool dictionaryInstalled;
+  final bool modelsInstalled;
+  final String message;
+  final String? error;
+
+  const LanguagePackInstallationResult({
+    required this.success,
+    required this.packId,
+    required this.dictionaryInstalled,
+    required this.modelsInstalled,
+    required this.message,
+    this.error,
+  });
+}
+
+class DictionaryLoadResult {
+  final bool success;
+  final int entriesLoaded;
+  final String message;
+  final String? error;
+
+  const DictionaryLoadResult({
+    required this.success,
+    required this.entriesLoaded,
+    required this.message,
+    this.error,
+  });
 }

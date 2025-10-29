@@ -13,7 +13,7 @@ class AppConstants {
   
   // Language Codes
   static const List<String> supportedLanguages = [
-    'auto', 'en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar'
+    'auto', 'en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi'
   ];
   
   static const Map<String, String> languageNames = {
@@ -29,6 +29,7 @@ class AppConstants {
     'ja': 'Japanese',
     'ko': 'Korean',
     'ar': 'Arabic',
+    'hi': 'Hindi',
   };
   
   // File Formats
@@ -77,6 +78,6 @@ class AppConstants {
   static const String languagePacksUrl = 'https://github.com/kvgharbigit/PolyRead/releases';
   
   // Language Pack Configuration
-  static const String languagePacksReleaseTag = 'language-packs-v1.0';
-  static const String registryFileName = 'updated-registry.json';
+  static const String languagePacksReleaseTag = 'language-packs-v2.0';
+  static const String registryFileName = 'comprehensive-registry.json';
 }

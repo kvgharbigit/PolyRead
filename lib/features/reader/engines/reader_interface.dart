@@ -40,6 +40,9 @@ abstract class ReaderEngine {
   
   /// Search for text in the document
   Future<List<SearchResult>> search(String query);
+  
+  /// Extract context around a word for sentence translation
+  String? extractContextAroundWord(String word, {int contextWords = 10});
 }
 
 /// Reading position that works for both PDF and EPUB
