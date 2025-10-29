@@ -1,6 +1,7 @@
 // GitHub Releases Repository - Downloads language packs from GitHub releases
 // Fetches manifests and download URLs from GitHub API
 
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../models/language_pack_manifest.dart';
 
@@ -27,33 +28,102 @@ class GitHubReleasesRepository {
     _dio.options.receiveTimeout = const Duration(seconds: 60);
   }
   
-  /// Get all available language pack releases
+  /// Get all available language pack releases from registry
   Future<List<LanguagePackManifest>> getAvailableLanguagePacks() async {
+    print('GitHubReleasesRepository: Starting getAvailableLanguagePacks...');
+    print('GitHubReleasesRepository: Owner: $owner, Repository: $repository');
+    
     try {
-      final response = await _dio.get('/repos/$owner/$repository/releases');
+      // Get the specific language packs release
+      final releaseUrl = '/repos/$owner/$repository/releases/tags/language-packs-v2.0';
+      print('GitHubReleasesRepository: Fetching release from: $releaseUrl');
+      
+      final response = await _dio.get(releaseUrl);
+      print('GitHubReleasesRepository: Release response status: ${response.statusCode}');
       
       if (response.statusCode != 200) {
-        throw LanguagePackException('Failed to fetch releases: ${response.statusCode}');
+        print('GitHubReleasesRepository: ERROR - Failed to fetch release: ${response.statusCode}');
+        throw LanguagePackException('Failed to fetch language packs release: ${response.statusCode}');
       }
       
-      final releases = response.data as List<dynamic>;
+      final release = response.data as Map<String, dynamic>;
+      print('GitHubReleasesRepository: Release name: ${release['name']}');
+      
+      // Find the registry file in the release assets
+      final assets = release['assets'] as List<dynamic>;
+      
+      final registryAsset = assets.firstWhere(
+        (asset) => asset['name'] == 'comprehensive-registry.json',
+        orElse: () => null,
+      );
+      
+      if (registryAsset == null) {
+        print('GitHubReleasesRepository: ERROR - Registry file not found in release');
+        throw LanguagePackException('Registry file not found in release');
+      }
+      
+      // Download and parse the registry file
+      final registryResponse = await _dio.get(registryAsset['browser_download_url']);
+      
+      if (registryResponse.statusCode != 200) {
+        print('GitHubReleasesRepository: ERROR - Failed to download registry: ${registryResponse.statusCode}');
+        throw LanguagePackException('Failed to download registry: ${registryResponse.statusCode}');
+      }
+      
+      // Parse JSON if it's a string
+      final registryData = registryResponse.data;
+      
+      final registry = registryData is String 
+          ? jsonDecode(registryData) as Map<String, dynamic>
+          : registryData as Map<String, dynamic>;
+      
+      
+      final packsData = registry['packs'];
+      
+      if (packsData == null) {
+        print('GitHubReleasesRepository: ERROR - No packs found in registry');
+        throw LanguagePackException('No packs found in registry');
+      }
+      
+      // Handle both Map and List formats
+      List<Map<String, dynamic>> packsList;
+      if (packsData is Map<String, dynamic>) {
+        packsList = packsData.entries.map((entry) {
+          final packData = entry.value as Map<String, dynamic>;
+          packData['id'] = entry.key;
+          return packData;
+        }).toList();
+      } else if (packsData is List<dynamic>) {
+        packsList = packsData.cast<Map<String, dynamic>>();
+      } else {
+        print('GitHubReleasesRepository: ERROR - Unknown packs format: ${packsData.runtimeType}');
+        throw LanguagePackException('Unknown packs format in registry');
+      }
+      
       final manifests = <LanguagePackManifest>[];
       
-      for (final release in releases) {
-        try {
-          final manifest = await _parseReleaseToManifest(release as Map<String, dynamic>);
-          if (manifest != null) {
-            manifests.add(manifest);
-          }
-        } catch (e) {
-          // Skip invalid releases but continue processing others
-          print('Skipping invalid release: $e');
+      // Only include packs that are "ready" and actually have files
+      final readyPacks = ['eng-spa', 'spa-eng']; // Only these actually exist
+      for (final packData in packsList) {
+        final packId = packData['id'] as String?;
+        
+        if (packId == null) {
+          continue;
+        }
+        
+        // Only include ready packs that actually exist
+        if (readyPacks.contains(packId) && packData['status'] == 'ready') {
+          manifests.add(_createManifestFromRegistry(packId, packData, release));
         }
       }
       
+      print('GitHubReleasesRepository: Found ${manifests.length} available language packs');
+      
       return manifests;
     } catch (e) {
-      throw LanguagePackException('Failed to fetch language packs: $e');
+      print('GitHubReleasesRepository: ERROR - Failed to get available language packs: $e');
+      print('GitHubReleasesRepository: Error type: ${e.runtimeType}');
+      throw LanguagePackException('Failed to get available language packs: $e');
     }
   }
   
@@ -131,6 +201,71 @@ class GitHubReleasesRepository {
     }
   }
   
+  /// Create a manifest from registry data
+  LanguagePackManifest _createManifestFromRegistry(
+    String packId, 
+    Map<String, dynamic> packData, 
+    Map<String, dynamic> release
+  ) {
+    final assets = release['assets'] as List<dynamic>;
+    
+    // Find the corresponding .sqlite.zip file
+    final sqliteAsset = assets.firstWhere(
+      (asset) => asset['name'] == '$packId.sqlite.zip',
+      orElse: () => null,
+    );
+    
+    if (sqliteAsset == null) {
+      throw LanguagePackException('SQLite file not found for pack $packId');
+    }
+    
+    // Extract language codes from pack ID (e.g., "eng-spa" -> ["eng", "spa"])
+    final languages = packId.split('-');
+    final sourceLanguage = languages.isNotEmpty ? languages[0] : 'unknown';
+    final targetLanguage = languages.length > 1 ? languages[1] : 'unknown';
+    
+    // Convert 3-letter codes to 2-letter codes
+    final sourceCode = _convertLanguageCode(sourceLanguage);
+    final targetCode = _convertLanguageCode(targetLanguage);
+    
+    return LanguagePackManifest(
+      id: '$sourceCode-$targetCode',
+      name: '$sourceCode → $targetCode Dictionary',
+      language: sourceCode,
+      version: packData['version'] ?? '1.0.0',
+      description: packData['description'] ?? 'Dictionary for $sourceCode to $targetCode translation',
+      totalSize: sqliteAsset['size'] ?? 0,
+      files: [
+        LanguagePackFile(
+          name: '$packId.sqlite.zip',
+          path: '$packId.sqlite.zip',
+          type: LanguagePackFileType.dictionary,
+          size: sqliteAsset['size'] ?? 0,
+          checksum: packData['checksum'] ?? '',
+          downloadUrl: sqliteAsset['browser_download_url'],
+        ),
+      ],
+      supportedTargetLanguages: [targetCode],
+      releaseDate: DateTime.parse(release['published_at']),
+      author: 'PolyRead Team',
+      license: 'CC BY-SA 4.0',
+    );
+  }
+  
+  /// Convert 3-letter language codes to 2-letter codes
+  String _convertLanguageCode(String code) {
+    switch (code) {
+      case 'eng': return 'en';
+      case 'spa': return 'es';
+      case 'fra': return 'fr';
+      case 'deu': return 'de';
+      case 'ita': return 'it';
+      case 'por': return 'pt';
+      case 'rus': return 'ru';
+      default: return code;
+    }
+  }
+
   Future<LanguagePackManifest?> _parseReleaseToManifest(Map<String, dynamic> release) async {
     try {
       // Look for manifest.json in release assets

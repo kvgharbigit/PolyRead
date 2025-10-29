@@ -5,8 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 
 import '../repositories/github_releases_repo.dart';
-import '../services/pack_download_service.dart';
-import '../services/storage_management_service.dart';
+import '../services/combined_language_pack_service.dart';
 import '../../../core/utils/constants.dart';
 import '../../../core/providers/database_provider.dart';
 
@@ -20,39 +19,29 @@ final githubReleasesRepositoryProvider = Provider<GitHubReleasesRepository>((ref
   );
 });
 
-/// Storage Management Service Provider
-/// TODO: Fix database type mismatch - service expects sqflite.Database but getting AppDatabase
-// final storageManagementServiceProvider = Provider<StorageManagementService>((ref) {
-//   final database = ref.watch(databaseProvider);
-//   return StorageManagementService(database: database);
-// });
-
-/// Pack Download Service Provider
-/// Combines GitHub repository and storage management
-/// TODO: Fix after storage service is fixed
-// final packDownloadServiceProvider = Provider<PackDownloadService>((ref) {
-//   final repository = ref.watch(githubReleasesRepositoryProvider);
-//   final storageService = ref.watch(storageManagementServiceProvider);
-//   
-//   return PackDownloadService(
-//     repository: repository,
-//     storageService: storageService,
-//     maxConcurrentDownloads: 3, // Limit concurrent downloads
-//   );
-// });
+/// Combined Language Pack Service Provider
+/// Handles both dictionary and ML Kit model downloads in one action
+final combinedLanguagePackServiceProvider = Provider<CombinedLanguagePackService>((ref) {
+  final database = ref.watch(databaseProvider);
+  final repository = ref.watch(githubReleasesRepositoryProvider);
+  
+  return CombinedLanguagePackService(
+    database: database,
+    repository: repository,
+  );
+});
 
 /// Language Pack Manager State Provider
 /// Manages available and installed language packs
-/// TODO: Fix after download service is fixed
-// final languagePacksProvider = StateNotifierProvider<LanguagePacksNotifier, LanguagePacksState>((ref) {
-//   final downloadService = ref.watch(packDownloadServiceProvider);
-//   final repository = ref.watch(githubReleasesRepositoryProvider);
-//   
-//   return LanguagePacksNotifier(
-//     downloadService: downloadService,
-//     repository: repository,
-//   );
-// });
+final languagePacksProvider = StateNotifierProvider<LanguagePacksNotifier, LanguagePacksState>((ref) {
+  final combinedService = ref.watch(combinedLanguagePackServiceProvider);
+  final repository = ref.watch(githubReleasesRepositoryProvider);
+  
+  return LanguagePacksNotifier(
+    combinedService: combinedService,
+    repository: repository,
+  );
+});
 
 /// Language Packs State
 class LanguagePacksState {
@@ -106,13 +95,13 @@ class LanguagePackInfo {
 
 /// Language Packs State Notifier
 class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
-  final PackDownloadService _downloadService;
+  final CombinedLanguagePackService _combinedService;
   final GitHubReleasesRepository _repository;
   
   LanguagePacksNotifier({
-    required PackDownloadService downloadService,
+    required CombinedLanguagePackService combinedService,
     required GitHubReleasesRepository repository,
-  }) : _downloadService = downloadService,
+  }) : _combinedService = combinedService,
        _repository = repository,
        super(const LanguagePacksState()) {
     _loadLanguagePacks();
@@ -128,7 +117,15 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
       final installedPackIds = <String>[];
       
       for (final manifest in manifests) {
-        final isInstalled = await _downloadService.isPackDownloaded(manifest.id);
+        // Extract languages from manifest ID (e.g., "en-es" -> en, es)
+        final parts = manifest.id.split('-');
+        final sourceLanguage = parts.isNotEmpty ? parts[0] : 'en';
+        final targetLanguage = parts.length > 1 ? parts[1] : 'es';
+        
+        final isInstalled = await _combinedService.isLanguagePackInstalled(
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+        );
         
         if (isInstalled) {
           installedPackIds.add(manifest.id);
@@ -166,34 +163,84 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
     await _loadLanguagePacks();
   }
   
-  /// Download a language pack
+  /// Download a language pack (dictionary + ML Kit models)
   Future<void> downloadPack(String packId) async {
+    print('');
+    print('++++++++++++++++++++++++++++++++++++++++++++');
+    print('LanguagePacksProvider.downloadPack: ENTRY POINT');
+    print('LanguagePacksProvider.downloadPack: Pack ID: $packId');
+    print('LanguagePacksProvider.downloadPack: Current state: isLoading=${state.isLoading}, error=${state.error}');
+    print('LanguagePacksProvider.downloadPack: Available packs: ${state.availablePacks.length}');
+    print('LanguagePacksProvider.downloadPack: Installed pack IDs: ${state.installedPackIds}');
+    print('++++++++++++++++++++++++++++++++++++++++++++');
+    
     try {
-      final manifest = await _repository.getLanguagePack(packId);
-      if (manifest == null) {
-        throw Exception('Language pack not found: $packId');
+      // Extract languages from pack ID
+      final parts = packId.split('-');
+      print('LanguagePacksProvider.downloadPack: Step 1 - Pack ID parts: $parts');
+      
+      if (parts.length < 2) {
+        print('LanguagePacksProvider.downloadPack: ❌ VALIDATION ERROR - Invalid pack ID format: $packId');
+        throw Exception('Invalid pack ID format: $packId');
       }
       
-      await _downloadService.downloadLanguagePack(
-        manifest: manifest,
-        wifiOnly: true, // Default to WiFi only
+      final sourceLanguage = parts[0];
+      final targetLanguage = parts[1];
+      print('LanguagePacksProvider.downloadPack: Step 2 - Extracted languages:');
+      print('  - Source: $sourceLanguage');
+      print('  - Target: $targetLanguage');
+      
+      print('LanguagePacksProvider.downloadPack: Step 3 - Calling combinedService.installLanguagePack...');
+      print('LanguagePacksProvider.downloadPack: Service instance: $_combinedService');
+      
+      await _combinedService.installLanguagePack(
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
+        wifiOnly: true,
+        onProgress: (message) {
+          print('LanguagePacksProvider.downloadPack: 📝 PROGRESS - $message');
+        },
       );
       
+      print('');
+      print('LanguagePacksProvider.downloadPack: Step 4 - ✅ Installation completed successfully');
+      
       // Refresh state after download
+      print('LanguagePacksProvider.downloadPack: Step 5 - Refreshing provider state...');
       await refresh();
+      print('LanguagePacksProvider.downloadPack: Step 6 - State refresh completed');
+      print('LanguagePacksProvider.downloadPack: New state: isLoading=${state.isLoading}, error=${state.error}');
+      print('LanguagePacksProvider.downloadPack: New installed pack IDs: ${state.installedPackIds}');
+      
     } catch (e) {
+      print('');
+      print('LanguagePacksProvider.downloadPack: ❌❌❌ DOWNLOAD FAILED ❌❌❌');
+      print('LanguagePacksProvider.downloadPack: Error: $e');
+      print('LanguagePacksProvider.downloadPack: Error type: ${e.runtimeType}');
+      print('LanguagePacksProvider.downloadPack: Stack trace:');
+      print(StackTrace.current);
+      
+      print('LanguagePacksProvider.downloadPack: Setting error state...');
       state = state.copyWith(error: 'Failed to download $packId: $e');
+      print('LanguagePacksProvider.downloadPack: Error state set: ${state.error}');
+      
+      rethrow; // Re-throw to propagate to UI
     }
+    
+    print('++++++++++++++++++++++++++++++++++++++++++++');
+    print('LanguagePacksProvider.downloadPack: EXIT POINT');
+    print('++++++++++++++++++++++++++++++++++++++++++++');
+    print('');
   }
   
   /// Cancel a download
   Future<void> cancelDownload(String packId) async {
-    await _downloadService.cancelDownload(packId);
+    await _combinedService.cancelInstallation(packId);
   }
   
   @override
   void dispose() {
-    _downloadService.dispose();
+    _combinedService.dispose();
     _repository.dispose();
     super.dispose();
   }

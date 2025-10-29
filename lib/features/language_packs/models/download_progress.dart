@@ -8,6 +8,7 @@ class DownloadProgress {
   final int totalBytes;
   final double progressPercent;
   final String? currentFile;
+  final String? stageDescription;
   final int filesCompleted;
   final int totalFiles;
   final String? error;
@@ -22,6 +23,7 @@ class DownloadProgress {
     required this.totalBytes,
     required this.progressPercent,
     this.currentFile,
+    this.stageDescription,
     required this.filesCompleted,
     required this.totalFiles,
     this.error,
@@ -55,6 +57,7 @@ class DownloadProgress {
     int? downloadedBytes,
     int? totalBytes,
     String? currentFile,
+    String? stageDescription,
     int? filesCompleted,
     String? error,
     DateTime? endTime,
@@ -73,6 +76,7 @@ class DownloadProgress {
       totalBytes: newTotalBytes,
       progressPercent: newProgressPercent,
       currentFile: currentFile ?? this.currentFile,
+      stageDescription: stageDescription ?? this.stageDescription,
       filesCompleted: filesCompleted ?? this.filesCompleted,
       totalFiles: totalFiles,
       error: error ?? this.error,

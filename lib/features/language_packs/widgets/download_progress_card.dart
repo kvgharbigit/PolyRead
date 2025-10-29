@@ -107,16 +107,22 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
               Text(
-                _getStatusText(),
+                widget.progress.stageDescription ?? _getStatusText(),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: _getStatusColor(),
+                  fontWeight: widget.progress.stageDescription != null ? FontWeight.w500 : null,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
               ),
             ],
           ),
         ),
+        const SizedBox(width: 8),
         Text(
           '${widget.progress.progressPercent.toStringAsFixed(1)}%',
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -190,24 +196,48 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
 
   Widget _buildProgressDetails() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          widget.progress.formattedProgress,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        if (widget.progress.downloadSpeed != null)
-          Text(
-            widget.progress.downloadSpeed!,
+        // Progress percentage (prominent)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '${widget.progress.progressPercent.toStringAsFixed(1)}%',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.bold,
             ),
           ),
-        if (widget.progress.estimatedTimeRemaining != null)
-          Text(
-            widget.progress.estimatedTimeRemaining!,
-            style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(width: 12),
+        // Other details
+        Expanded(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              Text(
+                widget.progress.formattedProgress,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              if (widget.progress.downloadSpeed != null)
+                Text(
+                  widget.progress.downloadSpeed!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              if (widget.progress.estimatedTimeRemaining != null)
+                Text(
+                  widget.progress.estimatedTimeRemaining!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
           ),
+        ),
       ],
     );
   }
@@ -248,8 +278,10 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
   }
 
   Widget _buildActionButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 4,
       children: [
         if (widget.progress.status == DownloadStatus.downloading) ...[
           TextButton.icon(
@@ -257,7 +289,6 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
             icon: const Icon(Icons.pause, size: 16),
             label: const Text('Pause'),
           ),
-          const SizedBox(width: 8),
           TextButton.icon(
             onPressed: widget.onCancel,
             icon: const Icon(Icons.close, size: 16),
@@ -269,7 +300,6 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
             icon: const Icon(Icons.play_arrow, size: 16),
             label: const Text('Resume'),
           ),
-          const SizedBox(width: 8),
           TextButton.icon(
             onPressed: widget.onCancel,
             icon: const Icon(Icons.close, size: 16),
@@ -281,24 +311,28 @@ class _DownloadProgressCardState extends State<DownloadProgressCard>
             icon: const Icon(Icons.refresh, size: 16),
             label: const Text('Retry'),
           ),
-          const SizedBox(width: 8),
           TextButton.icon(
             onPressed: widget.onCancel,
             icon: const Icon(Icons.close, size: 16),
             label: const Text('Remove'),
           ),
         ] else if (widget.progress.status == DownloadStatus.completed) ...[
-          Icon(
-            Icons.check_circle,
-            color: Colors.green,
-            size: 16,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Completed',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.green,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 16,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Completed',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.green,
+                ),
+              ),
+            ],
           ),
         ],
       ],

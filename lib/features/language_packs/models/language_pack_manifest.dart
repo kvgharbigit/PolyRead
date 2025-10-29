@@ -13,6 +13,8 @@ class LanguagePackManifest {
   final DateTime releaseDate;
   final String? author;
   final String? license;
+  final String? downloadUrl;
+  final String? checksum;
   final Map<String, dynamic> metadata;
   
   const LanguagePackManifest({
@@ -27,6 +29,8 @@ class LanguagePackManifest {
     required this.releaseDate,
     this.author,
     this.license,
+    this.downloadUrl,
+    this.checksum,
     this.metadata = const {},
   });
   
@@ -47,6 +51,8 @@ class LanguagePackManifest {
       releaseDate: DateTime.parse(json['release_date'] as String),
       author: json['author'] as String?,
       license: json['license'] as String?,
+      downloadUrl: json['download_url'] as String?,
+      checksum: json['checksum'] as String?,
       metadata: json['metadata'] as Map<String, dynamic>? ?? {},
     );
   }
@@ -65,6 +71,8 @@ class LanguagePackManifest {
       'release_date': releaseDate.toIso8601String(),
       'author': author,
       'license': license,
+      'download_url': downloadUrl,
+      'checksum': checksum,
       'metadata': metadata,
     };
   }
@@ -90,6 +98,26 @@ class LanguagePackManifest {
   bool supportsTargetLanguage(String targetLanguage) {
     return supportedTargetLanguages.contains(targetLanguage);
   }
+  
+  /// Get pack type based on files
+  String get packType {
+    if (dictionaryFiles.isNotEmpty && modelFiles.isNotEmpty) {
+      return 'full';
+    } else if (dictionaryFiles.isNotEmpty) {
+      return 'dictionary';
+    } else if (modelFiles.isNotEmpty) {
+      return 'models';
+    }
+    return 'unknown';
+  }
+  
+  /// Source language (same as language property)
+  String get sourceLanguage => language;
+  
+  /// Primary target language (first in supported list)
+  String get targetLanguage => supportedTargetLanguages.isNotEmpty 
+      ? supportedTargetLanguages.first 
+      : 'en';
   
   @override
   bool operator ==(Object other) {
