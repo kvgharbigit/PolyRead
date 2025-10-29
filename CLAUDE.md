@@ -82,6 +82,12 @@ CREATE TABLE pack_metadata (
 - **✅ Data Sources**: PolyBook's Wiktionary sources integrated for future expansion
 - **✅ Verification System**: Comprehensive validation of schema, data integrity, and lookups
 
+### ✅ Recently Completed (Dynamic Size Verification)
+- **Dynamic File Size Calculation**: Replaced hardcoded 50MB claims with actual filesystem measurements
+- **Separate Size Display**: Dictionary (~1.5MB) and ML Kit models (~60-70MB) shown separately
+- **Real-time Size Verification**: Dynamic filesystem scanning for actual SQLite file sizes
+- **Accurate Storage Reporting**: ML Kit model estimates based on Google's actual per-language sizes
+
 ### 🚧 In Progress
 - **French ↔ English**: Next high priority language pack using PolyBook sources
 - **Italian ↔ English**: High priority language pack  
@@ -156,6 +162,8 @@ lib/
 6. **Error Handling**: Robust error recovery and user feedback
 7. **iOS Build Compatibility**: Fixed import conflicts and Drift syntax for successful iOS compilation
 8. **Expanded Language Support**: Added German (de-en) and additional Spanish variants compatibility
+9. **Dynamic Size Calculation**: Replaced misleading hardcoded 50MB with real file sizes (~1.5MB dict + ~60-70MB ML Kit)
+10. **Accurate Progress Tracking**: Fixed suspicious 1-second downloads with actual GitHub file sizes
 
 ## Testing
 - Unit tests for translation services
