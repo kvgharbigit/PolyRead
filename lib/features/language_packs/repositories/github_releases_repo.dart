@@ -100,6 +100,11 @@ class GitHubReleasesRepository {
         throw LanguagePackException('Unknown packs format in registry');
       }
       
+      print('GitHubReleasesRepository: Registry contains ${packsList.length} packs:');
+      for (final pack in packsList) {
+        print('  - ${pack['id']}: ${pack['name']} (${pack['pack_type']})');
+      }
+      
       final manifests = <LanguagePackManifest>[];
       
       // Only include the most complete packs available
@@ -111,9 +116,14 @@ class GitHubReleasesRepository {
           continue;
         }
         
+        print('GitHubReleasesRepository: Checking pack: $packId (ready: ${readyPacks.contains(packId)})');
+        
         // Only include packs that actually exist and are available
         if (readyPacks.contains(packId)) {
+          print('GitHubReleasesRepository: Adding pack to manifests: $packId');
           manifests.add(_createManifestFromRegistry(packId, packData, release));
+        } else {
+          print('GitHubReleasesRepository: Skipping pack (not in readyPacks): $packId');
         }
       }
       
