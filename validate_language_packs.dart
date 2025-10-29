@@ -312,39 +312,39 @@ Future<void> testWiktionaryCompatibility(String assetsDir, Map<String, dynamic> 
 
 Future<void> testBidirectionalRelationships(Map<String, dynamic> registry, Map<String, dynamic> validationResults) async {
   final packs = registry['packs'] as List;
-  final companionPairs = <String, String>{};
+  final bidirectionalPacks = <String>[];
   
-  // Build companion relationships
+  // Find bidirectional packs
   for (final pack in packs) {
     final packId = pack['id'] as String;
-    final companionId = pack['companion_pack_id'];
+    final packType = pack['pack_type'] as String?;
     
-    if (companionId != null) {
-      companionPairs[packId] = companionId;
+    if (packType == 'bidirectional' || packType == 'main') {
+      bidirectionalPacks.add(packId);
     }
   }
   
-  print('Found ${companionPairs.length} companion relationships:');
+  print('Found ${bidirectionalPacks.length} bidirectional language packs:');
   
-  for (final entry in companionPairs.entries) {
-    final mainPack = entry.key;
-    final companionPack = entry.value;
+  for (final packId in bidirectionalPacks) {
+    final packValid = validationResults[packId]?['valid'] == true;
     
-    final mainValid = validationResults[mainPack]?['valid'] == true;
-    final companionValid = validationResults[companionPack]?['valid'] == true;
+    print('   $packId: ${packValid ? "✅" : "❌"}');
     
-    print('   $mainPack ↔ $companionPack: ${mainValid && companionValid ? "✅" : "❌"}');
-    
-    if (mainValid && companionValid) {
-      final mainEntries = validationResults[mainPack]['details']['actual_entries'];
-      final companionEntries = validationResults[companionPack]['details']['actual_entries'];
+    if (packValid) {
+      final totalEntries = validationResults[packId]['details']['actual_entries'];
       
-      // Check if entry counts are reasonable (allow variation for companion packs)
-      final countRatio = companionEntries / mainEntries;
-      if (countRatio >= 0.5 && countRatio <= 2.0) {
-        print('     ✅ Entry counts reasonable: $mainEntries ↔ $companionEntries');
+      // Test bidirectional functionality by checking if both directions exist
+      final packResult = validationResults[packId]['details'];
+      final hasForward = packResult['has_forward_entries'] ?? false;
+      final hasReverse = packResult['has_reverse_entries'] ?? false;
+      
+      if (hasForward && hasReverse) {
+        final forwardCount = packResult['forward_entries'] ?? 0;
+        final reverseCount = packResult['reverse_entries'] ?? 0;
+        print('     ✅ Bidirectional: $forwardCount forward + $reverseCount reverse = $totalEntries total');
       } else {
-        print('     ⚠️ Entry count mismatch: $mainEntries ↔ $companionEntries (ratio: ${countRatio.toStringAsFixed(2)})');
+        print('     ⚠️ Missing directions: forward=$hasForward, reverse=$hasReverse');
       }
     }
   }

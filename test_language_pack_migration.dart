@@ -174,26 +174,25 @@ Future<Map<String, dynamic>> testLanguagePack(String assetsDir, String packFile,
 }
 
 Future<void> testBidirectionalLookup(String assetsDir) async {
-  // Test that we can look up words in both directions
+  // Test that we can look up words in both directions using single bidirectional packs
   final testPairs = [
-    {'main': 'de-en.sqlite.zip', 'companion': 'en-de.sqlite.zip', 'word1': 'Haus', 'word2': 'house'},
-    {'main': 'es-en.sqlite.zip', 'companion': 'en-es.sqlite.zip', 'word1': 'casa', 'word2': 'house'},
+    {'pack': 'de-en.sqlite', 'word1': 'Haus', 'word2': 'house', 'direction1': 'forward', 'direction2': 'reverse'},
+    {'pack': 'es-en.sqlite', 'word1': 'casa', 'word2': 'house', 'direction1': 'forward', 'direction2': 'reverse'},
   ];
   
   for (final pair in testPairs) {
-    final mainPack = pair['main'] as String;
-    final companionPack = pair['companion'] as String;
+    final packFile = pair['pack'] as String;
     final word1 = pair['word1'] as String;
     final word2 = pair['word2'] as String;
     
-    print('\n🔄 Testing bidirectional: $mainPack ↔ $companionPack');
+    print('\n🔄 Testing bidirectional pack: $packFile');
     
-    // Test main direction
-    final result1 = await testLanguagePack(assetsDir, mainPack, word1);
+    // Test forward direction (e.g., German → English)
+    final result1 = await testBidirectionalLanguagePack(assetsDir, packFile, word1, 'forward');
     final found1 = result1['success'] == true && result1['foundTestWord'] == true;
     
-    // Test companion direction  
-    final result2 = await testLanguagePack(assetsDir, companionPack, word2);
+    // Test reverse direction (e.g., English → German)
+    final result2 = await testBidirectionalLanguagePack(assetsDir, packFile, word2, 'reverse');
     final found2 = result2['success'] == true && result2['foundTestWord'] == true;
     
     if (found1 && found2) {
@@ -201,5 +200,49 @@ Future<void> testBidirectionalLookup(String assetsDir) async {
     } else {
       print('   ⚠️ Bidirectional issue: "$word1" found=$found1, "$word2" found=$found2');
     }
+  }
+}
+
+/// Test a bidirectional language pack with specific direction
+Future<Map<String, dynamic>> testBidirectionalLanguagePack(String assetsDir, String packFile, String testWord, String direction) async {
+  final file = File('$assetsDir/$packFile');
+  
+  if (!file.existsSync()) {
+    print('   ❌ Pack file not found: $packFile');
+    return {'success': false, 'foundTestWord': false, 'error': 'File not found'};
+  }
+  
+  try {
+    // Open the bidirectional SQLite database
+    final db = sqlite3.open(file.path);
+    
+    try {
+      // Query for the test word in the specified direction
+      final stmt = db.prepare('''
+        SELECT lemma, definition FROM dictionary_entries 
+        WHERE LOWER(lemma) = LOWER(?) AND direction = ?
+        LIMIT 1
+      ''');
+      
+      final result = stmt.select([testWord, direction]);
+      
+      if (result.isNotEmpty) {
+        final row = result.first;
+        final lemma = row['lemma'];
+        final definition = row['definition'];
+        print('   ✅ Found "$testWord" ($direction): $definition');
+        return {'success': true, 'foundTestWord': true, 'lemma': lemma, 'definition': definition};
+      } else {
+        print('   ⚠️ Test word "$testWord" not found in $direction direction');
+        return {'success': true, 'foundTestWord': false};
+      }
+      
+    } finally {
+      db.dispose();
+    }
+    
+  } catch (e) {
+    print('   ❌ Error testing bidirectional pack: $e');
+    return {'success': false, 'foundTestWord': false, 'error': e.toString()};
   }
 }

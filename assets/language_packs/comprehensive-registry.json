@@ -1,40 +1,17 @@
 {
   "version": "2.0",
-  "timestamp": "2024-10-28T22:15:00Z",
+  "timestamp": "auto-generated",
   "description": "PolyRead Language Pack Registry - Migrated from PolyBook with bidirectional support",
   "strategy": "companion_pack_approach",
   "total_language_pairs": 3,
   "total_languages_supported": 3,
   "packs": [
     {
-      "id": "de-en",
-      "name": "German ↔ English",
-      "description": "Bidirectional German-English dictionary from Wiktionary",
-      "source_language": "de",
-      "target_language": "en",
-      "type": "bilingual",
-      "pack_type": "main",
-      "companion_pack_id": "en-de",
-      "hidden": false,
-      "format": "sqlite",
-      "file": "de-en.sqlite.zip",
-      "size_bytes": 823201,
-      "size_mb": 0.8,
-      "entries": 12130,
-      "source": "Wiktionary",
-      "version": "1.0.0",
-      "checksum": "c7241f107434212228c9304c422c1378deff34370e79748aaef2649e122a6f9f",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/de-en.sqlite.zip",
-      "created": "2024-10-28T22:15:00Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
-    },
-    {
-      "id": "en-de", 
-      "name": "English → German (Companion)",
+      "id": "en-de",
+      "name": "English \u2192 German (Companion)",
       "description": "Companion pack for German-English bidirectional lookup",
       "source_language": "en",
-      "target_language": "de", 
+      "target_language": "de",
       "type": "bilingual",
       "pack_type": "companion",
       "main_pack_id": "de-en",
@@ -53,36 +30,13 @@
       "ml_kit_supported": true
     },
     {
-      "id": "es-en",
-      "name": "Spanish ↔ English", 
-      "description": "Bidirectional Spanish-English dictionary from Wiktionary",
-      "source_language": "es",
-      "target_language": "en",
-      "type": "bilingual",
-      "pack_type": "main",
-      "companion_pack_id": "en-es",
-      "hidden": false,
-      "format": "sqlite",
-      "file": "es-en.sqlite.zip",
-      "size_bytes": 143872,
-      "size_mb": 0.1,
-      "entries": 4497,
-      "source": "Wiktionary",
-      "version": "1.0.0",
-      "checksum": "eeb960527bb64be5f4d7f29551c80b07e2184e0bcfe441d03dfed23ac8f87296",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/es-en.sqlite.zip",
-      "created": "2024-10-28T22:15:00Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
-    },
-    {
       "id": "en-es",
-      "name": "English → Spanish (Companion)",
-      "description": "Companion pack for Spanish-English bidirectional lookup", 
+      "name": "English \u2192 Spanish (Companion)",
+      "description": "Companion pack for Spanish-English bidirectional lookup",
       "source_language": "en",
       "target_language": "es",
       "type": "bilingual",
-      "pack_type": "companion", 
+      "pack_type": "companion",
       "main_pack_id": "es-en",
       "hidden": true,
       "format": "sqlite",
@@ -90,7 +44,7 @@
       "size_bytes": 421768,
       "size_mb": 0.4,
       "entries": 11598,
-      "source": "Wiktionary", 
+      "source": "Wiktionary",
       "version": "1.0.0",
       "checksum": "8dc39425d58e862b9c473e204adeaa70d280f953f0afda42c3220f8e92305ca3",
       "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/en-es.sqlite.zip",
@@ -100,7 +54,7 @@
     },
     {
       "id": "eng-spa",
-      "name": "English ↔ Spanish (Legacy)",
+      "name": "English \u2194 Spanish (Legacy)",
       "description": "Legacy English-Spanish dictionary pack - use es-en for better bidirectional support",
       "source_language": "en",
       "target_language": "es",
@@ -108,13 +62,13 @@
       "pack_type": "legacy",
       "companion_pack_id": null,
       "hidden": true,
-      "format": "sqlite", 
+      "format": "sqlite",
       "file": "eng-spa.sqlite.zip",
       "size_bytes": 3180095,
       "size_mb": 3.0,
       "entries": 11598,
       "source": "Wiktionary",
-      "version": "1.0.0", 
+      "version": "1.0.0",
       "checksum": "ed00db525b955291ef1505ddaef215e2785cf30c8b8a6a43fb06d84dc88df186",
       "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/eng-spa.sqlite.zip",
       "created": "2024-10-28T22:15:00Z",
@@ -126,60 +80,81 @@
     "de": {
       "name": "German",
       "code": "de",
-      "supported_pairs": ["en"],
-      "main_packs": ["de-en"],
-      "companion_packs": ["en-de"],
+      "supported_pairs": [
+        "en"
+      ],
+      "main_packs": [
+        "de-en"
+      ],
+      "companion_packs": [
+        "en-de"
+      ],
       "ml_kit_supported": true,
       "total_entries": 12130
     },
     "en": {
-      "name": "English", 
+      "name": "English",
       "code": "en",
-      "supported_pairs": ["de", "es"],
-      "main_packs": ["de-en", "es-en"],
-      "companion_packs": ["en-de", "en-es"],
+      "supported_pairs": [
+        "de",
+        "es"
+      ],
+      "main_packs": [
+        "de-en",
+        "es-en"
+      ],
+      "companion_packs": [
+        "en-de",
+        "en-es"
+      ],
       "ml_kit_supported": true,
       "total_entries": 16627
     },
     "es": {
       "name": "Spanish",
-      "code": "es", 
-      "supported_pairs": ["en"],
-      "main_packs": ["es-en"],
-      "companion_packs": ["en-es"],
+      "code": "es",
+      "supported_pairs": [
+        "en"
+      ],
+      "main_packs": [
+        "es-en"
+      ],
+      "companion_packs": [
+        "en-es"
+      ],
       "ml_kit_supported": true,
       "total_entries": 4497
     }
   },
   "missing_from_polybook": [
-    "fr-en (French ↔ English)",
-    "it-en (Italian ↔ English)", 
-    "pt-en (Portuguese ↔ English)",
-    "ru-en (Russian ↔ English)",
-    "ko-en (Korean ↔ English)",
-    "ar-en (Arabic ↔ English)",
-    "hi-en (Hindi ↔ English)",
-    "ja-en (Japanese ↔ English)",
-    "zh-en (Chinese ↔ English)"
+    "fr-en (French \u2194 English)",
+    "it-en (Italian \u2194 English)",
+    "pt-en (Portuguese \u2194 English)",
+    "ru-en (Russian \u2194 English)",
+    "ko-en (Korean \u2194 English)",
+    "ar-en (Arabic \u2194 English)",
+    "hi-en (Hindi \u2194 English)",
+    "ja-en (Japanese \u2194 English)",
+    "zh-en (Chinese \u2194 English)"
   ],
   "roadmap": {
     "phase_1_completed": [
-      "German ↔ English with companion pack approach",
-      "Spanish ↔ English with companion pack approach", 
+      "German \u2194 English with companion pack approach",
+      "Spanish \u2194 English with companion pack approach",
       "Bidirectional lookup working for both language pairs"
     ],
     "phase_2_next": [
-      "French ↔ English (high priority)",
-      "Italian ↔ English (high priority)",
-      "Portuguese ↔ English (medium priority)"
+      "French \u2194 English (high priority)",
+      "Italian \u2194 English (high priority)",
+      "Portuguese \u2194 English (medium priority)"
     ],
     "phase_3_future": [
-      "Russian ↔ English",
-      "Korean ↔ English", 
-      "Arabic ↔ English",
-      "Hindi ↔ English",
-      "Japanese ↔ English",
-      "Chinese ↔ English"
+      "Russian \u2194 English",
+      "Korean \u2194 English",
+      "Arabic \u2194 English",
+      "Hindi \u2194 English",
+      "Japanese \u2194 English",
+      "Chinese \u2194 English"
     ]
   },
   "technical_notes": {
@@ -193,7 +168,23 @@
     "from_polybook": "Partial migration completed - 3 language pairs out of 22",
     "missing_pairs": 19,
     "completion_percentage": 13.6,
-    "priority_languages_migrated": ["German", "Spanish"],
-    "priority_languages_pending": ["French", "Italian", "Portuguese", "Russian", "Korean", "Arabic", "Hindi", "Japanese", "Chinese"]
-  }
+    "priority_languages_migrated": [
+      "German",
+      "Spanish"
+    ],
+    "priority_languages_pending": [
+      "French",
+      "Italian",
+      "Portuguese",
+      "Russian",
+      "Korean",
+      "Arabic",
+      "Hindi",
+      "Japanese",
+      "Chinese"
+    ]
+  },
+  "pack_count": 3,
+  "total_entries": 0,
+  "schema_version": "2.0"
 }
