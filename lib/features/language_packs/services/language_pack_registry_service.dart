@@ -65,8 +65,8 @@ class LanguagePackRegistryService {
     for (final packData in packsData) {
       final pack = packData as Map<String, dynamic>;
       
-      // Only include main packs (not companion packs) for UI display
-      if (pack['pack_type'] == 'main' || pack['pack_type'] == 'legacy') {
+      // Only include main packs (not companion/legacy packs) for UI display to avoid duplicates
+      if (pack['pack_type'] == 'main') {
         packs.add(LanguagePackInfo(
           id: pack['id'] as String,
           name: pack['name'] as String,

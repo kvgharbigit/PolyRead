@@ -102,8 +102,8 @@ class GitHubReleasesRepository {
       
       final manifests = <LanguagePackManifest>[];
       
-      // Only include packs that are "ready" and actually have files
-      final readyPacks = ['eng-spa', 'spa-eng', 'de-en', 'en-de', 'es-en', 'en-es']; // Available packs
+      // Only include one pack per language pair since they're bidirectional
+      final readyPacks = ['eng-spa', 'de-en']; // Available main packs only (bidirectional)
       for (final packData in packsList) {
         final packId = packData['id'] as String?;
         
@@ -230,10 +230,10 @@ class GitHubReleasesRepository {
     
     return LanguagePackManifest(
       id: '$sourceCode-$targetCode',
-      name: '$sourceCode → $targetCode Dictionary',
+      name: '$sourceCode ↔ $targetCode Dictionary',
       language: sourceCode,
       version: packData['version'] ?? '1.0.0',
-      description: packData['description'] ?? 'Dictionary for $sourceCode to $targetCode translation',
+      description: packData['description'] ?? 'Bidirectional dictionary for $sourceCode ↔ $targetCode translation',
       totalSize: sqliteAsset['size'] ?? 0,
       files: [
         LanguagePackFile(
