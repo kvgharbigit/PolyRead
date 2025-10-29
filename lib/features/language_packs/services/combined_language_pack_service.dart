@@ -18,12 +18,15 @@ import '../models/language_pack_manifest.dart';
 import '../models/download_progress.dart';
 import '../repositories/github_releases_repo.dart';
 import 'drift_language_pack_service.dart' hide LanguagePackException;
+import 'bidirectional_dictionary_service.dart';
+import '../models/bidirectional_dictionary_entry.dart';
 import 'zip_extraction_service.dart';
 import 'sqlite_import_service.dart';
 
 class CombinedLanguagePackService {
   final AppDatabase _database;
   final DriftLanguagePackService _packService;
+  final BidirectionalDictionaryService _bidirectionalService;
   final DictionaryManagementService _dictionaryService;
   final DictionaryLoaderService _dictionaryLoader;
   final LanguagePackIntegrationService _integrationService;
@@ -39,6 +42,7 @@ class CombinedLanguagePackService {
     required GitHubReleasesRepository repository,
   }) : _database = database,
        _packService = DriftLanguagePackService(database),
+       _bidirectionalService = BidirectionalDictionaryService(database),
        _dictionaryService = DictionaryManagementService(database),
        _dictionaryLoader = DictionaryLoaderService(database),
        _integrationService = LanguagePackIntegrationService(
@@ -64,6 +68,20 @@ class CombinedLanguagePackService {
       _activeDownloads.remove(packId);
       _cancelTokens.remove(packId);
       print('CombinedLanguagePackService: Cleared failed download for $packId');
+    }
+  }
+  
+  /// Clear any stale download state for a pack (force cleanup)
+  void clearAnyDownloadState(String packId) {
+    print('CombinedLanguagePackService: Force clearing any download state for $packId');
+    if (_activeDownloads.containsKey(packId)) {
+      _activeDownloads.remove(packId);
+      print('CombinedLanguagePackService: Removed active download for $packId');
+    }
+    if (_cancelTokens.containsKey(packId)) {
+      _cancelTokens[packId]?.cancel('Forced cleanup');
+      _cancelTokens.remove(packId);
+      print('CombinedLanguagePackService: Cancelled and removed cancel token for $packId');
     }
   }
   
@@ -110,32 +128,24 @@ class CombinedLanguagePackService {
     Function(String message)? onProgress,
   }) async {
     final packId = '$sourceLanguage-$targetLanguage';
-    final reversePackId = '$targetLanguage-$sourceLanguage';
     
     print('');
     print('********************************');
-    print('CombinedLanguagePackService.installLanguagePack: ENTRY');
+    print('CombinedLanguagePackService.installLanguagePack: ENTRY (Bidirectional)');
     print('CombinedLanguagePackService: Source: $sourceLanguage');
     print('CombinedLanguagePackService: Target: $targetLanguage');
-    print('CombinedLanguagePackService: Pack ID: $packId');
-    print('CombinedLanguagePackService: Reverse Pack ID: $reversePackId');
+    print('CombinedLanguagePackService: Bidirectional Pack ID: $packId');
     print('CombinedLanguagePackService: WiFi only: $wifiOnly');
     print('CombinedLanguagePackService: onProgress callback provided: ${onProgress != null}');
     print('********************************');
     
-    // Check if already installed in either direction
+    // Check if bidirectional pack is already installed
     print('');
-    print('CombinedLanguagePackService: 🔍 CHECKING INSTALLATION STATUS...');
+    print('CombinedLanguagePackService: 🔍 CHECKING BIDIRECTIONAL PACK INSTALLATION STATUS...');
     
     try {
-      final forwardInstalled = await _packService.isPackInstalled(packId);
-      print('CombinedLanguagePackService: Forward direction ($packId) installed: $forwardInstalled');
-      
-      final reverseInstalled = await _packService.isPackInstalled(reversePackId);
-      print('CombinedLanguagePackService: Reverse direction ($reversePackId) installed: $reverseInstalled');
-      
-      final isInstalled = forwardInstalled || reverseInstalled;
-      print('CombinedLanguagePackService: Overall installation status: $isInstalled');
+      final isInstalled = await _packService.isPackInstalled(packId);
+      print('CombinedLanguagePackService: Bidirectional pack ($packId) installed: $isInstalled');
       
       if (isInstalled) {
         print('CombinedLanguagePackService: ⚠️ Pack already installed - FORCING REINSTALL');
@@ -167,13 +177,9 @@ class CombinedLanguagePackService {
     print('CombinedLanguagePackService: Total active downloads: ${_activeDownloads.length}');
     
     if (_activeDownloads.containsKey(packId)) {
-      print('CombinedLanguagePackService: ⚠️ Forward direction ($packId) download in progress');
-      throw LanguagePackException('Installation already in progress for $packId');
-    }
-    
-    if (_activeDownloads.containsKey(reversePackId)) {
-      print('CombinedLanguagePackService: ⚠️ Reverse direction ($reversePackId) download in progress');
-      throw LanguagePackException('Installation already in progress for $reversePackId');
+      print('CombinedLanguagePackService: ⚠️ Found stale download state for ($packId)');
+      print('CombinedLanguagePackService: 🧹 Clearing stale state and proceeding...');
+      clearAnyDownloadState(packId);
     }
     
     print('CombinedLanguagePackService: ✅ No active downloads for this language pair');
@@ -389,25 +395,7 @@ class CombinedLanguagePackService {
         await _packService.markPackAsInstalled(packId);
         print('CombinedLanguagePackService: ✅ Forward pack marked as installed');
         
-        // Also register the reverse direction since Wiktionary dictionaries are bidirectional
-        print('CombinedLanguagePackService: Registering reverse pack ($reversePackId)...');
-        await _packService.registerLanguagePack(
-          packId: reversePackId,
-          name: '$targetLanguage ↔ $sourceLanguage Language Pack',
-          description: 'Bidirectional dictionary and translation models (reverse)',
-          sourceLanguage: targetLanguage,
-          targetLanguage: sourceLanguage,
-          packType: 'combined',
-          version: '1.0.0',
-          sizeBytes: 0, // No additional size since it's the same data
-          downloadUrl: '',
-          checksum: '',
-        );
-        print('CombinedLanguagePackService: ✅ Reverse pack registered successfully');
-        
-        print('CombinedLanguagePackService: Marking reverse pack as installed...');
-        await _packService.markPackAsInstalled(reversePackId);
-        print('CombinedLanguagePackService: ✅ Reverse pack marked as installed');
+        // Bidirectional pack provides both directions in a single database
         
       } catch (e) {
         print('CombinedLanguagePackService: ❌ Error during pack registration: $e');
@@ -493,13 +481,9 @@ class CombinedLanguagePackService {
     required String targetLanguage,
   }) async {
     final packId = '$sourceLanguage-$targetLanguage';
-    final reversePackId = '$targetLanguage-$sourceLanguage';
     
-    // Check if either direction is installed (since they share the same dictionary)
-    final forwardInstalled = await _packService.isPackInstalled(packId);
-    final reverseInstalled = await _packService.isPackInstalled(reversePackId);
-    
-    return forwardInstalled || reverseInstalled;
+    // Check if bidirectional pack is installed
+    return await _packService.isPackInstalled(packId);
   }
   
   /// Get installed language packs
@@ -507,20 +491,18 @@ class CombinedLanguagePackService {
     return await _packService.getInstalledPacks();
   }
   
-  /// Remove a language pack (removes both directions)
+  /// Remove a bidirectional language pack
   Future<void> removeLanguagePack({
     required String sourceLanguage,
     required String targetLanguage,
   }) async {
     final packId = '$sourceLanguage-$targetLanguage';
-    final reversePackId = '$targetLanguage-$sourceLanguage';
     
     print('');
     print('🗑️ CombinedLanguagePackService.removeLanguagePack: STARTING REMOVAL');
     print('CombinedLanguagePackService.removeLanguagePack: Source: $sourceLanguage');
     print('CombinedLanguagePackService.removeLanguagePack: Target: $targetLanguage');
-    print('CombinedLanguagePackService.removeLanguagePack: Pack ID: $packId');
-    print('CombinedLanguagePackService.removeLanguagePack: Reverse Pack ID: $reversePackId');
+    print('CombinedLanguagePackService.removeLanguagePack: Bidirectional Pack ID: $packId');
     
     // Remove ML Kit models
     print('');
@@ -538,13 +520,22 @@ class CombinedLanguagePackService {
     print('CombinedLanguagePackService.removeLanguagePack: 📚 REMOVING PACK REGISTRATIONS...');
     
     try {
-      print('CombinedLanguagePackService.removeLanguagePack: Removing forward pack ($packId)...');
+      print('CombinedLanguagePackService.removeLanguagePack: Removing bidirectional pack ($packId)...');
       await _packService.removeLanguagePack(packId);
-      print('CombinedLanguagePackService.removeLanguagePack: ✅ Forward pack removed');
+      print('CombinedLanguagePackService.removeLanguagePack: ✅ Bidirectional pack removed');
       
-      print('CombinedLanguagePackService.removeLanguagePack: Removing reverse pack ($reversePackId)...');
-      await _packService.removeLanguagePack(reversePackId);
-      print('CombinedLanguagePackService.removeLanguagePack: ✅ Reverse pack removed');
+      // Clear any active downloads for this pack
+      print('CombinedLanguagePackService.removeLanguagePack: 🧹 CLEARING ACTIVE DOWNLOADS...');
+      if (_activeDownloads.containsKey(packId)) {
+        _activeDownloads.remove(packId);
+        print('CombinedLanguagePackService.removeLanguagePack: Cleared active download for $packId');
+      }
+      if (_cancelTokens.containsKey(packId)) {
+        _cancelTokens[packId]?.cancel('Pack removed');
+        _cancelTokens.remove(packId);
+        print('CombinedLanguagePackService.removeLanguagePack: Cancelled and cleared cancel token for $packId');
+      }
+      print('CombinedLanguagePackService.removeLanguagePack: ✅ Active downloads cleared');
       
     } catch (e) {
       print('CombinedLanguagePackService.removeLanguagePack: ❌ Error removing pack registrations: $e');
@@ -855,6 +846,56 @@ class CombinedLanguagePackService {
     }
   }
   
+  /// Get bidirectional dictionary service for lookups
+  BidirectionalDictionaryService get bidirectionalDictionary => _bidirectionalService;
+
+  /// Perform bidirectional dictionary lookup
+  Future<BidirectionalLookupResult> lookupWord({
+    required String query,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    return await _bidirectionalService.lookup(
+      query: query,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+    );
+  }
+
+  /// Search for partial matches in both directions
+  Future<List<BidirectionalDictionaryEntry>> searchWords({
+    required String query,
+    required String sourceLanguage, 
+    required String targetLanguage,
+    int limit = 20,
+  }) async {
+    return await _bidirectionalService.search(
+      query: query,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      limit: limit,
+    );
+  }
+
+
+  /// Get statistics for a bidirectional pack
+  Future<Map<String, int>> getPackStatistics({
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    final packId = '$sourceLanguage-$targetLanguage';
+    return await _bidirectionalService.getPackStatistics(packId);
+  }
+
+  /// Validate bidirectional pack structure
+  Future<bool> validatePackStructure({
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    final packId = '$sourceLanguage-$targetLanguage';
+    return await _bidirectionalService.validatePackStructure(packId);
+  }
+
   /// Clean up resources
   void dispose() {
     // Cancel all active downloads
@@ -865,6 +906,7 @@ class CombinedLanguagePackService {
     _cancelTokens.clear();
     _activeDownloads.clear();
     _progressController.close();
+    _bidirectionalService.dispose();
   }
 }
 
