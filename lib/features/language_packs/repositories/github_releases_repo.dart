@@ -35,7 +35,7 @@ class GitHubReleasesRepository {
     
     try {
       // Get the specific language packs release
-      final releaseUrl = '/repos/$owner/$repository/releases/tags/language-packs-v2.0';
+      final releaseUrl = '/repos/$owner/$repository/releases/tags/language-packs-v2.1';
       print('GitHubReleasesRepository: Fetching release from: $releaseUrl');
       
       final response = await _dio.get(releaseUrl);

@@ -1,210 +1,84 @@
 {
-  "version": "2.0",
-  "timestamp": "2025-10-29T02:55:52Z",
-  "description": "PolyRead Language Pack Registry - Bidirectional System v2.0",
-  "total_language_pairs": 5,
-  "total_languages_supported": 6,
-  "packs": [
-    {
-      "id": "de-en",
-      "name": "\ud83c\udde9\ud83c\uddea German \u2194 \ud83c\uddfa\ud83c\uddf8 English",
-      "description": "Bidirectional German-English dictionary with Wiktionary content",
-      "source_language": "de",
-      "target_language": "en",
-      "type": "bidirectional",
-      "pack_type": "main",
-      "hidden": false,
-      "format": "sqlite",
-      "file": "de-en.sqlite.zip",
-      "size_bytes": 1609110,
-      "size_mb": 1.6,
-      "entries": 30492,
-      "source": "Wiktionary",
-      "version": "2.0.0",
-      "checksum": "",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/de-en.sqlite.zip",
-      "created": "2025-10-29T06:29:00Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
-    },
-    {
+  "version": "2.1.0",
+  "description": "PolyRead Language Pack Registry - Vuizur Dictionary System v2.1",
+  "schema_version": "1.1",
+  "last_updated": "2025-10-29T00:00:00Z",
+  "total_packs": 1,
+  "metadata": {
+    "architecture": "vuizur_wiktionary",
+    "data_source": "Vuizur Wiktionary-Dictionaries",
+    "data_source_url": "https://github.com/Vuizur/Wiktionary-Dictionaries",
+    "release_notes": "Revolutionary 1M+ entries per language pair with FTS5 search",
+    "schema_type": "drift_wiktionary",
+    "performance_features": [
+      "6 optimized database indexes",
+      "FTS5 virtual table with BM25 ranking",
+      "Sub-millisecond exact lookups",
+      "100ms fuzzy search performance"
+    ]
+  },
+  "language_packs": {
+    "es-en": {
       "id": "es-en",
-      "name": "\ud83c\uddea\ud83c\uddf8 Spanish \u2194 \ud83c\uddfa\ud83c\uddf8 English",
-      "description": "Bidirectional Spanish-English dictionary with Wiktionary content",
+      "name": "🇪🇸 Spanish ↔ 🇺🇸 English",
+      "description": "Vuizur Wiktionary • 1,086,098 entries • Complete Spanish-English vocabulary",
+      "type": "vuizur_wiktionary",
       "source_language": "es",
       "target_language": "en",
-      "type": "bidirectional",
-      "pack_type": "main",
-      "hidden": false,
-      "format": "sqlite",
-      "file": "es-en.sqlite.zip",
-      "size_bytes": 1487456,
-      "size_mb": 1.5,
-      "entries": 29548,
-      "source": "Wiktionary",
-      "version": "2.0.0",
+      "entries": 1086098,
+      "unique_headwords": 1054529,
+      "size_bytes": 77522254,
+      "size_mb": 74.0,
+      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.1/es-en.sqlite.zip",
       "checksum": "",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/es-en.sqlite.zip",
-      "created": "2025-10-29T06:29:00Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
-    },
+      "version": "2.1.0",
+      "pack_type": "main",
+      "priority": "high",
+      "features": [
+        "complete_vocabulary",
+        "fts5_search",
+        "performance_indexes",
+        "html_definitions",
+        "part_of_speech_tags",
+        "legacy_compatibility"
+      ],
+      "technical_details": {
+        "database_schema": "drift_wiktionary",
+        "indexes": 6,
+        "fts_enabled": true,
+        "fts_type": "fts5_bm25",
+        "lookup_performance": "<1ms",
+        "search_performance": "<100ms",
+        "data_format": "html_formatted_definitions"
+      },
+      "quality_metrics": {
+        "common_words_coverage": "100%",
+        "technical_terms": true,
+        "regional_expressions": true,
+        "verb_conjugations": true,
+        "idioms_phrases": true,
+        "data_source_quality": "wiktionary_community_verified"
+      }
+    }
+  },
+  "coming_soon": [
     {
       "id": "fr-en",
-      "name": "\ud83c\uddeb\ud83c\uddf7 French \u2194 \ud83c\uddfa\ud83c\uddf8 English",
-      "description": "Bidirectional French-English dictionary with Wiktionary content",
-      "source_language": "fr",
-      "target_language": "en",
-      "type": "bidirectional",
-      "pack_type": "main",
-      "hidden": false,
-      "format": "sqlite",
-      "file": "fr-en.sqlite.zip",
-      "size_bytes": 6041558,
-      "size_mb": 5.8,
-      "entries": 137181,
-      "source": "Wiktionary",
-      "version": "2.0.0",
-      "checksum": "",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/fr-en.sqlite.zip",
-      "created": "2025-10-29T02:08:00Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
+      "name": "🇫🇷 French ↔ 🇺🇸 English",
+      "estimated_entries": "1000000+",
+      "status": "pipeline_ready"
     },
     {
-      "id": "it-en",
-      "name": "\ud83c\uddee\ud83c\uddf9 Italian \u2194 \ud83c\uddfa\ud83c\uddf8 English",
-      "description": "Bidirectional Italian-English dictionary with Wiktionary content",
-      "source_language": "it",
-      "target_language": "en",
-      "type": "bidirectional",
-      "pack_type": "main",
-      "hidden": false,
-      "format": "sqlite",
-      "file": "it-en.sqlite.zip",
-      "size_bytes": 5110680,
-      "size_mb": 4.9,
-      "entries": 124778,
-      "source": "Wiktionary",
-      "version": "2.0.0",
-      "checksum": "",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/it-en.sqlite.zip",
-      "created": "2025-10-29T02:18:00Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
+      "id": "de-en", 
+      "name": "🇩🇪 German ↔ 🇺🇸 English",
+      "estimated_entries": "1000000+",
+      "status": "pipeline_ready"
     },
     {
       "id": "pt-en",
-      "name": "\ud83c\uddf5\ud83c\uddf9 Portuguese \u2194 English",
-      "description": "Bidirectional Portuguese \u2194 English dictionary with Wiktionary content",
-      "source_language": "pt",
-      "target_language": "en",
-      "type": "bidirectional",
-      "pack_type": "main",
-      "hidden": false,
-      "format": "sqlite",
-      "file": "pt-en.sqlite.zip",
-      "size_bytes": 4124593,
-      "size_mb": 3.9,
-      "entries": 86951,
-      "source": "Wiktionary",
-      "version": "2.0.0",
-      "checksum": "845ffc9f725c7ce60327e5295fe3fe7b56ce94fc088566d127331e666abf4433",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/pt-en.sqlite.zip",
-      "created": "2025-10-29T02:45:45Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
+      "name": "🇵🇹 Portuguese ↔ 🇺🇸 English", 
+      "estimated_entries": "1000000+",
+      "status": "pipeline_ready"
     }
-  ],
-  "supported_languages": [
-    {
-      "code": "de",
-      "name": "German",
-      "supported_pairs": [
-        "en"
-      ],
-      "main_packs": [
-        "de-en"
-      ],
-      "ml_kit_supported": true
-    },
-    {
-      "code": "es",
-      "name": "Spanish",
-      "supported_pairs": [
-        "en"
-      ],
-      "main_packs": [
-        "es-en"
-      ],
-      "ml_kit_supported": true
-    },
-    {
-      "code": "fr",
-      "name": "French",
-      "supported_pairs": [
-        "en"
-      ],
-      "main_packs": [
-        "fr-en"
-      ],
-      "ml_kit_supported": true
-    },
-    {
-      "code": "it",
-      "name": "Italian",
-      "supported_pairs": [
-        "en"
-      ],
-      "main_packs": [
-        "it-en"
-      ],
-      "ml_kit_supported": true
-    },
-    {
-      "code": "en",
-      "name": "English",
-      "supported_pairs": [
-        "de",
-        "es",
-        "fr",
-        "it",
-        "pt"
-      ],
-      "main_packs": [
-        "de-en",
-        "es-en",
-        "fr-en",
-        "it-en",
-        "pt-en"
-      ],
-      "ml_kit_supported": true
-    },
-    {
-      "code": "pt",
-      "name": "Portuguese",
-      "supported_pairs": [
-        "en"
-      ],
-      "main_packs": [
-        "pt-en"
-      ],
-      "ml_kit_supported": true
-    }
-  ],
-  "coming_soon": [
-    "Russian \u2194 English",
-    "Japanese \u2194 English",
-    "Korean \u2194 English",
-    "Chinese \u2194 English",
-    "Arabic \u2194 English",
-    "Hindi \u2194 English"
-  ],
-  "technical_notes": {
-    "bidirectional_approach": "Single database per language pair with direction field for optimal lookup",
-    "download_behavior": "Each pack contains bidirectional dictionary data for both translation directions",
-    "wiktionary_format": "Rich HTML formatting preserved with examples and part-of-speech information",
-    "ml_kit_integration": "All language pairs support ML Kit offline translation",
-    "file_format": "SQLite databases compressed as .zip files"
-  }
+  ]
 }

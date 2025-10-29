@@ -78,6 +78,6 @@ class AppConstants {
   static const String languagePacksUrl = 'https://github.com/kvgharbigit/PolyRead/releases';
   
   // Language Pack Configuration
-  static const String languagePacksReleaseTag = 'language-packs-v2.0';
+  static const String languagePacksReleaseTag = 'language-packs-v2.1';
   static const String registryFileName = 'comprehensive-registry.json';
 }

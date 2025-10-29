@@ -6,7 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 
 class LanguagePackRegistryService {
-  static const String _registryUrl = 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/comprehensive-registry.json';
+  static const String _registryUrl = 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.1/comprehensive-registry.json';
   static const String _localRegistryPath = 'assets/language_packs/comprehensive-registry.json';
   
   final Dio _dio;
@@ -88,7 +88,7 @@ class LanguagePackRegistryService {
           entries: pack['entries'] as int? ?? 0,
           sizeBytes: pack['size_bytes'] as int? ?? 0,
           sizeMb: (pack['size_mb'] as num?)?.toDouble() ?? 0.0,
-          downloadUrl: pack['download_url'] as String? ?? 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/$packId.sqlite.zip',
+          downloadUrl: pack['download_url'] as String? ?? 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.1/$packId.sqlite.zip',
           checksum: pack['checksum'] as String? ?? '',
           version: pack['version'] as String? ?? '2.0.0',
           packType: pack['pack_type'] as String? ?? 'main',
@@ -159,33 +159,17 @@ class LanguagePackRegistryService {
     print('LanguagePackRegistryService: Using hardcoded fallback language packs');
     return [
       LanguagePackInfo(
-        id: 'de-en',
-        name: '🇩🇪 German ↔ 🇺🇸 English',
-        description: 'Bidirectional dictionary • 30,492 entries',
-        sourceLanguage: 'de',
-        targetLanguage: 'en',
-        entries: 30492,
-        sizeBytes: 1609110, // Actual GitHub file size
-        sizeMb: 1.6,
-        downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/de-en.sqlite.zip',
-        checksum: '',
-        version: '2.0.0',
-        packType: 'main',
-        isAvailable: true,
-        priority: 'high',
-      ),
-      LanguagePackInfo(
         id: 'es-en',
         name: '🇪🇸 Spanish ↔ 🇺🇸 English',
-        description: 'Bidirectional dictionary • 29,548 entries',
+        description: 'Vuizur Wiktionary • 1,086,098 entries',
         sourceLanguage: 'es',
         targetLanguage: 'en',
-        entries: 29548,
-        sizeBytes: 1487456, // Actual GitHub file size
-        sizeMb: 1.5,
-        downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/es-en.sqlite.zip',
+        entries: 1086098,
+        sizeBytes: 77522254, // Actual GitHub file size (74MB)
+        sizeMb: 74.0,
+        downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.1/es-en.sqlite.zip',
         checksum: '',
-        version: '2.0.0',
+        version: '2.1.0',
         packType: 'main',
         isAvailable: true,
         priority: 'high',
