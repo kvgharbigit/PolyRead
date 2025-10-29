@@ -149,6 +149,7 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
         availablePacks: availablePacks,
         installedPackIds: installedPackIds,
         isLoading: false,
+        error: null, // Clear any previous errors on successful load
       );
     } catch (e) {
       state = state.copyWith(
@@ -204,6 +205,10 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
       
       print('');
       print('LanguagePacksProvider.downloadPack: Step 4 - ✅ Installation completed successfully');
+      
+      // Clear any previous error state since installation succeeded
+      state = state.copyWith(error: null);
+      print('LanguagePacksProvider.downloadPack: Cleared error state after successful installation');
       
       // Refresh state after download
       print('LanguagePacksProvider.downloadPack: Step 5 - Refreshing provider state...');

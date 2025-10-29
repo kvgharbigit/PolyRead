@@ -224,16 +224,14 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     final languagePacksState = ref.watch(languagePacksProvider);
     final combinedService = ref.watch(combinedLanguagePackServiceProvider);
     
-    // Check if this pack is installed (bidirectional support)
-    final reversePackId = '$targetCode-$sourceCode';
-    final isInstalled = languagePacksState.installedPackIds.contains(packId) || 
-                       languagePacksState.installedPackIds.contains(reversePackId);
+    // Check if this bidirectional pack is installed
+    final isInstalled = languagePacksState.installedPackIds.contains(packId);
     
     // Get download progress if it exists
     DownloadProgress? downloadProgress;
     try {
       downloadProgress = combinedService.activeDownloads.firstWhere((download) => 
-          download.packId == packId || download.packId == reversePackId);
+          download.packId == packId);
     } catch (e) {
       downloadProgress = null;
     }
@@ -290,30 +288,58 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
             fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: Text(
-          isDownloading
-              ? '${downloadProgress?.stageDescription ?? "Downloading..."} • ${downloadProgress?.progressPercent.toStringAsFixed(1) ?? "0.0"}%'
-              : isFailed
-                  ? 'Installation failed - Tap to retry'
-                  : isInstalled 
-                      ? 'Installed • Bidirectional support'
-                      : isComingSoon
-                          ? description ?? 'Coming soon'
-                          : description ?? 'Dictionary + ML Kit models • ~50MB',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: isDownloading
-                ? Theme.of(context).colorScheme.primary
-                : isFailed
-                    ? Colors.red.shade700
-                    : isInstalled 
-                        ? Colors.green.shade700
-                        : isComingSoon
-                            ? Colors.orange.shade700
-                            : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-          ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isDownloading
+                  ? '${downloadProgress?.stageDescription ?? "Downloading..."} • ${downloadProgress?.progressPercent.toStringAsFixed(1) ?? "0.0"}%'
+                  : isFailed
+                      ? 'Installation failed - Tap to retry'
+                      : isInstalled 
+                          ? 'Installed • Bidirectional support'
+                          : isComingSoon
+                              ? description ?? 'Coming soon'
+                              : description ?? 'Dictionary + ML Kit models • ~50MB',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isDownloading
+                    ? Theme.of(context).colorScheme.primary
+                    : isFailed
+                        ? Colors.red.shade700
+                        : isInstalled 
+                            ? Colors.green.shade700
+                            : isComingSoon
+                                ? Colors.orange.shade700
+                                : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
+            if (isInstalled) ...[
+              const SizedBox(height: 4),
+              FutureBuilder<Map<String, dynamic>>(
+                future: _getPackDetails(sourceCode, targetCode),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    final data = snapshot.data!;
+                    return Text(
+                      '${data['entries']} entries • ${data['sizeMB']} MB • ${data['files']} files',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                        fontSize: 11,
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
+          ],
         ),
         trailing: _buildActionWidget(isInstalled, isDownloading, isFailed, downloadProgress, sourceCode, targetCode, isComingSoon),
-        onTap: isInstalled || isDownloading || isComingSoon ? null : () => _installLanguagePair(sourceCode, targetCode),
+        onTap: isInstalled 
+            ? () => _showPackDetails(sourceCode, targetCode, label)
+            : isDownloading || isComingSoon 
+                ? null 
+                : () => _installLanguagePair(sourceCode, targetCode),
       ),
     );
   }
@@ -850,6 +876,97 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
 
   void _openStorageSettings() {
     // Open storage settings
+  }
+
+  /// Show detailed pack information dialog
+  Future<void> _showPackDetails(String sourceCode, String targetCode, String label) async {
+    final details = await _getPackDetails(sourceCode, targetCode);
+    
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('📊 $label'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDetailRow('Entries', '${details['entries']}'),
+            _buildDetailRow('Estimated Size', '${details['sizeMB']} MB'),
+            _buildDetailRow('Files', '${details['files']}'),
+            _buildDetailRow('Version', '${details['version']}'),
+            _buildDetailRow('Installed', '${details['installDate']}'),
+            const SizedBox(height: 16),
+            Text(
+              'Tap "Validate All Packs" in Storage tab to verify file integrity.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text(value),
+        ],
+      ),
+    );
+  }
+
+  /// Get detailed information about an installed pack
+  Future<Map<String, dynamic>> _getPackDetails(String sourceCode, String targetCode) async {
+    try {
+      final packId = '$sourceCode-$targetCode';
+      final combinedService = ref.read(combinedLanguagePackServiceProvider);
+      
+      // Get pack statistics 
+      final stats = await combinedService.getPackStatistics(
+        sourceLanguage: sourceCode,
+        targetLanguage: targetCode,
+      );
+      
+      // Get pack info from database
+      final packService = DriftLanguagePackService(ref.read(db.databaseProvider));
+      final packs = await packService.getInstalledPacks();
+      final pack = packs.firstWhere((p) => p.packId == packId, orElse: () => throw Exception('Pack not found'));
+      
+      // Calculate rough size from entries (estimation)
+      final entries = stats['total_entries'] ?? 0;
+      final estimatedSizeMB = (entries * 50 / 1000).toStringAsFixed(1); // rough estimate
+      
+      return {
+        'entries': entries,
+        'sizeMB': estimatedSizeMB,
+        'files': stats['file_count'] ?? 1,
+        'version': pack.version,
+        'installDate': pack.installedAt?.toIso8601String().split('T')[0] ?? 'Unknown',
+      };
+    } catch (e) {
+      print('Error getting pack details: $e');
+      return {
+        'entries': '?',
+        'sizeMB': '?',
+        'files': '?',
+        'version': '?',
+        'installDate': 'Unknown',
+      };
+    }
   }
 
 }
