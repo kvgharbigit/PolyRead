@@ -41,34 +41,15 @@ This directory contains the **Vuizur Dictionary Builder** - a simple, reliable t
 ## Database Schema
 
 ```sql
--- Main dictionary table (Drift/Wiktionary compatible schema)
+-- Main dictionary table (PolyRead compatible schema)
 CREATE TABLE dictionary_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    
-    -- Core Wiktionary Fields (Primary)
-    written_rep TEXT NOT NULL,            -- Headword/lemma (Wiktionary standard)
-    lexentry TEXT,                        -- Lexical entry ID (e.g., cold_ADJ_01)
-    sense TEXT,                           -- Definition/meaning description
-    trans_list TEXT NOT NULL,             -- Pipe-separated translations
-    pos TEXT,                             -- Part of speech (noun, verb, etc.)
-    domain TEXT,                          -- Semantic domain (optional)
-    
-    -- Language Pair Information
+    lemma TEXT NOT NULL,                  -- Headword/term  
+    definition TEXT NOT NULL,             -- HTML-formatted definition
+    direction TEXT NOT NULL CHECK (direction IN ('forward', 'reverse')),
     source_language TEXT NOT NULL,        -- Source language code (ISO)
     target_language TEXT NOT NULL,        -- Target language code (ISO)
-    
-    -- Additional Metadata
-    pronunciation TEXT,                   -- IPA or phonetic pronunciation
-    examples TEXT,                        -- JSON array of example sentences
-    frequency INTEGER DEFAULT 0,          -- Usage frequency ranking
-    source TEXT,                          -- Dictionary pack source name
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Legacy Compatibility Fields (Maintained for backward compatibility)
-    lemma TEXT DEFAULT '',                -- Legacy alias for written_rep
-    definition TEXT DEFAULT '',           -- Legacy alias for sense
-    part_of_speech TEXT,                  -- Legacy alias for pos
-    language_pair TEXT DEFAULT ''         -- Legacy computed field (e.g., en-es)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Pack metadata

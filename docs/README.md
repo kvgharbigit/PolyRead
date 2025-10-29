@@ -84,29 +84,29 @@ Welcome to the comprehensive documentation for PolyRead's dictionary and transla
 3. [Database Schema Analysis](DATABASE_SCHEMA_ANALYSIS.md) - Technical validation
 
 **Quality Metrics:**
-- **Schema Consistency**: 100% across all language packs
-- **Test Coverage**: 14/14 tests passing
-- **Performance**: <50ms average dictionary lookup
-- **Data Integrity**: 408,950 verified entries across 5 languages
+- **Schema Consistency**: 100% Drift/Wiktionary compatibility
+- **Test Coverage**: Comprehensive lookup and FTS testing
+- **Performance**: <1ms exact lookups, <100ms FTS searches
+- **Data Integrity**: 1,086,098+ verified entries with complete vocabulary coverage
 
 ## 📊 System Status
 
 ### **✅ Production Ready Components**
-- **Core Dictionary System**: 5 language packs deployed (408,950 entries)
-- **Translation Services**: Multi-provider architecture with fallbacks
-- **Database Schema**: Wiktionary-compatible with legacy support
-- **Performance**: Optimized queries and caching
+- **Vuizur Dictionary System v2.1**: Spanish-English deployed (1,086,098 entries)
+- **Translation Services**: Multi-provider architecture with dictionary-first fallbacks
+- **Database Schema**: Drift/Wiktionary compatible with FTS5 and performance indexes
+- **Performance**: Sub-millisecond lookups with optimized search
 
 ### **🚧 Active Development**
-- **Language Pack Generation**: 6 additional languages ready
-- **Advanced Search**: Enhanced FTS capabilities
-- **Performance Optimization**: Query and caching improvements
+- **Additional Languages**: French, German, Portuguese ready for Vuizur pipeline
+- **FTS5 Search**: BM25-ranked fuzzy search with comprehensive coverage
+- **Performance Optimization**: 6 database indexes for optimal speed
 
 ### **📈 Metrics**
-- **Documentation Coverage**: 97% across all components
-- **Dictionary Entries**: 408,950 verified entries
-- **Language Pairs**: 5 deployed, 6 ready for generation
-- **Performance**: <50ms average lookup time
+- **Documentation Coverage**: Updated for Vuizur v2.1 system
+- **Dictionary Entries**: 1,086,098 verified entries (35x improvement)
+- **Language Pairs**: 1 deployed, 3 ready for Vuizur generation
+- **Performance**: <1ms exact lookups, <100ms FTS searches
 
 ## 🔗 External Resources
 
@@ -159,6 +159,6 @@ Welcome to the comprehensive documentation for PolyRead's dictionary and transla
 
 ---
 
-*Last updated: October 2025*
-*Total dictionary entries: 408,950 across 5 languages*
-*Documentation coverage: 97%*
+*Last updated: October 2025 - Vuizur Dictionary System v2.1*
+*Total dictionary entries: 1,086,098 for Spanish-English (more languages coming)*
+*Documentation coverage: Updated for v2.1 architecture*

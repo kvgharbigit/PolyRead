@@ -61,35 +61,16 @@ import sys
 conn = sqlite3.connect('$PAIR.db')
 cursor = conn.cursor()
 
-# Create dictionary_entries table (Drift/Wiktionary compatible schema)
+# Create dictionary_entries table (compatible with PolyRead import service)
 cursor.execute('''
 CREATE TABLE dictionary_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    
-    -- Core Wiktionary Fields (Primary)
-    written_rep TEXT NOT NULL,            -- Headword/lemma (Wiktionary standard)
-    lexentry TEXT,                        -- Lexical entry ID (e.g., cold_ADJ_01)
-    sense TEXT,                           -- Definition/meaning description
-    trans_list TEXT NOT NULL,             -- Pipe-separated translations
-    pos TEXT,                             -- Part of speech (noun, verb, etc.)
-    domain TEXT,                          -- Semantic domain (optional)
-    
-    -- Language Pair Information
-    source_language TEXT NOT NULL,        -- Source language code (ISO)
-    target_language TEXT NOT NULL,        -- Target language code (ISO)
-    
-    -- Additional Metadata
-    pronunciation TEXT,                   -- IPA or phonetic pronunciation
-    examples TEXT,                        -- JSON array of example sentences
-    frequency INTEGER DEFAULT 0,          -- Usage frequency ranking
-    source TEXT,                          -- Dictionary pack source name
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Legacy Compatibility Fields (Maintained for backward compatibility)
-    lemma TEXT DEFAULT '',                -- Legacy alias for written_rep
-    definition TEXT DEFAULT '',           -- Legacy alias for sense
-    part_of_speech TEXT,                  -- Legacy alias for pos
-    language_pair TEXT DEFAULT ''         -- Legacy computed field (e.g., en-es)
+    lemma TEXT NOT NULL,
+    definition TEXT NOT NULL,
+    direction TEXT NOT NULL CHECK (direction IN ('forward', 'reverse')),
+    source_language TEXT NOT NULL,
+    target_language TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 ''')
 
@@ -101,50 +82,14 @@ CREATE TABLE pack_metadata (
 )
 ''')
 
-# Create performance indexes (matching app expectations)
-cursor.execute('''CREATE INDEX idx_dictionary_written_rep ON dictionary_entries(written_rep)''')
-cursor.execute('''CREATE INDEX idx_dictionary_languages ON dictionary_entries(source_language, target_language)''')
-cursor.execute('''CREATE INDEX idx_dictionary_lookup ON dictionary_entries(written_rep, source_language, target_language)''')
-cursor.execute('''CREATE INDEX idx_dictionary_pos ON dictionary_entries(pos)''')
-cursor.execute('''CREATE INDEX idx_dictionary_source_lang ON dictionary_entries(source_language)''')
-cursor.execute('''CREATE INDEX idx_dictionary_target_lang ON dictionary_entries(target_language)''')
-
-# Create FTS5 virtual table for fast search (matching app implementation)
+# Create FTS5 virtual table for fast search (will be populated after data insertion)
 cursor.execute('''
 CREATE VIRTUAL TABLE dictionary_fts USING fts5(
-    written_rep,
-    sense,
-    trans_list,
+    lemma,
+    definition,
     content='dictionary_entries',
     content_rowid='id'
 )
-''')
-
-# Create FTS triggers for automatic synchronization
-cursor.execute('''
-CREATE TRIGGER dictionary_entries_ai AFTER INSERT ON dictionary_entries
-BEGIN
-  INSERT INTO dictionary_fts(written_rep, sense, trans_list)
-  VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-END
-''')
-
-cursor.execute('''
-CREATE TRIGGER dictionary_entries_ad AFTER DELETE ON dictionary_entries
-BEGIN
-  INSERT INTO dictionary_fts(dictionary_fts, rowid, written_rep, sense, trans_list)
-  VALUES ('delete', old.id, old.written_rep, COALESCE(old.sense, ''), old.trans_list);
-END
-''')
-
-cursor.execute('''
-CREATE TRIGGER dictionary_entries_au AFTER UPDATE ON dictionary_entries
-BEGIN
-  INSERT INTO dictionary_fts(dictionary_fts, rowid, written_rep, sense, trans_list)
-  VALUES ('delete', old.id, old.written_rep, COALESCE(old.sense, ''), old.trans_list);
-  INSERT INTO dictionary_fts(written_rep, sense, trans_list)
-  VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-END
 ''')
 
 # Determine languages from pair
@@ -175,29 +120,53 @@ with open('dict.tsv', 'r', encoding='utf-8') as f:
             headwords = row[0].strip()
             definition = row[1].strip()
             
-            # Split multiple headwords and create separate entries
+            # Split multiple headwords and create bidirectional entries
             for headword in headwords.split('|'):
                 headword = headword.strip()
                 if headword:
+                    # Create forward entry (source language -> target language)
                     cursor.execute('''
                         INSERT INTO dictionary_entries 
-                        (written_rep, sense, trans_list, source_language, target_language, source, lemma, definition, language_pair) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (headword, definition, definition, source_lang, target_lang, 'Vuizur Wiktionary', headword, definition, '$PAIR'))
+                        (lemma, definition, direction, source_language, target_language) 
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (headword, definition, 'forward', source_lang, target_lang))
                     count += 1
+                    
+                    # Create reverse entry (target language -> source language)  
+                    # Extract simple translation from HTML definition for reverse lookup
+                    import re
+                    simple_def = re.sub(r'<[^>]+>', '', definition)  # Remove HTML tags
+                    simple_def = re.sub(r'\([^)]*\)', '', simple_def)  # Remove parenthetical info
+                    simple_def = simple_def.strip()
+                    
+                    if len(simple_def) > 0:  # Only create reverse if we have clean text
+                        cursor.execute('''
+                            INSERT INTO dictionary_entries 
+                            (lemma, definition, direction, source_language, target_language) 
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (simple_def, headword, 'reverse', target_lang, source_lang))
+                        count += 1
             
             if count % 10000 == 0:
                 print(f'Processed {count} entries...')
 
 conn.commit()
 
-# Rebuild FTS index to ensure consistency
+# Add performance indexes after data insertion
+print('🔧 Creating performance indexes...')
+cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_lemma ON dictionary_entries(lemma)''')
+cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_languages ON dictionary_entries(source_language, target_language)''')
+cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_lookup ON dictionary_entries(lemma, source_language, target_language)''')
+cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_direction ON dictionary_entries(direction)''')
+
+# Build FTS index after data insertion
+print('🔧 Building FTS search index...')
 cursor.execute('''INSERT INTO dictionary_fts(dictionary_fts) VALUES('rebuild')''')
 conn.commit()
 
 conn.close()
 print(f'✅ Imported {count} entries')
-print(f'✅ FTS index built for fast search')
+print(f'✅ Performance indexes and FTS search built')
 "
 
 if [ ! -f "$PAIR.db" ]; then
@@ -224,15 +193,15 @@ sqlite3 "$PAIR.db" "SELECT key, value FROM pack_metadata;"
 
 if [ "$WORD_COUNT" -lt 1000 ]; then
     echo "⚠️  Warning: Low word count, checking sample entries..."
-    sqlite3 "$PAIR.db" "SELECT written_rep, substr(sense, 1, 80) FROM dictionary_entries LIMIT 5;"
+    sqlite3 "$PAIR.db" "SELECT lemma, substr(definition, 1, 80) FROM dictionary_entries LIMIT 5;"
 fi
 
 echo "🧪 Testing common words..."
-COMMON_FOUND=$(sqlite3 "$PAIR.db" "SELECT COUNT(*) FROM dictionary_entries WHERE written_rep IN ('casa', 'agua', 'hacer', 'tener', 'ser', 'hola', 'tiempo', 'año', 'día', 'vez');")
+COMMON_FOUND=$(sqlite3 "$PAIR.db" "SELECT COUNT(*) FROM dictionary_entries WHERE lemma IN ('casa', 'agua', 'hacer', 'tener', 'ser', 'hola', 'tiempo', 'año', 'día', 'vez');")
 echo "Found $COMMON_FOUND common Spanish words out of 10 tested"
 
 echo "🔍 Sample lookup test..."
-sqlite3 "$PAIR.db" "SELECT written_rep, substr(sense, 1, 60) as definition, source_language, target_language FROM dictionary_entries WHERE written_rep = 'agua' LIMIT 1;"
+sqlite3 "$PAIR.db" "SELECT lemma, substr(definition, 1, 60) as definition, direction, source_language, target_language FROM dictionary_entries WHERE lemma = 'agua' LIMIT 1;"
 
 echo "📦 Packaging..."
 zip "../$OUTPUT_DIR/${PAIR}.sqlite.zip" "$PAIR.db"

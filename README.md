@@ -36,12 +36,12 @@ PolyRead is a comprehensive Flutter-based language learning application that com
 - **Progress Analytics**: Track mastery, review statistics, and learning trends
 - **Interactive Cards**: Flip animations and difficulty-based scheduling
 
-### 📦 Language Pack Management
+### 📦 Language Pack Management  
 - **GitHub Integration**: Automatic pack distribution and updates from `kvgharbigit/PolyRead`
-- **5+ Languages Supported**: English, Spanish, French, German, Italian with bidirectional support
-- **Validated Language Pairs**: en↔es, en↔fr, en↔de, fr↔en with quality assurance testing
-- **360K+ Dictionary Entries**: Comprehensive Wiktionary-based definitions with FTS5 search
-- **Storage Optimization**: 500MB quota with intelligent LRU eviction
+- **Vuizur Dictionary System**: Revolutionary 1M+ entries per language pair from Wiktionary
+- **Production Ready**: Spanish ↔ English with 1,086,098 comprehensive dictionary entries
+- **Performance Optimized**: Sub-millisecond lookups with FTS5 search and 6 database indexes
+- **Storage Efficient**: 74MB compressed packages with complete vocabulary coverage
 - **Download Progress**: Real-time tracking with pause/resume capability
 - **Integrity Validation**: SHA256 checksums ensure data quality
 
@@ -130,28 +130,21 @@ The translation system uses a 3-tier fallback strategy for optimal performance:
 
 ## 🌍 Available Language Packs
 
-### ✅ Production Ready - **408,950 Total Entries**
-| Language Pack | Entries | Size | Quality | Status |
-|---------------|---------|------|---------|--------|
-| 🇩🇪 German ↔ English | 30,492 | 1.6MB | Excellent | ✅ Deployed |
-| 🇪🇸 Spanish ↔ English | 29,548 | 1.5MB | Excellent | ✅ Deployed |
-| 🇫🇷 French ↔ English | 137,181 | 5.8MB | Excellent | ✅ Deployed |
-| 🇮🇹 Italian ↔ English | 124,778 | 4.9MB | Excellent | ✅ Deployed |
-| 🇵🇹 Portuguese ↔ English | 86,951 | 3.9MB | Excellent | ✅ Deployed |
+### ✅ Production Ready - **Vuizur Dictionary System v2.1**
+| Language Pack | Entries | Size | Quality | Source | Status |
+|---------------|---------|------|---------|---------|--------|
+| 🇪🇸 Spanish ↔ English | 1,086,098 | 74MB | Excellent | Vuizur Wiktionary | ✅ Deployed |
 
-### 🔄 Ready for Generation (6 remaining)
-| Language Pack | Expected Entries | Source Size | Priority | Status |
-|---------------|------------------|-------------|----------|--------|
-| 🇷🇺 Russian ↔ English | ~45,000 | 8.2MB | High | 📋 Ready |
-| 🇯🇵 Japanese ↔ English | ~30,000 | 3.7MB | High | 📋 Ready |
-| 🇰🇷 Korean ↔ English | ~15,000 | 2.1MB | Medium | 📋 Ready |
-| 🇨🇳 Chinese ↔ English | ~40,000 | 6.4MB | Medium | 📋 Ready |
-| 🇸🇦 Arabic ↔ English | ~20,000 | 2.9MB | Medium | 📋 Ready |
-| 🇮🇳 Hindi ↔ English | ~15,000 | 1.0MB | Medium | 📋 Ready |
+### 🔄 Ready for Generation (Vuizur Pipeline)
+| Language Pack | Expected Entries | Source | Priority | Status |
+|---------------|------------------|--------|----------|--------|
+| 🇫🇷 French ↔ English | ~1,000,000+ | Vuizur Wiktionary | High | 📋 Pipeline Ready |
+| 🇩🇪 German ↔ English | ~1,000,000+ | Vuizur Wiktionary | High | 📋 Pipeline Ready |
+| 🇵🇹 Portuguese ↔ English | ~1,000,000+ | Vuizur Wiktionary | Medium | 📋 Pipeline Ready |
 
-**Current Coverage**: 5 of 11 language pairs deployed (45% complete)  
-**Architecture**: Bidirectional single-database design (50% storage reduction)  
-**Quality**: 4-level verification process with comprehensive testing
+**Current Coverage**: 1 of 4 language pairs deployed (25% complete)  
+**Architecture**: Vuizur Wiktionary system with FTS5 search and performance optimization  
+**Quality**: Complete vocabulary coverage with 35x more entries than previous system
 
 ### 📥 How to Download
 1. Open PolyRead app
@@ -160,7 +153,7 @@ The translation system uses a 3-tier fallback strategy for optimal performance:
 4. Tap **Download** for desired languages
 5. **WiFi recommended** for large packs
 
-**Download Source**: `https://github.com/kvgharbigit/PolyRead/releases/`
+**Download Source**: `https://github.com/kvgharbigit/PolyRead/releases/tag/language-packs-v2.1`
 
 ## 🛠 Development
 

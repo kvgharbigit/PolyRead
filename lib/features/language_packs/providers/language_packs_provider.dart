@@ -214,13 +214,10 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
       return metadata['entry_count'] as int;
     }
     
-    // Fallback to known entry counts for existing packs
+    // Fallback to known entry counts for Vuizur v2.1 system
     final knownCounts = {
-      'de-en': 30492,   // German-English bidirectional
-      'es-en': 29548,   // Spanish-English bidirectional  
-      'fr-en': 137181,  // French-English bidirectional
-      'it-en': 124778,  // Italian-English bidirectional
-      'pt-en': 86951,   // Portuguese-English bidirectional
+      'es-en': 1086098,  // Spanish-English Vuizur Wiktionary v2.1
+      // Future Vuizur language pairs will be added here
     };
     
     return knownCounts[packId] ?? 50000; // Default estimate for unknown packs

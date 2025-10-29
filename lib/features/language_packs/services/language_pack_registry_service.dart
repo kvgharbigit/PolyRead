@@ -60,17 +60,32 @@ class LanguagePackRegistryService {
   
   List<LanguagePackInfo> _parseLanguagePacks(Map<String, dynamic> registry) {
     final packs = <LanguagePackInfo>[];
-    final packsData = registry['packs'] as List? ?? [];
+    
+    // Handle both new format (language_packs object) and old format (packs array)
+    Map<String, dynamic> packsData;
+    if (registry.containsKey('language_packs')) {
+      // New format: language_packs is an object with pack IDs as keys
+      packsData = registry['language_packs'] as Map<String, dynamic>;
+    } else {
+      // Old format: packs is an array - convert to map for consistency
+      final packsList = registry['packs'] as List? ?? [];
+      packsData = {};
+      for (final packData in packsList) {
+        final pack = packData as Map<String, dynamic>;
+        final packId = pack['id'] as String;
+        packsData[packId] = pack;
+      }
+    }
     
     // Keep track of which actual files we've found in registry
     final foundPacks = <String>{};
     
-    for (final packData in packsData) {
-      final pack = packData as Map<String, dynamic>;
+    for (final entry in packsData.entries) {
+      final packId = entry.key;
+      final pack = entry.value as Map<String, dynamic>;
       
       final packType = pack['pack_type'] as String?;
       final isHidden = pack['hidden'] == true;
-      final packId = pack['id'] as String;
       
       // Include all non-companion packs
       final shouldInclude = packType != 'companion' && !isHidden;
@@ -111,12 +126,12 @@ class LanguagePackRegistryService {
     //     description: 'Bidirectional dictionary • Wiktionary source',
     //     sourceLanguage: sourceCode,
     //     targetLanguage: targetCode,
-    //     entries: packId == 'de-en' ? 30492 : 29548, // Known entry counts
-    //     sizeBytes: packId == 'de-en' ? 1609110 : 1487456, // Actual GitHub file sizes
-    //     sizeMb: packId == 'de-en' ? 1.6 : 1.5,
-    //     downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/$packId.sqlite.zip',
+    //     entries: packId == 'es-en' ? 1086098 : 1000000, // Vuizur v2.1 entry counts
+    //     sizeBytes: packId == 'es-en' ? 77522254 : 75000000, // Vuizur v2.1 file sizes
+    //     sizeMb: packId == 'es-en' ? 74.0 : 70.0,
+    //     downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.1/$packId.sqlite.zip',
     //     checksum: '',
-    //     version: '2.0.0',
+    //     version: '2.1.0',
     //     packType: 'main',
     //     isAvailable: true,
     //     priority: 'high',
