@@ -78,59 +78,52 @@ class LanguagePackRegistryService {
       if (shouldInclude) {
         foundPacks.add(packId);
         
-        // Override registry data with corrected information for our available packs
-        final correctedName = packId == 'de-en' ? '🇩🇪 German ↔ 🇺🇸 English' : '🇪🇸 Spanish ↔ 🇺🇸 English';
-        final correctedDescription = 'Bidirectional dictionary • Wiktionary source';
-        final correctedEntries = packId == 'de-en' ? 30492 : 29548;
-        final correctedSize = packId == 'de-en' ? 1609110 : 1487456;
-        final correctedSizeMB = packId == 'de-en' ? 1.6 : 1.5;
-        
+        // Use registry data directly
         packs.add(LanguagePackInfo(
           id: packId,
-          name: correctedName,
-          description: correctedDescription,
-          sourceLanguage: packId == 'de-en' ? 'de' : 'es',
-          targetLanguage: packId == 'de-en' ? 'en' : 'en',
-          entries: correctedEntries,
-          sizeBytes: correctedSize,
-          sizeMb: correctedSizeMB,
-          downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/$packId.sqlite.zip',
+          name: pack['name'] as String? ?? '$packId Dictionary',
+          description: pack['description'] as String? ?? 'Bidirectional dictionary • Wiktionary source',
+          sourceLanguage: pack['source_language'] as String? ?? packId.split('-')[0],
+          targetLanguage: pack['target_language'] as String? ?? packId.split('-')[1], 
+          entries: pack['entries'] as int? ?? 0,
+          sizeBytes: pack['size_bytes'] as int? ?? 0,
+          sizeMb: (pack['size_mb'] as num?)?.toDouble() ?? 0.0,
+          downloadUrl: pack['download_url'] as String? ?? 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/$packId.sqlite.zip',
           checksum: pack['checksum'] as String? ?? '',
-          version: '2.0.0',
-          packType: 'main', // Force to main instead of legacy
+          version: pack['version'] as String? ?? '2.0.0',
+          packType: pack['pack_type'] as String? ?? 'main',
           isAvailable: true,
           priority: 'high',
         ));
       }
     }
     
-    // Add missing packs that exist on GitHub but not in registry
-    final missingPacks = ['de-en', 'es-en'].where((pack) => !foundPacks.contains(pack)).toList();
-    for (final packId in missingPacks) {
-      final parts = packId.split('-');
-      final sourceCode = parts[0];
-      final targetCode = parts[1];
-      
-      packs.add(LanguagePackInfo(
-        id: packId,
-        name: '${_getLanguageName(sourceCode)} ↔ ${_getLanguageName(targetCode)}',
-        description: 'Bidirectional dictionary • Wiktionary source',
-        sourceLanguage: sourceCode,
-        targetLanguage: targetCode,
-        entries: packId == 'de-en' ? 30492 : 29548, // Known entry counts
-        sizeBytes: packId == 'de-en' ? 1609110 : 1487456, // Actual GitHub file sizes
-        sizeMb: packId == 'de-en' ? 1.6 : 1.5,
-        downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/$packId.sqlite.zip',
-        checksum: '',
-        version: '2.0.0',
-        packType: 'main',
-        isAvailable: true,
-        priority: 'high',
-      ));
-    }
+    // Registry should now be comprehensive - no need for fallback missing packs
+    // final missingPacks = ['de-en', 'es-en'].where((pack) => !foundPacks.contains(pack)).toList();
+    // for (final packId in missingPacks) {
+    //   final parts = packId.split('-');
+    //   final sourceCode = parts[0];
+    //   final targetCode = parts[1];
+    //   
+    //   packs.add(LanguagePackInfo(
+    //     id: packId,
+    //     name: '${_getLanguageName(sourceCode)} ↔ ${_getLanguageName(targetCode)}',
+    //     description: 'Bidirectional dictionary • Wiktionary source',
+    //     sourceLanguage: sourceCode,
+    //     targetLanguage: targetCode,
+    //     entries: packId == 'de-en' ? 30492 : 29548, // Known entry counts
+    //     sizeBytes: packId == 'de-en' ? 1609110 : 1487456, // Actual GitHub file sizes
+    //     sizeMb: packId == 'de-en' ? 1.6 : 1.5,
+    //     downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/$packId.sqlite.zip',
+    //     checksum: '',
+    //     version: '2.0.0',
+    //     packType: 'main',
+    //     isAvailable: true,
+    //     priority: 'high',
+    //   ));
+    // }
     
-    // Add coming soon packs that aren't in the registry yet
-    packs.addAll(_getComingSoonPacks());
+    // Registry now contains all available packs - no coming soon needed
     
     return packs;
   }
@@ -161,154 +154,6 @@ class LanguagePackRegistryService {
     return 'medium';
   }
   
-  List<LanguagePackInfo> _getComingSoonPacks() {
-    return [
-      LanguagePackInfo(
-        id: 'fr-en',
-        name: '🇫🇷 French ↔ 🇺🇸 English',
-        description: 'Coming soon • High priority',
-        sourceLanguage: 'fr',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-      LanguagePackInfo(
-        id: 'it-en',
-        name: '🇮🇹 Italian ↔ 🇺🇸 English',
-        description: 'Coming soon • High priority',
-        sourceLanguage: 'it',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-      LanguagePackInfo(
-        id: 'pt-en',
-        name: '🇵🇹 Portuguese ↔ 🇺🇸 English',
-        description: 'Coming soon • Medium priority',
-        sourceLanguage: 'pt',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-      LanguagePackInfo(
-        id: 'ru-en',
-        name: '🇷🇺 Russian ↔ 🇺🇸 English',
-        description: 'Coming soon • Medium priority',
-        sourceLanguage: 'ru',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-      LanguagePackInfo(
-        id: 'ko-en',
-        name: '🇰🇷 Korean ↔ 🇺🇸 English',
-        description: 'Coming soon • Medium priority',
-        sourceLanguage: 'ko',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-      LanguagePackInfo(
-        id: 'ja-en',
-        name: '🇯🇵 Japanese ↔ 🇺🇸 English',
-        description: 'Coming soon • Medium priority',
-        sourceLanguage: 'ja',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-      LanguagePackInfo(
-        id: 'zh-en',
-        name: '🇨🇳 Chinese ↔ 🇺🇸 English',
-        description: 'Coming soon • Medium priority',
-        sourceLanguage: 'zh',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-      LanguagePackInfo(
-        id: 'ar-en',
-        name: '🇸🇦 Arabic ↔ 🇺🇸 English',
-        description: 'Coming soon • Medium priority',
-        sourceLanguage: 'ar',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-      LanguagePackInfo(
-        id: 'hi-en',
-        name: '🇮🇳 Hindi ↔ 🇺🇸 English',
-        description: 'Coming soon • Medium priority',
-        sourceLanguage: 'hi',
-        targetLanguage: 'en',
-        entries: 0,
-        sizeBytes: 0,
-        sizeMb: 0.0,
-        downloadUrl: '',
-        checksum: '',
-        version: '1.0.0',
-        packType: 'coming-soon',
-        isAvailable: false,
-        priority: 'coming-soon',
-      ),
-    ];
-  }
   
   List<LanguagePackInfo> _getHardcodedLanguagePacks() {
     print('LanguagePackRegistryService: Using hardcoded fallback language packs');
@@ -345,7 +190,7 @@ class LanguagePackRegistryService {
         isAvailable: true,
         priority: 'high',
       ),
-    ]..addAll(_getComingSoonPacks());
+    ];
   }
 }
 
