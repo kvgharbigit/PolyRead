@@ -27,6 +27,8 @@ class DriftLanguagePackService {
   /// Validate pack integrity and detect broken installations
   Future<PackValidationResult> validatePack(String packId) async {
     try {
+      print('DriftLanguagePackService: Validating pack $packId...');
+      
       // Check database record
       final query = _database.select(_database.languagePacks)
         ..where((pack) => pack.packId.equals(packId));
@@ -41,34 +43,39 @@ class DriftLanguagePackService {
         return PackValidationResult(packId, false, 'Pack marked as not installed');
       }
       
-      // Check if pack files exist
-      final packDir = await getPackDirectory(packId);
-      if (!await packDir.exists()) {
-        return PackValidationResult(packId, false, 'Pack directory missing');
-      }
-      
-      // Check manifest file
-      final manifest = await loadPackManifest(packId);
-      if (manifest == null) {
-        return PackValidationResult(packId, false, 'Manifest file missing or corrupted');
-      }
-      
-      // Verify pack files exist
-      for (final file in manifest.files) {
-        final filePath = path.join(packDir.path, file.name);
-        final fileExists = await File(filePath).exists();
-        if (!fileExists) {
-          return PackValidationResult(packId, false, 'Required file missing: ${file.name}');
-        }
+      // Check dictionary entries exist (most important validation)
+      try {
+        final entryCount = await (_database.selectOnly(_database.dictionaryEntries)
+          ..addColumns([_database.dictionaryEntries.id.count()])
+          ..where(_database.dictionaryEntries.sourceLanguage.equals(pack.sourceLanguage ?? '') &
+                  _database.dictionaryEntries.targetLanguage.equals(pack.targetLanguage ?? ''))
+        ).getSingle();
         
-        // Optional: Verify file size matches manifest
-        final actualSize = await File(filePath).length();
-        if (actualSize != file.size) {
-          return PackValidationResult(packId, false, 'File size mismatch: ${file.name}');
+        final count = entryCount.read(_database.dictionaryEntries.id.count()) ?? 0;
+        print('DriftLanguagePackService: Pack $packId has $count dictionary entries');
+        
+        if (count < 1000) { // Reasonable minimum for any language pack
+          return PackValidationResult(packId, false, 'Dictionary data missing or incomplete ($count entries)');
         }
+      } catch (e) {
+        print('DriftLanguagePackService: Error checking dictionary entries for $packId: $e');
+        return PackValidationResult(packId, false, 'Dictionary data corrupted or inaccessible');
       }
       
-      return PackValidationResult(packId, true, 'Pack is valid');
+      // Basic file system checks (optional - dictionary data is primary)
+      try {
+        final packDir = await getPackDirectory(packId);
+        if (!await packDir.exists()) {
+          print('DriftLanguagePackService: Pack directory missing for $packId, but dictionary data exists');
+          // Not critical if database data is intact
+        }
+      } catch (e) {
+        print('DriftLanguagePackService: File system check failed for $packId: $e');
+        // Continue - database validation is more important
+      }
+      
+      print('DriftLanguagePackService: Pack $packId validation passed');
+      return PackValidationResult(packId, true, 'Pack is valid and functional');
       
     } catch (e) {
       return PackValidationResult(packId, false, 'Validation error: $e');

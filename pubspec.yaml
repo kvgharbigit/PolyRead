@@ -60,3 +60,4 @@ flutter:
     - assets/dictionaries/
     - assets/icons/
     - assets/test_samples/
+    - assets/language_packs/

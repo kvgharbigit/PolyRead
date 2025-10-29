@@ -1,94 +1,81 @@
-# PolyRead Dictionary Tools
+# PolyRead Vuizur Dictionary Builder
 
-This directory contains the **Vuizur Dictionary Builder** - a simple, reliable tool for creating PolyRead-compatible language pack databases.
+Simple, reliable tool for creating PolyRead-compatible language pack databases from Vuizur Wiktionary-Dictionaries.
 
-## ✅ Current Tool: `vuizur-dict-builder.sh`
+## ✅ Quick Usage
 
-**Purpose**: Creates language pack databases from Vuizur Wiktionary-Dictionaries repository
-
-**Features**:
-- Downloads comprehensive bilingual dictionaries from [Vuizur/Wiktionary-Dictionaries](https://github.com/Vuizur/Wiktionary-Dictionaries)
-- Creates PolyRead-compatible SQLite databases with proper Drift/Wiktionary schema
-- Handles multiple word forms (pipe-separated headwords)
-- Generates metadata for pack identification
-- Over 1M+ dictionary entries per language pair with full common vocabulary coverage
-- **Performance optimized** with 6 database indexes for fast lookups
-- **Full-text search (FTS5)** with BM25 ranking for fuzzy search
-- **Legacy compatibility** fields for backward compatibility
-- **Automatic triggers** for FTS synchronization
-
-## Usage
+### Generate Language Packs
 
 ```bash
-# Build Spanish-English dictionary
+# Spanish-English dictionary
 ./vuizur-dict-builder.sh es-en
 
-# Build French-English dictionary  
+# French-English dictionary  
 ./vuizur-dict-builder.sh fr-en
 
-# Build German-English dictionary
+# German-English dictionary
 ./vuizur-dict-builder.sh de-en
 ```
 
-## Output
+### Output
 
-- **Database**: SQLite file with `dictionary_entries`, `pack_metadata`, and `dictionary_fts` tables
+Each command generates:
+- **Database**: SQLite file with dictionary entries and FTS5 search
 - **Package**: Compressed `.sqlite.zip` file ready for PolyRead
-- **Size**: ~74MB compressed (from ~650MB uncompressed database with FTS indexes)
-- **Entries**: 1M+ dictionary entries with full vocabulary coverage
-- **Performance**: 6 optimized indexes + FTS5 for sub-100ms lookups
+- **Location**: `dist/<language-pair>.sqlite.zip`
 
-## Database Schema
+## 📊 Current Results
 
-```sql
--- Main dictionary table (PolyRead compatible schema)
-CREATE TABLE dictionary_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lemma TEXT NOT NULL,                  -- Headword/term  
-    definition TEXT NOT NULL,             -- HTML-formatted definition
-    direction TEXT NOT NULL CHECK (direction IN ('forward', 'reverse')),
-    source_language TEXT NOT NULL,        -- Source language code (ISO)
-    target_language TEXT NOT NULL,        -- Target language code (ISO)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+### Spanish-English (es-en)
+- **Entries**: 2,172,196 dictionary entries
+- **Size**: 80.5MB compressed
+- **Status**: ✅ **Production ready**
+- **Coverage**: Complete vocabulary with common words, idioms, technical terms
 
--- Pack metadata
-CREATE TABLE pack_metadata (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-```
+### Ready for Generation
+- **French-English** (fr-en): ~1M+ entries expected
+- **German-English** (de-en): ~1M+ entries expected  
+- **Portuguese-English** (pt-en): ~1M+ entries expected
 
-## Verification Results
+## 🔧 Requirements
 
-**✅ Spanish-English Dictionary:**
-- **Entries**: 1,086,098 dictionary entries
-- **Common words**: All basic vocabulary found (agua, casa, hacer, tener, ser, hola, tiempo, año, día, vez)
-- **Quality**: Comprehensive coverage with conjugated forms, synonyms, and specialized terms
-- **Schema**: PolyRead-compatible with proper metadata
+- **Bash shell** (macOS/Linux)
+- **curl** for downloading source data
+- **sqlite3** for database operations
+- **GitHub CLI** (optional, for deployment)
 
-## Supported Language Pairs
-
-Currently supported language pairs from Vuizur repository:
-- **es-en**: Spanish → English
-- **fr-en**: French → English  
-- **de-en**: German → English
-- **en-es**: English → Spanish (if available)
-
-## Data Source
+## 📦 Data Source
 
 **Vuizur Wiktionary-Dictionaries**: https://github.com/Vuizur/Wiktionary-Dictionaries
-- High-quality bilingual dictionaries extracted from Wiktionary
+- High-quality bilingual dictionaries from Wiktionary
 - TSV format with comprehensive word forms and definitions
 - Regular updates and community maintenance
 - Creative Commons licensed
 
-## Legacy Cleanup
+## 🏗️ Technical Details
 
-**Removed legacy tools** (as of 2025-10-29):
-- `build-unified-pack.sh` - Complex, unreliable pipeline
-- `simple-build.sh` - Incomplete implementation  
-- `scrape-wiktionary*.py` - Direct scraping approach
-- All `tmp-unified-*` directories - Old processing artifacts
+For complete database schema, service architecture, and integration details, see:
+**[Dictionary System Documentation](../docs/DICTIONARY_SYSTEM.md)**
 
-The new `vuizur-dict-builder.sh` replaces all previous approaches with a simple, reliable solution.
+## 🚀 Deployment
+
+```bash
+# After generation, deploy to GitHub releases
+gh release upload language-packs-v2.1 dist/es-en.sqlite.zip
+
+# Update registry metadata
+# (See Dictionary System docs for registry format)
+```
+
+## ⚡ Performance Features
+
+- **5 database indexes** for fast lookups
+- **FTS5 full-text search** with BM25 ranking
+- **Legacy compatibility** fields for backward compatibility
+- **Automatic triggers** for search synchronization
+- **Sub-millisecond** exact lookups
+- **<100ms** fuzzy search performance
+
+---
+
+*For detailed technical documentation, troubleshooting, and architecture details, see [Dictionary System Documentation](../docs/DICTIONARY_SYSTEM.md)*

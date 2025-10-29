@@ -5,94 +5,72 @@ Welcome to the comprehensive documentation for PolyRead's dictionary and transla
 ## 🚀 Quick Start
 
 **New to PolyRead?** Start here:
-1. **[Project Overview](../CLAUDE.md)** - Complete project overview with current status
-2. **[Dictionary System Overview](DICTIONARY_SYSTEM_OVERVIEW.md)** - Architecture and component guide ⭐
-3. **[Quick Start](../README.md)** - Installation and basic usage
+1. **[Project Overview](../README.md)** - Main project documentation with installation guide
+2. **[Dictionary System](DICTIONARY_SYSTEM.md)** - Complete architecture and technical overview ⭐
+3. **[Development Setup](../CLAUDE.md)** - Detailed development instructions and project status
 
 ## 📚 Core Documentation
 
-### **Database & Schema**
+### **System Architecture**
 | Document | Description | Audience |
 |----------|-------------|----------|
-| **[DATABASE_SCHEMA.md](DATABASE_SCHEMA.md)** | Complete database schema with field mapping | Developers |
-| **[DATABASE_SCHEMA_ANALYSIS.md](DATABASE_SCHEMA_ANALYSIS.md)** | Technical analysis of schema implementation | Technical |
-| **[DICTIONARY_STRUCTURE_SUMMARY.md](DICTIONARY_STRUCTURE_SUMMARY.md)** | Executive summary with verification results | All |
+| **[DICTIONARY_SYSTEM.md](DICTIONARY_SYSTEM.md)** | Complete database schema, service architecture, and usage examples | All |
 
-### **Translation System**
+### **Tools & Generation**
 | Document | Description | Audience |
 |----------|-------------|----------|
-| **[TRANSLATION_SYSTEM.md](TRANSLATION_SYSTEM.md)** | Multi-provider translation architecture | Developers |
-
-## 🔧 Language Pack Generation
-
-### **Generation System**
-| Document | Description | Audience |
-|----------|-------------|----------|
-| **[Current Status](../language_pack_generation/docs/CURRENT_STATUS.md)** | Progress tracking (5/11 packs completed) | All |
-| **[Pipeline Guide](../language_pack_generation/docs/PIPELINE_GUIDE.md)** | Step-by-step generation instructions | Developers |
-| **[Verification Process](../language_pack_generation/docs/VERIFICATION_PROCESS.md)** | 4-level quality assurance process | Technical |
+| **[Vuizur Builder](../tools/README.md)** | Language pack generation using Vuizur dictionary system | Developers |
 
 ## 🎯 By Use Case
 
 ### **👨‍💻 For Developers**
 
 **Getting Started:**
-1. [Dictionary System Overview](DICTIONARY_SYSTEM_OVERVIEW.md) - Start here for architecture understanding
-2. [Database Schema](DATABASE_SCHEMA.md) - Understanding the data structure
-3. [Translation System](TRANSLATION_SYSTEM.md) - Translation service integration
+1. [Dictionary System](DICTIONARY_SYSTEM.md) - Complete system architecture
+2. [Main README](../README.md) - Project setup and dependencies
+3. Service Code - Implementation details in `lib/features/translation/services/`
 
-**API Reference:**
-- **Service APIs**: Documented in respective service files
-- **Database Schema**: Complete field reference in DATABASE_SCHEMA.md
-- **Error Handling**: Comprehensive error codes and handling patterns
-
-**Development Workflow:**
-- **Adding Features**: Follow service architecture patterns
-- **Database Changes**: Use migration strategies in DATABASE_SCHEMA.md
-- **Testing**: 100% test coverage on critical paths
+**Key Services:**
+- `BidirectionalDictionaryService` - Core lookup engine (`lib/features/language_packs/services/`)
+- `DriftDictionaryService` - Database integration (`lib/features/translation/services/`)
+- `CombinedLanguagePackService` - Pack management (`lib/features/language_packs/services/`)
 
 ### **🏗️ For System Architects**
 
-**Architecture Documents:**
-1. [Dictionary System Overview](DICTIONARY_SYSTEM_OVERVIEW.md) - Complete system architecture
-2. [Database Schema Analysis](DATABASE_SCHEMA_ANALYSIS.md) - Technical implementation details
-3. [Translation System](TRANSLATION_SYSTEM.md) - Multi-provider architecture
-
-**Performance & Scalability:**
-- **Query Optimization**: Indexed strategies in database docs
-- **Caching**: Service-level caching patterns documented
-- **Storage**: 50% reduction with bidirectional architecture
+**Architecture Overview:**
+1. [Dictionary System](DICTIONARY_SYSTEM.md) - Complete technical architecture
+2. [Project Overview](../README.md) - High-level system design
+3. [Development Details](../CLAUDE.md) - Internal architecture decisions
 
 ### **📦 For Language Pack Creators**
 
 **Generation Workflow:**
-1. [Pipeline Guide](../language_pack_generation/docs/PIPELINE_GUIDE.md) - Complete generation process
-2. [Verification Process](../language_pack_generation/docs/VERIFICATION_PROCESS.md) - Quality assurance
-3. [Current Status](../language_pack_generation/docs/CURRENT_STATUS.md) - Track progress
+1. [Vuizur Builder Guide](../tools/README.md) - Complete generation process
+2. [Dictionary System](DICTIONARY_SYSTEM.md) - Database schema and requirements
+3. [Vuizur Source](https://github.com/Vuizur/Wiktionary-Dictionaries) - Primary data source
 
-**Technical Requirements:**
-- Python 3.8+ environment
-- PyGlossary for StarDict conversion
+**Requirements:**
+- Bash shell environment
+- curl for data fetching
+- sqlite3 for database operations
 - GitHub CLI for deployment
-- 2GB RAM for large language packs
 
 ### **🔍 For Quality Assurance**
 
-**Verification Documents:**
-1. [Verification Process](../language_pack_generation/docs/VERIFICATION_PROCESS.md) - 4-level QA process
-2. [Dictionary Structure Summary](DICTIONARY_STRUCTURE_SUMMARY.md) - Verification results
-3. [Database Schema Analysis](DATABASE_SCHEMA_ANALYSIS.md) - Technical validation
+**Verification Process:**
+1. [Dictionary System](DICTIONARY_SYSTEM.md) - Quality metrics and verification process
+2. Service Tests - Quality validation in test suites
+3. [Project Status](../CLAUDE.md) - Current verification results
 
 **Quality Metrics:**
 - **Schema Consistency**: 100% Drift/Wiktionary compatibility
-- **Test Coverage**: Comprehensive lookup and FTS testing
 - **Performance**: <1ms exact lookups, <100ms FTS searches
-- **Data Integrity**: 1,086,098+ verified entries with complete vocabulary coverage
+- **Data Integrity**: 2,172,196 verified entries with complete vocabulary coverage
 
 ## 📊 System Status
 
 ### **✅ Production Ready Components**
-- **Vuizur Dictionary System v2.1**: Spanish-English deployed (1,086,098 entries)
+- **Vuizur Dictionary System v2.1**: Spanish-English deployed (2,172,196 entries)
 - **Translation Services**: Multi-provider architecture with dictionary-first fallbacks
 - **Database Schema**: Drift/Wiktionary compatible with FTS5 and performance indexes
 - **Performance**: Sub-millisecond lookups with optimized search
@@ -100,12 +78,11 @@ Welcome to the comprehensive documentation for PolyRead's dictionary and transla
 ### **🚧 Active Development**
 - **Additional Languages**: French, German, Portuguese ready for Vuizur pipeline
 - **FTS5 Search**: BM25-ranked fuzzy search with comprehensive coverage
-- **Performance Optimization**: 6 database indexes for optimal speed
+- **Performance Optimization**: 5 database indexes for optimal speed
 
-### **📈 Metrics**
-- **Documentation Coverage**: Updated for Vuizur v2.1 system
-- **Dictionary Entries**: 1,086,098 verified entries (35x improvement)
-- **Language Pairs**: 1 deployed, 3 ready for Vuizur generation
+### **📈 Current Metrics**
+- **Dictionary Entries**: 2,172,196 verified entries (Spanish-English)
+- **Language Pairs**: 1 deployed, 3 ready for generation
 - **Performance**: <1ms exact lookups, <100ms FTS searches
 
 ## 🔗 External Resources
@@ -113,12 +90,12 @@ Welcome to the comprehensive documentation for PolyRead's dictionary and transla
 ### **Dependencies & Tools**
 - **Flutter & Dart**: Core application framework
 - **Drift ORM**: Database management
-- **PyGlossary**: StarDict conversion
-- **GitHub Actions**: CI/CD pipeline
+- **Vuizur Wiktionary-Dictionaries**: Primary data source
+- **GitHub Releases**: Distribution system
 
 ### **Data Sources**
 - **Wiktionary**: Primary dictionary content source
-- **StarDict**: Dictionary format for conversion
+- **Vuizur TSV Format**: Processed Wiktionary data
 - **Google ML Kit**: Online translation fallback
 
 ## 🤝 Contributing
@@ -126,16 +103,16 @@ Welcome to the comprehensive documentation for PolyRead's dictionary and transla
 ### **Documentation**
 - All docs are in Markdown format
 - Follow existing structure and style
-- Update documentation index when adding new docs
+- Update this index when adding new docs
 
 ### **Code Contributions**
-- Follow service architecture patterns
+- Follow service architecture patterns in [Dictionary System](DICTIONARY_SYSTEM.md)
 - Maintain test coverage
 - Update relevant documentation
 
 ### **Language Packs**
-- Use generation pipeline for consistency
-- Follow verification process
+- Use Vuizur generation pipeline for consistency
+- Follow verification process in [Dictionary System](DICTIONARY_SYSTEM.md)
 - Document any new language-specific requirements
 
 ---
@@ -143,22 +120,17 @@ Welcome to the comprehensive documentation for PolyRead's dictionary and transla
 ## 📞 Support
 
 **For technical questions:**
-- Check relevant documentation first
-- Review error handling patterns
-- Consult API documentation in service files
+- Database/schema issues → [Dictionary System](DICTIONARY_SYSTEM.md)
+- Setup/installation → [Main README](../README.md)
+- Development details → [CLAUDE.md](../CLAUDE.md)
 
 **For development issues:**
-- Database problems → DATABASE_SCHEMA.md
-- Translation issues → TRANSLATION_SYSTEM.md
-- Language pack problems → Generation docs
-
-**For architecture questions:**
-- Start with [Dictionary System Overview](DICTIONARY_SYSTEM_OVERVIEW.md)
-- Review service interaction patterns
-- Check performance optimization strategies
+- Service architecture → [Dictionary System](DICTIONARY_SYSTEM.md)
+- Build problems → [Main README](../README.md)
+- Language pack generation → [Tools README](../tools/README.md)
 
 ---
 
 *Last updated: October 2025 - Vuizur Dictionary System v2.1*
-*Total dictionary entries: 1,086,098 for Spanish-English (more languages coming)*
-*Documentation coverage: Updated for v2.1 architecture*
+*Total dictionary entries: 2,172,196 for Spanish-English*
+*Documentation: Consolidated and verified for accuracy*

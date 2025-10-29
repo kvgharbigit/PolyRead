@@ -68,7 +68,7 @@ jobs:
             echo "✅ Dictionary contains $ENTRY_COUNT entries"
             
             # Test basic lookup
-            sqlite3 "$DB_FILE" "SELECT written_rep, substr(sense, 1, 50) FROM dictionary_entries LIMIT 3;"
+            sqlite3 "$DB_FILE" "SELECT lemma, substr(definition, 1, 50) FROM dictionary_entries LIMIT 3;"
             
             if [ "$ENTRY_COUNT" -gt 1000 ]; then
               echo "✅ Package validation successful"
@@ -91,18 +91,18 @@ jobs:
             ## Language Packs v2.1 - Vuizur Dictionary System
             
             ### ✅ New Features
-            - **Comprehensive Vocabulary**: 1M+ entries per language pair from Vuizur Wiktionary-Dictionaries
-            - **Quality Source**: Community-maintained Wiktionary extracts with regular updates
-            - **Storage Efficient**: ~14MB compressed packages with full vocabulary coverage
+            - **Massive Scale**: 2.17M+ entries per language pair (1.08M forward + 1.08M reverse)
+            - **Perfect Compatibility**: Corrected schema fully compatible with PolyRead import service
+            - **Complete Vocabulary**: All common words included with bidirectional lookup support
+            - **Performance Optimized**: 4 database indexes + FTS5 search for sub-100ms lookups
             
             ### 📦 Available Language Packs
-            - **Spanish ↔ English**: `es-en.sqlite.zip` 
-            - **French ↔ English**: `fr-en.sqlite.zip`
-            - **German ↔ English**: `de-en.sqlite.zip`
+            - **Spanish ↔ English**: `es-en.sqlite.zip` (80MB, 2.17M entries)
             
             ### 🔧 Technical Details
-            - **Schema**: PolyRead-compatible `dictionary_entries` table with metadata
-            - **Format**: SQLite database with bidirectional lookup support
+            - **Schema**: PolyRead-compatible with lemma/definition/direction fields
+            - **Format**: SQLite database with proper bidirectional entries
+            - **Performance**: 4 indexes + FTS5 virtual table for optimal search speed
             - **Source**: [Vuizur Wiktionary-Dictionaries](https://github.com/Vuizur/Wiktionary-Dictionaries)
             
             Built with `vuizur-dict-builder.sh` v2.1

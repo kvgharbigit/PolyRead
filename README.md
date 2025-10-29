@@ -39,9 +39,9 @@ PolyRead is a comprehensive Flutter-based language learning application that com
 ### 📦 Language Pack Management  
 - **GitHub Integration**: Automatic pack distribution and updates from `kvgharbigit/PolyRead`
 - **Vuizur Dictionary System**: Revolutionary 1M+ entries per language pair from Wiktionary
-- **Production Ready**: Spanish ↔ English with 1,086,098 comprehensive dictionary entries
+- **Production Ready**: Spanish ↔ English with 2,172,196 comprehensive dictionary entries
 - **Performance Optimized**: Sub-millisecond lookups with FTS5 search and 6 database indexes
-- **Storage Efficient**: 74MB compressed packages with complete vocabulary coverage
+- **Storage Efficient**: 80.5MB compressed packages with complete vocabulary coverage
 - **Download Progress**: Real-time tracking with pause/resume capability
 - **Integrity Validation**: SHA256 checksums ensure data quality
 

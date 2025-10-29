@@ -923,10 +923,19 @@ class CombinedLanguagePackService {
   
   void _cleanupDownload(String packId) {
     _cancelTokens.remove(packId);
-    // Keep progress for a while for UI display
-    Timer(const Duration(minutes: 5), () {
+    
+    // Check if download completed successfully
+    final progress = _activeDownloads[packId];
+    if (progress?.status == DownloadStatus.completed) {
+      // For completed downloads, remove immediately to allow UI to show "installed" state
+      print('CombinedLanguagePackService._cleanupDownload: Removing completed download $packId immediately');
       _activeDownloads.remove(packId);
-    });
+    } else {
+      // For failed or cancelled downloads, keep for a while for UI feedback
+      Timer(const Duration(minutes: 5), () {
+        _activeDownloads.remove(packId);
+      });
+    }
   }
   
   void _emitProgress(DownloadProgress progress) {

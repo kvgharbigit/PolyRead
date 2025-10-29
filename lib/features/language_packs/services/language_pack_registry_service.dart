@@ -113,30 +113,7 @@ class LanguagePackRegistryService {
       }
     }
     
-    // Registry should now be comprehensive - no need for fallback missing packs
-    // final missingPacks = ['de-en', 'es-en'].where((pack) => !foundPacks.contains(pack)).toList();
-    // for (final packId in missingPacks) {
-    //   final parts = packId.split('-');
-    //   final sourceCode = parts[0];
-    //   final targetCode = parts[1];
-    //   
-    //   packs.add(LanguagePackInfo(
-    //     id: packId,
-    //     name: '${_getLanguageName(sourceCode)} ↔ ${_getLanguageName(targetCode)}',
-    //     description: 'Bidirectional dictionary • Wiktionary source',
-    //     sourceLanguage: sourceCode,
-    //     targetLanguage: targetCode,
-    //     entries: packId == 'es-en' ? 1086098 : 1000000, // Vuizur v2.1 entry counts
-    //     sizeBytes: packId == 'es-en' ? 77522254 : 75000000, // Vuizur v2.1 file sizes
-    //     sizeMb: packId == 'es-en' ? 74.0 : 70.0,
-    //     downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.1/$packId.sqlite.zip',
-    //     checksum: '',
-    //     version: '2.1.0',
-    //     packType: 'main',
-    //     isAvailable: true,
-    //     priority: 'high',
-    //   ));
-    // }
+    // Registry is now comprehensive with all available packs
     
     // Registry now contains all available packs - no coming soon needed
     
@@ -176,12 +153,12 @@ class LanguagePackRegistryService {
       LanguagePackInfo(
         id: 'es-en',
         name: '🇪🇸 Spanish ↔ 🇺🇸 English',
-        description: 'Vuizur Wiktionary • 1,086,098 entries',
+        description: 'Vuizur Wiktionary • 2,172,196 entries',
         sourceLanguage: 'es',
         targetLanguage: 'en',
-        entries: 1086098,
-        sizeBytes: 77522254, // Actual GitHub file size (74MB)
-        sizeMb: 74.0,
+        entries: 2172196,
+        sizeBytes: 84409229, // Actual GitHub file size (80.5MB)
+        sizeMb: 80.5,
         downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.1/es-en.sqlite.zip',
         checksum: '',
         version: '2.1.0',

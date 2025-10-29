@@ -167,6 +167,66 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
     await _loadLanguagePacks();
   }
   
+  /// Update only the installed packs list (lightweight refresh after installation)
+  Future<void> _updateInstalledPacksOnly() async {
+    try {
+      print('LanguagePacksProvider: Starting _updateInstalledPacksOnly...');
+      
+      // Small delay to ensure database transaction is committed
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      final installedPackIds = <String>[];
+      
+      // Update the installed status for existing available packs
+      final updatedAvailablePacks = <LanguagePackInfo>[];
+      
+      for (final pack in state.availablePacks) {
+        final parts = pack.id.split('-');
+        final sourceLanguage = parts.isNotEmpty ? parts[0] : 'en';
+        final targetLanguage = parts.length > 1 ? parts[1] : 'es';
+        
+        print('LanguagePacksProvider: Checking installation status for ${pack.id} ($sourceLanguage-$targetLanguage)');
+        
+        final isInstalled = await _combinedService.isLanguagePackInstalled(
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+        );
+        
+        print('LanguagePacksProvider: Pack ${pack.id} installed status: $isInstalled');
+        
+        if (isInstalled) {
+          installedPackIds.add(pack.id);
+        }
+        
+        // Create updated pack info with new installed status
+        updatedAvailablePacks.add(LanguagePackInfo(
+          id: pack.id,
+          name: pack.name,
+          version: pack.version,
+          totalSize: pack.totalSize,
+          entryCount: pack.entryCount,
+          languages: pack.languages,
+          isInstalled: isInstalled,
+        ));
+      }
+      
+      // Update state with new installed status
+      state = state.copyWith(
+        availablePacks: updatedAvailablePacks,
+        installedPackIds: installedPackIds,
+        error: null,
+      );
+      
+      print('LanguagePacksProvider: Updated installed packs: $installedPackIds');
+      print('LanguagePacksProvider: _updateInstalledPacksOnly completed successfully');
+      
+    } catch (e) {
+      print('LanguagePacksProvider: Error updating installed packs: $e');
+      print('LanguagePacksProvider: Error stack trace: ${StackTrace.current}');
+      // Don't set error state since this is a minor refresh operation
+    }
+  }
+  
   /// Download a language pack (dictionary + ML Kit models)
   Future<void> downloadPack(String packId) async {
     try {
@@ -193,12 +253,57 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
       // Clear any previous error state since installation succeeded
       state = state.copyWith(error: null);
       
-      // Refresh state after download
-      await refresh();
+      // Update installed packs list immediately without full refresh
+      // This prevents registry fetch errors from blocking UI updates
+      await _updateInstalledPacksOnly();
+      
+      // Additional fallback: if no packs were detected, force check the database directly
+      if (state.installedPackIds.isEmpty) {
+        print('LanguagePacksProvider: No installed packs detected, checking database directly...');
+        await _forceCheckInstalledPacks(packId);
+      }
       
     } catch (e) {
       state = state.copyWith(error: 'Failed to download $packId: $e');
       rethrow; // Re-throw to propagate to UI
+    }
+  }
+  
+  /// Force check installed packs directly from database (fallback)
+  Future<void> _forceCheckInstalledPacks(String packId) async {
+    try {
+      print('LanguagePacksProvider: Force checking database for pack: $packId');
+      
+      // Longer delay to ensure database commit
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Direct database check
+      final installedPacks = await _combinedService.getInstalledLanguagePacks();
+      final installedPackIds = installedPacks.map((pack) => pack.packId).toList();
+      
+      print('LanguagePacksProvider: Database contains installed packs: $installedPackIds');
+      
+      if (installedPackIds.contains(packId)) {
+        print('LanguagePacksProvider: Pack $packId confirmed installed in database');
+        
+        // Update state to include the newly installed pack
+        final currentIds = state.installedPackIds.toList();
+        if (!currentIds.contains(packId)) {
+          currentIds.add(packId);
+          
+          state = state.copyWith(
+            installedPackIds: currentIds,
+            error: null,
+          );
+          
+          print('LanguagePacksProvider: Force updated installed packs: $currentIds');
+        }
+      } else {
+        print('LanguagePacksProvider: Pack $packId NOT found in database - installation may have failed');
+      }
+      
+    } catch (e) {
+      print('LanguagePacksProvider: Error in force check: $e');
     }
   }
   
@@ -216,7 +321,7 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
     
     // Fallback to known entry counts for Vuizur v2.1 system
     final knownCounts = {
-      'es-en': 1086098,  // Spanish-English Vuizur Wiktionary v2.1
+      'es-en': 2172196,  // Spanish-English Vuizur Wiktionary v2.1 (total entries)
       // Future Vuizur language pairs will be added here
     };
     
