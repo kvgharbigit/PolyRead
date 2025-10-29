@@ -441,8 +441,10 @@ class MockTranslationService {
 
     // Check cache first
     if (useCache && _cache.containsKey(request.cacheKey)) {
-      final cached = _cache[request.cacheKey]!;
-      return TranslationResponse.fromCached(cached);
+      final cached = _cache[request.cacheKey];
+      if (cached != null) {
+        return TranslationResponse.fromCached(cached);
+      }
     }
 
     // Simulate translation processing time

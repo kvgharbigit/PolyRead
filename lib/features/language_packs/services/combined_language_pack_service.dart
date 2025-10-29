@@ -100,16 +100,21 @@ class CombinedLanguagePackService {
             print('CombinedLanguagePackService: Auto-repairing broken pack: $packId');
             
             // Mark as not installed so user can reinstall cleanly
-            await _database.update(_database.languagePacks)
-              .replace(LanguagePacksCompanion(
-                packId: Value(packId),
+            final updateCount = await (_database.update(_database.languagePacks)
+              ..where((pack) => pack.packId.equals(packId)))
+              .write(LanguagePacksCompanion(
                 isInstalled: Value(false),
                 isActive: Value(false),
               ));
               
-            print('CombinedLanguagePackService: Marked $packId as not installed for clean reinstall');
+            if (updateCount > 0) {
+              print('CombinedLanguagePackService: Successfully marked $packId as not installed for clean reinstall');
+            } else {
+              print('CombinedLanguagePackService: Warning: No pack found with ID $packId to repair');
+            }
           } catch (e) {
             print('CombinedLanguagePackService: Failed to auto-repair $packId: $e');
+            // Continue with other packs even if one fails
           }
         }
       } else {
@@ -325,6 +330,7 @@ class CombinedLanguagePackService {
         if (_activeDownloads.containsKey(packId)) {
           final updatedProgress = _activeDownloads[packId]!.copyWith(
             stageDescription: 'Downloading ML Kit translation models...',
+            downloadedBytes: (progress.totalBytes * 0.7).toInt(), // Starting ML Kit at 70%
           );
           _activeDownloads[packId] = updatedProgress;
           _emitProgress(updatedProgress);
@@ -335,6 +341,24 @@ class CombinedLanguagePackService {
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
             wifiOnly: wifiOnly,
+            onProgress: (mlKitProgress) {
+              // Update UI progress based on ML Kit download progress
+              if (_activeDownloads.containsKey(packId)) {
+                final currentProgress = _activeDownloads[packId]!;
+                // ML Kit progress goes from 70% to 90% of total progress
+                final overallProgress = 0.7 + (mlKitProgress * 0.2);
+                final updatedProgress = currentProgress.copyWith(
+                  stageDescription: mlKitProgress < 1.0 
+                      ? 'Downloading ML Kit models... ${(mlKitProgress * 100).toStringAsFixed(0)}%'
+                      : 'ML Kit models downloaded successfully',
+                  downloadedBytes: (currentProgress.totalBytes * overallProgress).toInt(),
+                  currentFile: mlKitProgress < 1.0 ? 'ml-kit-models' : 'installation-complete',
+                );
+                _activeDownloads[packId] = updatedProgress;
+                _emitProgress(updatedProgress);
+                print('CombinedLanguagePackService: ML Kit progress: ${(mlKitProgress * 100).toStringAsFixed(1)}% (Overall: ${(overallProgress * 100).toStringAsFixed(1)}%)');
+              }
+            },
           );
           
           print('CombinedLanguagePackService: ML Kit download result:');
@@ -668,6 +692,9 @@ class CombinedLanguagePackService {
               totalSize: matchingPack.totalSize,
               files: matchingPack.files,
               supportedTargetLanguages: matchingPack.supportedTargetLanguages,
+              sourceLanguage: matchingPack.sourceLanguage,
+              targetLanguage: matchingPack.targetLanguage,
+              packType: matchingPack.packType,
               releaseDate: matchingPack.releaseDate,
               author: matchingPack.author,
               license: matchingPack.license,

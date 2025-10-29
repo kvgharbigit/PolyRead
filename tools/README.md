@@ -1,96 +1,90 @@
-# PolyRead Language Pack Tools
+# PolyRead Dictionary Tools
 
-This directory contains tools for creating and managing language packs, copied from the original PolyBook project for future use.
+This directory contains the **Vuizur Dictionary Builder** - a simple, reliable tool for creating PolyRead-compatible language pack databases.
 
-## Scripts Overview
+## ✅ Current Tool: `vuizur-dict-builder.sh`
 
-### `build-unified-pack.sh`
-- **Source**: PolyBook's verified Wiktionary build system
-- **Purpose**: Creates language packs from Vuizur/Wiktionary-Dictionaries repository
-- **Features**: 
-  - Downloads StarDict archives from verified URLs
-  - Handles decompression of .dict.dz and .idx.gz files
-  - Converts using PyGlossary with UTF-8 encoding support
-  - Applies mobile optimization (journal_mode=OFF, etc.)
-  - Creates `dict` table schema for app compatibility
+**Purpose**: Creates language pack databases from Vuizur Wiktionary-Dictionaries repository
 
-**Usage:**
+**Features**:
+- Downloads comprehensive bilingual dictionaries from [Vuizur/Wiktionary-Dictionaries](https://github.com/Vuizur/Wiktionary-Dictionaries)
+- Creates PolyRead-compatible SQLite databases with proper schema
+- Handles multiple word forms (pipe-separated headwords)
+- Generates metadata for pack identification
+- Over 1M+ dictionary entries per language pair
+- Full common vocabulary coverage
+
+## Usage
+
 ```bash
-./build-unified-pack.sh fr-en    # French-English
-./build-unified-pack.sh it-en    # Italian-English  
-./build-unified-pack.sh pt-en    # Portuguese-English
-./build-unified-pack.sh ru-en    # Russian-English
-./build-unified-pack.sh ko-en    # Korean-English
-./build-unified-pack.sh ja-en    # Japanese-English
-./build-unified-pack.sh zh-en    # Chinese-English
-./build-unified-pack.sh ar-en    # Arabic-English
-./build-unified-pack.sh hi-en    # Hindi-English
+# Build Spanish-English dictionary
+./vuizur-dict-builder.sh es-en
+
+# Build French-English dictionary  
+./vuizur-dict-builder.sh fr-en
+
+# Build German-English dictionary
+./vuizur-dict-builder.sh de-en
 ```
 
-### `scrape-wiktionary.py` & `scrape-wiktionary-top10.py`
-- **Purpose**: Alternative Wiktionary data scrapers
-- **Features**: Direct Wiktionary parsing for custom data extraction
+## Output
 
-### `install_deps.py`
-- **Purpose**: Install required dependencies for language pack creation
-- **Dependencies**: PyGlossary, requests, sqlite3, etc.
+- **Database**: SQLite file with `dictionary_entries` and `pack_metadata` tables
+- **Package**: Compressed `.sqlite.zip` file ready for PolyRead
+- **Size**: ~14MB compressed (from ~125MB uncompressed database)
+- **Entries**: 1M+ dictionary entries with full vocabulary coverage
 
-### `test_basic.py`
-- **Purpose**: Basic testing framework for language pack validation
+## Database Schema
 
-## PolyBook's Original Data Sources
+```sql
+-- Main dictionary table
+CREATE TABLE dictionary_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lemma TEXT NOT NULL,                    -- Headword/term
+    definition TEXT NOT NULL,              -- HTML-formatted definition  
+    direction TEXT NOT NULL CHECK (direction IN ('forward', 'reverse')),
+    source_language TEXT NOT NULL,        -- ISO language codes
+    target_language TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-The build script uses these verified Wiktionary sources from Vuizur repository:
+-- Pack metadata
+CREATE TABLE pack_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+```
 
-- **French-English**: 3.2MB → ~20,000+ entries
-- **Italian-English**: 5.3MB → ~30,000+ entries  
-- **Portuguese-English**: 2.6MB → ~15,000+ entries
-- **Russian-English**: 8.2MB → ~50,000+ entries
-- **Korean-English**: 2.1MB → ~10,000+ entries
-- **Japanese-English**: 3.7MB → ~25,000+ entries
-- **Chinese-English**: 6.4MB → ~40,000+ entries
-- **Arabic-English**: 2.9MB → ~18,000+ entries
-- **Hindi-English**: 1.0MB → ~8,000+ entries
+## Verification Results
 
-## Size Comparison Analysis
+**✅ Spanish-English Dictionary:**
+- **Entries**: 1,086,098 dictionary entries
+- **Common words**: All basic vocabulary found (agua, casa, hacer, tener, ser, hola, tiempo, año, día, vez)
+- **Quality**: Comprehensive coverage with conjugated forms, synonyms, and specialized terms
+- **Schema**: PolyRead-compatible with proper metadata
 
-**Current PolyRead packs vs PolyBook sources:**
-- German: ✅ 12,130 entries (matches PolyBook)
-- Spanish: ⚠️ Two versions exist:
-  - `es-en.sqlite.zip`: 0.4MB with 11,598 entries (newer)
-  - `eng-spa.sqlite.zip`: 3.0MB with 11,598 entries (PolyBook-style)
+## Supported Language Pairs
 
-**Why sizes differ:**
-1. **PolyBook used rich StarDict format**: Contains HTML definitions, examples, pronunciation
-2. **Current packs may be simplified**: Basic lemma→definition mapping
-3. **Compression differences**: StarDict→SQLite optimization vs direct conversion
+Currently supported language pairs from Vuizur repository:
+- **es-en**: Spanish → English
+- **fr-en**: French → English  
+- **de-en**: German → English
+- **en-es**: English → Spanish (if available)
 
-## Future Usage
+## Data Source
 
-To create language packs using PolyBook's exact sources and processing:
+**Vuizur Wiktionary-Dictionaries**: https://github.com/Vuizur/Wiktionary-Dictionaries
+- High-quality bilingual dictionaries extracted from Wiktionary
+- TSV format with comprehensive word forms and definitions
+- Regular updates and community maintenance
+- Creative Commons licensed
 
-1. **Install dependencies**:
-   ```bash
-   python3 install_deps.py
-   brew install pyglossary  # or pip install pyglossary
-   ```
+## Legacy Cleanup
 
-2. **Create individual language pack**:
-   ```bash
-   ./build-unified-pack.sh fr-en
-   ```
+**Removed legacy tools** (as of 2025-10-29):
+- `build-unified-pack.sh` - Complex, unreliable pipeline
+- `simple-build.sh` - Incomplete implementation  
+- `scrape-wiktionary*.py` - Direct scraping approach
+- All `tmp-unified-*` directories - Old processing artifacts
 
-3. **Convert to bidirectional format** (for PolyRead compatibility):
-   - Use the created SQLite file as input to your bidirectional conversion script
-   - Apply the new schema with `direction` field
-   - Create forward/reverse entries
-
-## Integration with PolyRead
-
-These tools can be integrated with PolyRead's new bidirectional system by:
-1. Using `build-unified-pack.sh` to create rich Wiktionary-based SQLite files
-2. Converting the output to PolyRead's bidirectional schema
-3. Creating zip files compatible with PolyRead's download system
-4. Updating the comprehensive registry with proper metadata
-
-This maintains the rich content from PolyBook while supporting PolyRead's improved bidirectional architecture.
+The new `vuizur-dict-builder.sh` replaces all previous approaches with a simple, reliable solution.

@@ -51,52 +51,28 @@ class DriftDictionaryService {
       final exactResults = await exactQuery.get();
       print('DriftDictionary: Exact match found ${exactResults.length} results');
       
+      // Log exact matches if found
+      for (int i = 0; i < exactResults.length && i < 3; i++) {
+        final result = exactResults[i];
+        print('DriftDictionary: Exact match ${i + 1}: word="${result.writtenRep}" trans="${result.transList}" (${result.sourceLanguage}->${result.targetLanguage})');
+      }
+      
       if (exactResults.isNotEmpty) {
         stopwatch.stop();
         return exactResults.map((row) => _convertToModelEntry(row)).toList();
       }
       
-      // If no exact match, try FTS search using Wiktionary format
-      try {
-        final ftsResults = await _database.customSelect('''
-          SELECT de.* FROM dictionary_entries de
-          JOIN dictionary_fts fts ON de.id = fts.rowid
-          WHERE dictionary_fts MATCH ? 
-            AND de.source_language = ? 
-            AND de.target_language = ?
-          ORDER BY bm25(dictionary_fts) ASC, de.frequency DESC
-          LIMIT ?
-        ''', variables: [
-          Variable(word.toLowerCase()),
-          Variable(sourceLanguage),
-          Variable(targetLanguage),
-          Variable(limit),
-        ]).get();
-        
-        print('DriftDictionary: FTS search found ${ftsResults.length} results');
-        stopwatch.stop();
-        return ftsResults.map((row) => _convertToModelEntryFromMap(row.data)).toList();
-      } catch (ftsError) {
-        print('DriftDictionary: FTS search failed: $ftsError, falling back to basic search');
-        
-        // Fallback: try basic LIKE search using Wiktionary format
-        final likeQuery = _database.select(_database.dictionaryEntries)
-          ..where((e) => 
-            e.writtenRep.like('%${word.toLowerCase()}%') & 
-            e.sourceLanguage.equals(sourceLanguage) &
-            e.targetLanguage.equals(targetLanguage)
-          )
-          ..orderBy([
-            (e) => OrderingTerm(expression: e.frequency, mode: OrderingMode.desc),
-          ])
-          ..limit(limit);
-        
-        final likeResults = await likeQuery.get();
-        print('DriftDictionary: LIKE search found ${likeResults.length} results');
-        
-        stopwatch.stop();
-        return likeResults.map((row) => _convertToModelEntry(row)).toList();
+      // No exact match found - let's debug why common words aren't found
+      final commonWords = ['the', 'and', 'a', 'to', 'of', 'in', 'you', 'that', 'have', 'it', 'for', 'not', 'on', 'with', 'he', 'as', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'located', 'under', 'states'];
+      if (commonWords.contains(word.toLowerCase())) {
+        print('DriftDictionary: DEBUG - Common word "$word" not found in database with 333,458 entries! Running full exploration...');
+        await exploreDictionary();
       }
+      
+      // No exact match found - return empty to fall back to ML Kit
+      print('DriftDictionary: No exact match found for "$word", returning empty (will fall back to ML Kit)');
+      stopwatch.stop();
+      return [];
     } catch (e) {
       stopwatch.stop();
       print('DriftDictionary: Lookup failed with error: $e');
@@ -285,11 +261,16 @@ class DriftDictionaryService {
       }
       
       // Check specific test words
-      final testWords = ['for', 'hello', 'autobiography'];
+      final testWords = ['for', 'hello', 'autobiography', 'located', 'under', 'states', 'the', 'and', 'a'];
       for (final word in testWords) {
         final results = await (_database.select(_database.dictionaryEntries)
-          ..where((e) => e.writtenRep.equals(word.toLowerCase()))).get();
-        print('DriftDictionary Debug: Word "$word" found ${results.length} times');
+          ..where((e) => e.writtenRep.equals(word.toLowerCase()) & 
+                         e.sourceLanguage.equals('en') & 
+                         e.targetLanguage.equals('es'))).get();
+        print('DriftDictionary Debug: Word "$word" (en->es) found ${results.length} times');
+        if (results.isNotEmpty) {
+          print('  First match: "${results.first.writtenRep}" -> "${results.first.transList}"');
+        }
       }
       
       // Check language pairs (using Wiktionary format)
@@ -312,7 +293,227 @@ class DriftDictionaryService {
     }
   }
   
+  /// Debug method to check if common words exist
+  Future<void> debugCommonWords() async {
+    try {
+      print('DriftDictionary Debug: Checking common English words in en->es dictionary...');
+      
+      final commonWords = ['the', 'and', 'a', 'to', 'of', 'in', 'that', 'have', 'I', 'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she', 'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which', 'go', 'me'];
+      
+      int foundCount = 0;
+      for (final word in commonWords) {
+        final results = await (_database.select(_database.dictionaryEntries)
+          ..where((e) => e.writtenRep.equals(word.toLowerCase()) & 
+                         e.sourceLanguage.equals('en') & 
+                         e.targetLanguage.equals('es'))
+          ..limit(1)).get();
+        
+        if (results.isNotEmpty) {
+          foundCount++;
+          print('  ✓ "$word" -> "${results.first.transList}"');
+        } else {
+          print('  ✗ "$word" not found');
+        }
+      }
+      
+      print('DriftDictionary Debug: Found $foundCount/${commonWords.length} common words');
+      
+    } catch (e) {
+      print('DriftDictionary Debug: Error checking common words: $e');
+    }
+  }
+  
+  /// Comprehensive dictionary exploration
+  Future<void> exploreDictionary() async {
+    try {
+      print('\n🔍 DICTIONARY EXPLORATION REPORT 🔍');
+      print('=' * 50);
+      
+      // 1. Basic stats
+      final totalCount = await (_database.selectOnly(_database.dictionaryEntries)
+          ..addColumns([_database.dictionaryEntries.id.count()]))
+          .getSingle();
+      final total = totalCount.read(_database.dictionaryEntries.id.count()) ?? 0;
+      print('📊 Total entries: $total');
+      
+      // 2. Language pairs
+      final languagePairs = await _database.customSelect('''
+        SELECT source_language, target_language, COUNT(*) as count 
+        FROM dictionary_entries 
+        GROUP BY source_language, target_language
+        ORDER BY count DESC
+      ''').get();
+      
+      print('\n🌍 Language pairs:');
+      for (final row in languagePairs) {
+        print('  ${row.data['source_language']}->${row.data['target_language']}: ${row.data['count']} entries');
+      }
+      
+      // 3. Sample entries by length (to see data quality)
+      print('\n📝 Sample entries by word length:');
+      for (int len = 1; len <= 10; len++) {
+        final samples = await (_database.select(_database.dictionaryEntries)
+          ..where((e) => e.writtenRep.length.equals(len) & 
+                         e.sourceLanguage.equals('en') & 
+                         e.targetLanguage.equals('es'))
+          ..limit(3)).get();
+        
+        if (samples.isNotEmpty) {
+          print('  Length $len: ${samples.map((e) => '"${e.writtenRep}"').join(', ')}');
+        }
+      }
+      
+      // 4. Check for HTML contamination
+      final htmlEntries = await (_database.select(_database.dictionaryEntries)
+        ..where((e) => e.writtenRep.like('%<%') | e.writtenRep.like('%>%'))
+        ..limit(10)).get();
+      
+      print('\n🚨 HTML contamination check:');
+      print('  Entries with HTML tags: ${htmlEntries.length}');
+      for (int i = 0; i < htmlEntries.length && i < 5; i++) {
+        print('    "${htmlEntries[i].writtenRep}" -> "${htmlEntries[i].transList}"');
+      }
+      
+      // 5. Shortest and longest entries
+      final shortest = await (_database.select(_database.dictionaryEntries)
+        ..where((e) => e.sourceLanguage.equals('en') & e.targetLanguage.equals('es'))
+        ..orderBy([(e) => OrderingTerm(expression: e.writtenRep.length)])
+        ..limit(5)).get();
+      
+      final longest = await (_database.select(_database.dictionaryEntries)
+        ..where((e) => e.sourceLanguage.equals('en') & e.targetLanguage.equals('es'))
+        ..orderBy([(e) => OrderingTerm(expression: e.writtenRep.length, mode: OrderingMode.desc)])
+        ..limit(5)).get();
+      
+      print('\n📏 Entry length analysis:');
+      print('  Shortest entries:');
+      for (final entry in shortest) {
+        print('    "${entry.writtenRep}" (${entry.writtenRep.length} chars) -> "${entry.transList}"');
+      }
+      print('  Longest entries:');
+      for (final entry in longest) {
+        print('    "${entry.writtenRep}" (${entry.writtenRep.length} chars) -> "${entry.transList.length > 50 ? entry.transList.substring(0, 50) + '...' : entry.transList}"');
+      }
+      
+      // 6. Random sample to see overall quality
+      final randomSample = await _database.customSelect('''
+        SELECT * FROM dictionary_entries 
+        WHERE source_language = 'en' AND target_language = 'es'
+        ORDER BY RANDOM() 
+        LIMIT 10
+      ''').get();
+      
+      print('\n🎲 Random sample (10 entries):');
+      for (final row in randomSample) {
+        final word = row.data['written_rep'] as String;
+        final trans = row.data['trans_list'] as String;
+        print('    "$word" -> "$trans"');
+      }
+      
+      // 7. Check specific words you might expect
+      final expectedWords = ['house', 'water', 'food', 'good', 'bad', 'big', 'small', 'red', 'blue', 'green', 'book', 'table', 'chair', 'door', 'window'];
+      print('\n🏠 Basic vocabulary check:');
+      int basicFound = 0;
+      for (final word in expectedWords) {
+        final results = await (_database.select(_database.dictionaryEntries)
+          ..where((e) => e.writtenRep.equals(word.toLowerCase()) & 
+                         e.sourceLanguage.equals('en') & 
+                         e.targetLanguage.equals('es'))
+          ..limit(1)).get();
+        
+        if (results.isNotEmpty) {
+          basicFound++;
+          print('    ✓ "$word" -> "${results.first.transList}"');
+        } else {
+          print('    ✗ "$word" not found');
+        }
+      }
+      print('  Found $basicFound/${expectedWords.length} basic words');
+      
+      print('\n' + '=' * 50);
+      print('🎯 CONCLUSION:');
+      if (basicFound < expectedWords.length / 2) {
+        print('  📚 This appears to be a SPECIALIZED dictionary (Wiktionary-style)');
+        print('  💡 Recommended: Use ML Kit for common words, dictionary for rare/technical terms');
+      } else {
+        print('  📖 This appears to be a GENERAL-PURPOSE dictionary');
+        print('  💡 Investigate why common words are not being found');
+      }
+      
+    } catch (e) {
+      print('DriftDictionary Debug: Error exploring dictionary: $e');
+    }
+  }
+  
   // Private helper methods
+  
+  /// Check if a dictionary match is relevant for the searched word
+  bool _isRelevantMatch(String searchWord, String foundWord) {
+    final cleanFoundWord = foundWord.toLowerCase().trim();
+    
+    print('DriftDictionary: _isRelevantMatch checking "$searchWord" vs "$cleanFoundWord"');
+    
+    // Exact match is always relevant
+    if (cleanFoundWord == searchWord) {
+      print('DriftDictionary: Exact match found');
+      return true;
+    }
+    
+    // If the found word starts with the search word, it's probably relevant
+    if (cleanFoundWord.startsWith(searchWord)) {
+      print('DriftDictionary: Prefix match found');
+      return true;
+    }
+    
+    // If the search word is very short (1-2 chars), be more strict
+    if (searchWord.length <= 2) {
+      print('DriftDictionary: Short search word, requiring exact match');
+      return cleanFoundWord == searchWord;
+    }
+    
+    // For proper nouns like "States", be more lenient with certain patterns
+    if (searchWord.length >= 4) {
+      // Check if it's a word boundary match (after space, dash, or start)
+      final pattern = RegExp(r'(^|\s|-)' + RegExp.escape(searchWord) + r'(\s|-|$)');
+      if (pattern.hasMatch(cleanFoundWord)) {
+        print('DriftDictionary: Word boundary match found');
+        return true;
+      }
+    }
+    
+    // For longer words, check if it's a reasonable substring match
+    // Avoid matches where the search word is buried deep in a complex term
+    final searchIndex = cleanFoundWord.indexOf(searchWord);
+    if (searchIndex == -1) {
+      print('DriftDictionary: No substring match');
+      return false;
+    }
+    
+    // If the match is at the beginning or after a space/dash, it's probably relevant
+    if (searchIndex == 0) {
+      print('DriftDictionary: Match at beginning');
+      return true;
+    }
+    if (searchIndex > 0 && (cleanFoundWord[searchIndex - 1] == ' ' || cleanFoundWord[searchIndex - 1] == '-')) {
+      print('DriftDictionary: Match after word boundary');
+      return true;
+    }
+    
+    // If the found word is much longer than the search word, it's probably not relevant
+    if (cleanFoundWord.length > searchWord.length * 3) {
+      print('DriftDictionary: Found word too long (${cleanFoundWord.length} vs ${searchWord.length})');
+      return false;
+    }
+    
+    // If it's a place name match (like "States" in "United States"), might be relevant
+    if (searchWord == "states" && cleanFoundWord.contains("united states")) {
+      print('DriftDictionary: Geographic name match');
+      return true;
+    }
+    
+    print('DriftDictionary: No relevant match found');
+    return false;
+  }
   
   model.DictionaryEntry _convertToModelEntry(DictionaryEntry row) {
     // Parse pipe-separated translations from WikiDict format

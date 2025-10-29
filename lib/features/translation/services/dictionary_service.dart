@@ -1,5 +1,5 @@
 // Dictionary Service - SQLite-based word lookup with FTS support
-// Ported from PolyBook's dictionary system
+// Optimized for Vuizur Wiktionary-based language packs
 
 import 'package:sqflite/sqflite.dart';
 import '../models/dictionary_entry.dart';

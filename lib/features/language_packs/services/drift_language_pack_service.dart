@@ -77,18 +77,30 @@ class DriftLanguagePackService {
   
   /// Check for and detect broken installations
   Future<List<String>> detectBrokenPacks() async {
-    final installedPacks = await getInstalledPacks();
-    final brokenPacks = <String>[];
-    
-    for (final pack in installedPacks) {
-      final validation = await validatePack(pack.packId);
-      if (!validation.isValid) {
-        print('DriftLanguagePackService: Detected broken pack: ${pack.packId} - ${validation.error}');
-        brokenPacks.add(pack.packId);
+    try {
+      final installedPacks = await getInstalledPacks();
+      final brokenPacks = <String>[];
+      
+      for (final pack in installedPacks) {
+        try {
+          final validation = await validatePack(pack.packId);
+          if (!validation.isValid) {
+            print('DriftLanguagePackService: Detected broken pack: ${pack.packId} - ${validation.error}');
+            brokenPacks.add(pack.packId);
+          }
+        } catch (e) {
+          print('DriftLanguagePackService: Error validating pack ${pack.packId}: $e');
+          // If validation itself fails, consider the pack broken
+          brokenPacks.add(pack.packId);
+        }
       }
+      
+      return brokenPacks;
+    } catch (e) {
+      print('DriftLanguagePackService: Critical error in detectBrokenPacks: $e');
+      // Return empty list rather than crashing the app
+      return [];
     }
-    
-    return brokenPacks;
   }
   
   /// Get all installed language packs
@@ -247,7 +259,7 @@ class DriftLanguagePackService {
   
   /// Get pack installation directory
   Future<Directory> getPackDirectory(String packId) async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getApplicationSupportDirectory();
     final packDir = Directory(path.join(appDir.path, 'language_packs', packId));
     
     if (!await packDir.exists()) {
@@ -282,7 +294,7 @@ class DriftLanguagePackService {
   
   Future<void> _deletePackFiles(String packId) async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
+      final appDir = await getApplicationSupportDirectory();
       final packDir = Directory(path.join(appDir.path, 'language_packs', packId));
       
       if (await packDir.exists()) {

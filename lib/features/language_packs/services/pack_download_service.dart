@@ -118,7 +118,7 @@ class PackDownloadService {
   
   /// Get download directory for language packs
   Future<Directory> getDownloadDirectory() async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getApplicationSupportDirectory();
     final downloadDir = Directory(path.join(appDir.path, 'language_packs'));
     
     if (!await downloadDir.exists()) {

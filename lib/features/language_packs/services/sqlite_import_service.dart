@@ -7,6 +7,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as path;
 import 'package:polyread/core/database/app_database.dart';
 
+enum InsertResult { inserted, skipped, error }
+
 class SqliteImportService {
   final AppDatabase _appDatabase;
   
@@ -233,10 +235,16 @@ class SqliteImportService {
     int totalImported = 0;
     
     print('SqliteImport: Starting database transaction for batch import...');
+    print('SqliteImport: Target database: ${_appDatabase.hashCode}');
+    print('SqliteImport: Source database: ${sourceDb.hashCode}');
+    print('SqliteImport: Expected entries: ${sourceInfo.totalEntries}');
+    print('SqliteImport: Batch size: $batchSize');
+    
     await _appDatabase.transaction(() async {
       print('SqliteImport: Inside transaction, starting batch processing...');
       while (true) {
-        // Fetch batch from source database
+        print('SqliteImport: Fetching batch at offset $offset...');
+        // Fetch batch from source database - get ALL entries for bidirectional pack
         final batchResults = await sourceDb.rawQuery('''
           SELECT 
             lemma,
@@ -245,15 +253,21 @@ class SqliteImportService {
             source_language,
             target_language
           FROM dictionary_entries 
-          WHERE source_language = ? AND target_language = ?
           LIMIT ? OFFSET ?
-        ''', [sourceLanguage, targetLanguage, batchSize, offset]);
+        ''', [batchSize, offset]);
+        
+        print('SqliteImport: Batch query returned ${batchResults.length} entries');
         
         if (batchResults.isEmpty) break;
         
         // Convert and insert batch
+        print('SqliteImport: Processing ${batchResults.length} entries in current batch...');
+        var batchInserted = 0;
+        var batchSkipped = 0;
+        var batchErrors = 0;
+        
         for (final row in batchResults) {
-          await _insertDictionaryEntry(
+          final result = await _insertDictionaryEntry(
             sourceDb: sourceDb,
             row: row,
             sourceLanguage: sourceLanguage,
@@ -261,13 +275,26 @@ class SqliteImportService {
             dictionaryName: dictionaryName,
             entryNumber: totalImported,
           );
-          totalImported++;
+          
+          if (result == InsertResult.inserted) {
+            batchInserted++;
+            totalImported++;
+          } else if (result == InsertResult.skipped) {
+            batchSkipped++;
+          } else {
+            batchErrors++;
+          }
         }
+        
+        print('SqliteImport: Batch complete - Inserted: $batchInserted, Skipped: $batchSkipped, Errors: $batchErrors');
         
         offset += batchSize;
         onProgress?.call(totalImported, sourceInfo.totalEntries);
         
-        if (batchResults.length < batchSize) break;
+        if (batchResults.length < batchSize) {
+          print('SqliteImport: Reached end of data (batch size ${batchResults.length} < $batchSize)');
+          break;
+        }
       }
     });
     
@@ -284,7 +311,7 @@ class SqliteImportService {
     return totalImported;
   }
   
-  Future<void> _insertDictionaryEntry({
+  Future<InsertResult> _insertDictionaryEntry({
     required Database sourceDb,
     required Map<String, Object?> row,
     required String sourceLanguage,
@@ -299,22 +326,28 @@ class SqliteImportService {
       final rowSourceLanguage = row['source_language'] as String? ?? '';
       final rowTargetLanguage = row['target_language'] as String? ?? '';
       
-      if (lemma.isEmpty || definition.isEmpty) return;
+      if (lemma.isEmpty || definition.isEmpty) {
+        if (entryNumber < 10) {
+          print('SqliteImport: Entry #${entryNumber + 1}: SKIPPED - empty lemma or definition');
+        }
+        return InsertResult.skipped;
+      }
       
       // Debug: Log first few entries to understand language mapping
       if (entryNumber < 3) {
         print('SqliteImport: Entry #${entryNumber + 1}: "${lemma}" MANIFEST(${sourceLanguage}->${targetLanguage}) vs SQLITE(${rowSourceLanguage}->${rowTargetLanguage}) (direction: $direction)');
+        print('SqliteImport: Entry #${entryNumber + 1}: Will use SQLITE codes: ${rowSourceLanguage}->${rowTargetLanguage}');
       }
       
-      // Create dictionary entry using MANIFEST language codes (not SQLite row codes)
-      // This ensures consistency with query expectations
+      // Create dictionary entry using ACTUAL language codes from the database row
+      // This preserves the correct direction for bidirectional entries
       final companion = DictionaryEntriesCompanion.insert(
         writtenRep: lemma.toLowerCase(),
         sense: Value(definition),
         transList: definition, // Store definition as translation
         pos: const Value(null), // No part of speech in this format
-        sourceLanguage: sourceLanguage, // Use manifest language codes
-        targetLanguage: targetLanguage, // Use manifest language codes
+        sourceLanguage: rowSourceLanguage, // Use actual row language codes to preserve direction
+        targetLanguage: rowTargetLanguage, // Use actual row language codes to preserve direction
         frequency: const Value(1000), // Default frequency
         pronunciation: const Value(null),
         examples: const Value(null),
@@ -323,7 +356,7 @@ class SqliteImportService {
         lemma: Value(lemma.toLowerCase()), // Fix: Explicitly set legacy lemma field
         definition: Value(definition), // Fix: Explicitly set legacy definition field
         partOfSpeech: const Value(null), // Fix: Explicitly set legacy partOfSpeech field
-        languagePair: Value('$sourceLanguage-$targetLanguage'), // Fix: Explicitly set legacy languagePair field
+        languagePair: Value('$rowSourceLanguage-$rowTargetLanguage'), // Fix: Use actual row languages for legacy field
       );
       
       final insertResult = await _appDatabase.into(_appDatabase.dictionaryEntries).insert(
@@ -335,9 +368,21 @@ class SqliteImportService {
         print('SqliteImport: Entry #${entryNumber + 1} inserted with ID: $insertResult');
       }
       
+      // Check if actually inserted (insertOrIgnore returns -1 for ignored duplicates)
+      if (insertResult > 0) {
+        return InsertResult.inserted;
+      } else {
+        if (entryNumber < 10) {
+          print('SqliteImport: Entry #${entryNumber + 1}: DUPLICATE IGNORED (ID: $insertResult)');
+        }
+        return InsertResult.skipped;
+      }
+      
     } catch (e) {
       // Log error but continue with other entries
-      print('SqliteImport: Failed to import entry #${entryNumber + 1} "${row['lemma']}": $e');
+      print('SqliteImport: ❌ FAILED to import entry #${entryNumber + 1} "${row['lemma']}": $e');
+      print('SqliteImport: ❌ Error details: ${e.runtimeType}');
+      return InsertResult.error;
     }
   }
 }

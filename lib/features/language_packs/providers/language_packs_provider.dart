@@ -134,12 +134,15 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
         // Extract language codes from pack ID (e.g., "eng-spa" -> ["eng", "spa"])
         final languages = manifest.id.split('-').take(2).toList();
         
+        // Get entry count from manifest metadata or estimate based on language pair
+        final entryCount = _getEstimatedEntryCount(manifest.id, manifest.metadata);
+        
         availablePacks.add(LanguagePackInfo(
           id: manifest.id,
           name: manifest.name,
           version: manifest.version,
           totalSize: manifest.totalSize,
-          entryCount: manifest.files.isNotEmpty ? 98487 : 0, // From our registry data
+          entryCount: entryCount,
           languages: languages,
           isInstalled: isInstalled,
         ));
@@ -166,81 +169,61 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
   
   /// Download a language pack (dictionary + ML Kit models)
   Future<void> downloadPack(String packId) async {
-    print('');
-    print('++++++++++++++++++++++++++++++++++++++++++++');
-    print('LanguagePacksProvider.downloadPack: ENTRY POINT');
-    print('LanguagePacksProvider.downloadPack: Pack ID: $packId');
-    print('LanguagePacksProvider.downloadPack: Current state: isLoading=${state.isLoading}, error=${state.error}');
-    print('LanguagePacksProvider.downloadPack: Available packs: ${state.availablePacks.length}');
-    print('LanguagePacksProvider.downloadPack: Installed pack IDs: ${state.installedPackIds}');
-    print('++++++++++++++++++++++++++++++++++++++++++++');
-    
     try {
       // Extract languages from pack ID
       final parts = packId.split('-');
-      print('LanguagePacksProvider.downloadPack: Step 1 - Pack ID parts: $parts');
       
       if (parts.length < 2) {
-        print('LanguagePacksProvider.downloadPack: ❌ VALIDATION ERROR - Invalid pack ID format: $packId');
         throw Exception('Invalid pack ID format: $packId');
       }
       
       final sourceLanguage = parts[0];
       final targetLanguage = parts[1];
-      print('LanguagePacksProvider.downloadPack: Step 2 - Extracted languages:');
-      print('  - Source: $sourceLanguage');
-      print('  - Target: $targetLanguage');
-      
-      print('LanguagePacksProvider.downloadPack: Step 3 - Calling combinedService.installLanguagePack...');
-      print('LanguagePacksProvider.downloadPack: Service instance: $_combinedService');
       
       await _combinedService.installLanguagePack(
         sourceLanguage: sourceLanguage,
         targetLanguage: targetLanguage,
         wifiOnly: true,
         onProgress: (message) {
-          print('LanguagePacksProvider.downloadPack: 📝 PROGRESS - $message');
+          // Keep minimal progress logging
+          print('Language pack download: $message');
         },
       );
       
-      print('');
-      print('LanguagePacksProvider.downloadPack: Step 4 - ✅ Installation completed successfully');
-      
       // Clear any previous error state since installation succeeded
       state = state.copyWith(error: null);
-      print('LanguagePacksProvider.downloadPack: Cleared error state after successful installation');
       
       // Refresh state after download
-      print('LanguagePacksProvider.downloadPack: Step 5 - Refreshing provider state...');
       await refresh();
-      print('LanguagePacksProvider.downloadPack: Step 6 - State refresh completed');
-      print('LanguagePacksProvider.downloadPack: New state: isLoading=${state.isLoading}, error=${state.error}');
-      print('LanguagePacksProvider.downloadPack: New installed pack IDs: ${state.installedPackIds}');
       
     } catch (e) {
-      print('');
-      print('LanguagePacksProvider.downloadPack: ❌❌❌ DOWNLOAD FAILED ❌❌❌');
-      print('LanguagePacksProvider.downloadPack: Error: $e');
-      print('LanguagePacksProvider.downloadPack: Error type: ${e.runtimeType}');
-      print('LanguagePacksProvider.downloadPack: Stack trace:');
-      print(StackTrace.current);
-      
-      print('LanguagePacksProvider.downloadPack: Setting error state...');
       state = state.copyWith(error: 'Failed to download $packId: $e');
-      print('LanguagePacksProvider.downloadPack: Error state set: ${state.error}');
-      
       rethrow; // Re-throw to propagate to UI
     }
-    
-    print('++++++++++++++++++++++++++++++++++++++++++++');
-    print('LanguagePacksProvider.downloadPack: EXIT POINT');
-    print('++++++++++++++++++++++++++++++++++++++++++++');
-    print('');
   }
   
   /// Cancel a download
   Future<void> cancelDownload(String packId) async {
     await _combinedService.cancelInstallation(packId);
+  }
+  
+  /// Get estimated entry count for a language pack
+  int _getEstimatedEntryCount(String packId, Map<String, dynamic> metadata) {
+    // First check if manifest contains actual entry count
+    if (metadata.containsKey('entry_count')) {
+      return metadata['entry_count'] as int;
+    }
+    
+    // Fallback to known entry counts for existing packs
+    final knownCounts = {
+      'de-en': 30492,   // German-English bidirectional
+      'es-en': 29548,   // Spanish-English bidirectional  
+      'fr-en': 137181,  // French-English bidirectional
+      'it-en': 124778,  // Italian-English bidirectional
+      'pt-en': 86951,   // Portuguese-English bidirectional
+    };
+    
+    return knownCounts[packId] ?? 50000; // Default estimate for unknown packs
   }
   
   @override

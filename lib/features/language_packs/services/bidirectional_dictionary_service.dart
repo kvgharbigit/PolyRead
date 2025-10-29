@@ -56,16 +56,31 @@ class BidirectionalDictionaryService {
     
     // Debug: Check what entries actually exist in the database for this pack
     final allEntries = await (_database.select(_database.dictionaryEntries)
-        ..limit(5))
+        ..limit(10))
         .get();
-    print('BidirectionalDictionaryService: Sample of first 5 entries in database:');
+    print('BidirectionalDictionaryService: Sample of first ${allEntries.length} entries in database:');
     for (final entry in allEntries) {
-      print('  - "${entry.writtenRep}" (${entry.sourceLanguage}->${entry.targetLanguage}) source: ${entry.source}');
+      print('  - "${entry.writtenRep}" (${entry.sourceLanguage}->${entry.targetLanguage}) source: "${entry.source}"');
     }
     
     // Debug: Check total count in database
     final totalEntries = await (_database.select(_database.dictionaryEntries)).get();
     print('BidirectionalDictionaryService: Total entries in database: ${totalEntries.length}');
+    
+    // Debug: Check entries by source name
+    final packSourceEntries = await (_database.select(_database.dictionaryEntries)
+        ..where((tbl) => tbl.source.like('%German%') | tbl.source.like('%English%') | tbl.source.like('%de%') | tbl.source.like('%en%')))
+        .get();
+    print('BidirectionalDictionaryService: Entries matching German/English keywords: ${packSourceEntries.length}');
+    
+    // Debug: Check distinct source values
+    final distinctSources = await _database.customSelect(
+      'SELECT DISTINCT source FROM dictionary_entries LIMIT 10'
+    ).get();
+    print('BidirectionalDictionaryService: Distinct source names in database:');
+    for (final row in distinctSources) {
+      print('  - "${row.data['source']}"');
+    }
 
     final hasEntries = forwardEntryCount.isNotEmpty || reverseEntryCount.isNotEmpty;
     print('BidirectionalDictionaryService: Pack $packId ${hasEntries ? "HAS" : "DOES NOT HAVE"} dictionary entries');

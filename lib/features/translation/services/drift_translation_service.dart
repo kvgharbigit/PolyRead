@@ -338,6 +338,8 @@ class DriftTranslationService {
     final stopwatch = Stopwatch()..start();
     
     try {
+      print('🔍 DriftTranslation: _tryDictionaryLookup for "$word" (${sourceLanguage}->${targetLanguage})');
+      
       final entries = await _dictionaryService.lookupWord(
         word: word,
         sourceLanguage: sourceLanguage,
@@ -345,14 +347,23 @@ class DriftTranslationService {
         limit: 5,
       );
       
+      print('🔍 DriftTranslation: Dictionary returned ${entries.length} entries:');
+      for (int i = 0; i < entries.length && i < 3; i++) {
+        final entry = entries[i];
+        print('🔍 DriftTranslation: Entry ${i + 1}: "${entry.word}" -> "${entry.definition}" (synonyms: ${entry.synonyms})');
+      }
+      
       stopwatch.stop();
       
-      return DictionaryLookupResult(
+      final result = DictionaryLookupResult(
         query: word,
         language: sourceLanguage,
         entries: entries,
         latencyMs: stopwatch.elapsedMilliseconds,
       );
+      
+      print('🔍 DriftTranslation: DictionaryLookupResult created with ${result.entries.length} entries');
+      return result;
     } catch (e) {
       stopwatch.stop();
       return DictionaryLookupResult(

@@ -1,0 +1,123 @@
+name: Build and Deploy Language Packs
+
+on:
+  workflow_dispatch:
+    inputs:
+      language_pair:
+        description: 'Language pair to build (e.g., es-en, fr-en, de-en)'
+        required: true
+        default: 'es-en'
+      deploy:
+        description: 'Deploy to GitHub releases'
+        type: boolean
+        default: true
+
+jobs:
+  build-language-pack:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 curl unzip
+          
+      - name: Make build script executable
+        run: chmod +x tools/vuizur-dict-builder.sh
+        
+      - name: Build language pack
+        id: build
+        run: |
+          cd tools
+          ./vuizur-dict-builder.sh ${{ github.event.inputs.language_pair }}
+          
+          # Get package info
+          PACKAGE_PATH="dist/${{ github.event.inputs.language_pair }}.sqlite.zip"
+          if [ -f "$PACKAGE_PATH" ]; then
+            PACKAGE_SIZE=$(stat -c%s "$PACKAGE_PATH")
+            echo "package_path=$PACKAGE_PATH" >> $GITHUB_OUTPUT
+            echo "package_size=$PACKAGE_SIZE" >> $GITHUB_OUTPUT
+            echo "✅ Package created: $PACKAGE_PATH ($PACKAGE_SIZE bytes)"
+          else
+            echo "❌ Package creation failed"
+            exit 1
+          fi
+        
+      - name: Validate package
+        run: |
+          cd tools
+          PACKAGE_PATH="${{ steps.build.outputs.package_path }}"
+          
+          # Test package contents
+          unzip -l "$PACKAGE_PATH"
+          
+          # Extract and test database
+          unzip "$PACKAGE_PATH" -d test-extract/
+          DB_FILE="test-extract/${{ github.event.inputs.language_pair }}.db"
+          
+          if [ -f "$DB_FILE" ]; then
+            ENTRY_COUNT=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM dictionary_entries;")
+            echo "✅ Dictionary contains $ENTRY_COUNT entries"
+            
+            # Test basic lookup
+            sqlite3 "$DB_FILE" "SELECT lemma, substr(definition, 1, 50) FROM dictionary_entries LIMIT 3;"
+            
+            if [ "$ENTRY_COUNT" -gt 1000 ]; then
+              echo "✅ Package validation successful"
+            else
+              echo "❌ Package validation failed: too few entries"
+              exit 1
+            fi
+          else
+            echo "❌ Database file not found in package"
+            exit 1
+          fi
+          
+      - name: Upload to GitHub Releases
+        if: ${{ github.event.inputs.deploy == 'true' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: language-packs-v2.1
+          name: Language Packs v2.1 - Vuizur Dictionary System
+          body: |
+            ## Language Packs v2.1 - Vuizur Dictionary System
+            
+            ### ✅ New Features
+            - **Comprehensive Vocabulary**: 1M+ entries per language pair from Vuizur Wiktionary-Dictionaries
+            - **Quality Source**: Community-maintained Wiktionary extracts with regular updates
+            - **Storage Efficient**: ~14MB compressed packages with full vocabulary coverage
+            
+            ### 📦 Available Language Packs
+            - **Spanish ↔ English**: `es-en.sqlite.zip` 
+            - **French ↔ English**: `fr-en.sqlite.zip`
+            - **German ↔ English**: `de-en.sqlite.zip`
+            
+            ### 🔧 Technical Details
+            - **Schema**: PolyRead-compatible `dictionary_entries` table with metadata
+            - **Format**: SQLite database with bidirectional lookup support
+            - **Source**: [Vuizur Wiktionary-Dictionaries](https://github.com/Vuizur/Wiktionary-Dictionaries)
+            
+            Built with `vuizur-dict-builder.sh` v2.1
+            
+          files: |
+            tools/${{ steps.build.outputs.package_path }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Language Pair**: ${{ github.event.inputs.language_pair }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package Size**: ${{ steps.build.outputs.package_size }} bytes" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package Path**: ${{ steps.build.outputs.package_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy**: ${{ github.event.inputs.deploy }}" >> $GITHUB_STEP_SUMMARY

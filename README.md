@@ -130,22 +130,28 @@ The translation system uses a 3-tier fallback strategy for optimal performance:
 
 ## 🌍 Available Language Packs
 
-### ✅ Ready for Download
+### ✅ Production Ready - **408,950 Total Entries**
 | Language Pack | Entries | Size | Quality | Status |
 |---------------|---------|------|---------|--------|
-| 🇺🇸🇪🇸 English ↔ Spanish | 98,487 | 21.2MB | Excellent | ✅ Available |
+| 🇩🇪 German ↔ English | 30,492 | 1.6MB | Excellent | ✅ Deployed |
+| 🇪🇸 Spanish ↔ English | 29,548 | 1.5MB | Excellent | ✅ Deployed |
+| 🇫🇷 French ↔ English | 137,181 | 5.8MB | Excellent | ✅ Deployed |
+| 🇮🇹 Italian ↔ English | 124,778 | 4.9MB | Excellent | ✅ Deployed |
+| 🇵🇹 Portuguese ↔ English | 86,951 | 3.9MB | Excellent | ✅ Deployed |
 
-### 🔄 Coming Soon (Wiktionary Sources Downloaded)
-| Language Pack | Entries | Size | Quality | Status |
-|---------------|---------|------|---------|--------|
-| 🇺🇸🇫🇷 English ↔ French | ~45,000 | 3.2MB | Good | 🔄 Processing |
-| 🇺🇸🇩🇪 English ↔ German | ~75,000 | 6.9MB | Good | 🔄 Processing |
-| 🇺🇸🇮🇹 English ↔ Italian | ~60,000 | 5.3MB | Good | 🔄 Processing |
-| 🇺🇸🇵🇹 English ↔ Portuguese | ~35,000 | 2.6MB | Good | 🔄 Processing |
-| 🇺🇸🇷🇺 English ↔ Russian | ~50,000 | 4.2MB | Good | 🔄 Processing |
+### 🔄 Ready for Generation (6 remaining)
+| Language Pack | Expected Entries | Source Size | Priority | Status |
+|---------------|------------------|-------------|----------|--------|
+| 🇷🇺 Russian ↔ English | ~45,000 | 8.2MB | High | 📋 Ready |
+| 🇯🇵 Japanese ↔ English | ~30,000 | 3.7MB | High | 📋 Ready |
+| 🇰🇷 Korean ↔ English | ~15,000 | 2.1MB | Medium | 📋 Ready |
+| 🇨🇳 Chinese ↔ English | ~40,000 | 6.4MB | Medium | 📋 Ready |
+| 🇸🇦 Arabic ↔ English | ~20,000 | 2.9MB | Medium | 📋 Ready |
+| 🇮🇳 Hindi ↔ English | ~15,000 | 1.0MB | Medium | 📋 Ready |
 
-**Total Coverage**: 6 language pairs (bidirectional), 360K+ dictionary entries  
-**Note**: Each Wiktionary pack contains bidirectional translations (e.g., English→Spanish AND Spanish→English)
+**Current Coverage**: 5 of 11 language pairs deployed (45% complete)  
+**Architecture**: Bidirectional single-database design (50% storage reduction)  
+**Quality**: 4-level verification process with comprehensive testing
 
 ### 📥 How to Download
 1. Open PolyRead app

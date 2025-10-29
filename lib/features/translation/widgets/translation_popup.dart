@@ -424,58 +424,117 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
 
   // Cycling methods
   void _nextResult() {
-    if (!mounted) return;
+    print('🔄 TranslationPopup: _nextResult() called');
+    if (!mounted) {
+      print('🔄 TranslationPopup: Widget not mounted, skipping _nextResult');
+      return;
+    }
+    
     final entries = _currentResponse?.dictionaryResult?.entries;
+    print('🔄 TranslationPopup: Current entries count: ${entries?.length ?? 0}');
+    print('🔄 TranslationPopup: Current result index: $_currentResultIndex');
+    
     if (entries != null && entries.length > 1 && _currentResultIndex < entries.length - 1) {
+      final oldIndex = _currentResultIndex;
+      final oldSynonymIndex = _currentSynonymIndex;
+      
       setState(() {
         _currentResultIndex++;
         _currentSynonymIndex = 0;
       });
+      
+      print('🔄 TranslationPopup: Result index changed from $oldIndex to $_currentResultIndex');
+      print('🔄 TranslationPopup: Synonym index reset from $oldSynonymIndex to $_currentSynonymIndex');
+      print('🔄 TranslationPopup: New current translation: ${_getCurrentTranslation()}');
+    } else {
+      print('🔄 TranslationPopup: Cannot cycle results - entries: ${entries?.length}, currentIndex: $_currentResultIndex');
     }
   }
   
   void _cycleSynonym() {
-    if (!mounted) return;
+    print('🔄 TranslationPopup: _cycleSynonym() called');
+    if (!mounted) {
+      print('🔄 TranslationPopup: Widget not mounted, skipping _cycleSynonym');
+      return;
+    }
+    
     final synonyms = _getCurrentSynonyms();
+    print('🔄 TranslationPopup: Current synonyms: $synonyms');
+    print('🔄 TranslationPopup: Current synonym index: $_currentSynonymIndex');
+    
     if (synonyms.length > 1) {
+      final oldIndex = _currentSynonymIndex;
+      final oldTranslation = _getCurrentTranslation();
+      
       setState(() {
         _currentSynonymIndex = (_currentSynonymIndex + 1) % synonyms.length;
       });
+      
+      final newTranslation = _getCurrentTranslation();
+      print('🔄 TranslationPopup: Synonym index changed from $oldIndex to $_currentSynonymIndex');
+      print('🔄 TranslationPopup: Translation changed from "$oldTranslation" to "$newTranslation"');
+    } else {
+      print('🔄 TranslationPopup: Cannot cycle synonyms - only ${synonyms.length} available');
     }
   }
 
   // Translation helpers
   String _getCurrentTranslation() {
+    print('📝 TranslationPopup: _getCurrentTranslation() called');
+    print('📝 TranslationPopup: Current result index: $_currentResultIndex, synonym index: $_currentSynonymIndex');
+    
     if (_currentResponse!.dictionaryResult?.entries.isNotEmpty == true) {
+      print('📝 TranslationPopup: Using dictionary result');
       final synonyms = _getCurrentSynonyms();
+      print('📝 TranslationPopup: Available synonyms: $synonyms');
+      
       if (synonyms.isNotEmpty && _currentSynonymIndex < synonyms.length) {
-        return synonyms[_currentSynonymIndex];
+        final selectedSynonym = synonyms[_currentSynonymIndex];
+        print('📝 TranslationPopup: Selected synonym at index $_currentSynonymIndex: "$selectedSynonym"');
+        return selectedSynonym;
       }
+      
       final entry = _currentResponse!.dictionaryResult!.entries[_currentResultIndex];
-      return _extractTranslationFromDefinition(entry.definition);
+      final extractedTranslation = _extractTranslationFromDefinition(entry.definition);
+      print('📝 TranslationPopup: Extracted translation from definition: "$extractedTranslation"');
+      return extractedTranslation;
     }
-    return _currentResponse!.translatedText;
+    
+    final mlKitTranslation = _currentResponse!.translatedText;
+    print('📝 TranslationPopup: Using ML Kit translation: "$mlKitTranslation"');
+    return mlKitTranslation;
   }
   
   List<String> _getCurrentSynonyms() {
+    print('📝 TranslationPopup: _getCurrentSynonyms() called for result index $_currentResultIndex');
+    
     if (_currentResponse!.dictionaryResult?.entries.isNotEmpty == true) {
       final entry = _currentResponse!.dictionaryResult!.entries[_currentResultIndex];
+      print('📝 TranslationPopup: Dictionary entry - definition: "${entry.definition}"');
+      print('📝 TranslationPopup: Dictionary entry - synonyms: ${entry.synonyms}');
+      
       final synonyms = <String>[];
       
       // Use primary translation from definition (this is now the first translation from transList)
       final primaryTranslation = entry.definition;
       synonyms.add(primaryTranslation);
+      print('📝 TranslationPopup: Added primary translation: "$primaryTranslation"');
       
       // Add synonyms from WikiDict pipe-separated translations
       if (entry.synonyms.isNotEmpty) {
         synonyms.addAll(entry.synonyms);
+        print('📝 TranslationPopup: Added ${entry.synonyms.length} additional synonyms: ${entry.synonyms}');
       }
       
       // Remove duplicates and empty entries
-      return synonyms.where((s) => s.trim().isNotEmpty).toSet().toList();
+      final cleanedSynonyms = synonyms.where((s) => s.trim().isNotEmpty).toSet().toList();
+      print('📝 TranslationPopup: Final cleaned synonyms: $cleanedSynonyms');
+      return cleanedSynonyms;
     }
     
-    return [_currentResponse!.translatedText];
+    final fallbackSynonyms = [_currentResponse!.translatedText];
+    print('📝 TranslationPopup: Using fallback synonyms: $fallbackSynonyms');
+    return fallbackSynonyms;
   }
   
   String _getCurrentPartOfSpeech() {
@@ -489,14 +548,19 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
   String _getDictionaryCounter() {
     if (_currentResponse!.dictionaryResult?.entries.isNotEmpty == true) {
       final total = _currentResponse!.dictionaryResult!.entries.length;
-      return total > 1 ? '(${_currentResultIndex + 1}/$total)' : '';
+      final counter = total > 1 ? '(${_currentResultIndex + 1}/$total)' : '';
+      print('📊 TranslationPopup: Dictionary counter: "$counter" (index: $_currentResultIndex, total: $total)');
+      return counter;
     }
+    print('📊 TranslationPopup: No dictionary counter (no entries)');
     return '';
   }
   
   String _getSynonymCounter() {
     final count = _getCurrentSynonyms().length;
-    return count > 1 ? '(${_currentSynonymIndex + 1}/$count)' : '';
+    final counter = count > 1 ? '(${_currentSynonymIndex + 1}/$count)' : '';
+    print('📊 TranslationPopup: Synonym counter: "$counter" (index: $_currentSynonymIndex, count: $count)');
+    return counter;
   }
 
   String _extractTranslationFromDefinition(String definition) {

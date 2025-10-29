@@ -23,6 +23,8 @@ class BookImportService {
   /// Import books from device storage
   Future<List<BookImportResult>> importBooksFromDevice() async {
     try {
+      print('📚 BookImportService: Starting book import from device...');
+      
       final result = await file_picker.FilePicker.platform.pickFiles(
         type: file_picker.FileType.custom,
         allowedExtensions: ['pdf', 'epub', 'html', 'htm', 'txt'],
@@ -32,21 +34,39 @@ class BookImportService {
         withData: false,
       );
       
+      print('📚 BookImportService: File picker result: ${result != null ? "${result.files.length} files selected" : "cancelled"}');
+      
       if (result == null || result.files.isEmpty) {
+        print('📚 BookImportService: No files selected, returning empty list');
         return [];
       }
       
       final importResults = <BookImportResult>[];
       
-      for (final file in result.files) {
-        if (file.path == null) continue;
+      for (int i = 0; i < result.files.length; i++) {
+        final file = result.files[i];
+        print('📚 BookImportService: Processing file ${i + 1}/${result.files.length}: ${file.name}');
+        print('📚 BookImportService: File path: ${file.path}');
+        print('📚 BookImportService: File size: ${file.size} bytes');
+        
+        if (file.path == null) {
+          print('📚 BookImportService: ❌ File path is null, skipping file: ${file.name}');
+          continue;
+        }
         
         final importResult = await _importSingleBook(file.path!);
         importResults.add(importResult);
+        
+        print('📚 BookImportService: Import result for ${file.name}: ${importResult.success ? "SUCCESS" : "FAILED - ${importResult.error}"}');
       }
+      
+      print('📚 BookImportService: ✅ Completed importing ${result.files.length} files');
+      print('📚 BookImportService: Results: ${importResults.where((r) => r.success).length} successful, ${importResults.where((r) => !r.success).length} failed');
       
       return importResults;
     } catch (e) {
+      print('📚 BookImportService: ❌ Critical error during import: $e');
+      print('📚 BookImportService: Stack trace: ${StackTrace.current}');
       ErrorService.logFileSystemError(
         'Failed to import books from device',
         details: e.toString(),
@@ -62,47 +82,86 @@ class BookImportService {
   
   Future<BookImportResult> _importSingleBook(String sourcePath) async {
     try {
+      print('📚 _importSingleBook: Starting import for: $sourcePath');
+      
       final sourceFile = File(sourcePath);
+      print('📚 _importSingleBook: Checking if source file exists...');
       if (!await sourceFile.exists()) {
+        print('📚 _importSingleBook: ❌ Source file not found: $sourcePath');
         return BookImportResult.error('File not found: $sourcePath');
       }
+      print('📚 _importSingleBook: ✅ Source file exists');
       
       // Get file info
       final fileName = path.basename(sourcePath);
       final fileExtension = path.extension(sourcePath).toLowerCase();
       final fileSize = await sourceFile.length();
       
+      print('📚 _importSingleBook: File info:');
+      print('  - Name: $fileName');
+      print('  - Extension: $fileExtension');
+      print('  - Size: $fileSize bytes (${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB)');
+      
       // Validate file type
       if (fileExtension != '.pdf' && fileExtension != '.epub') {
+        print('📚 _importSingleBook: ❌ Unsupported file type: $fileExtension');
         return BookImportResult.error('Unsupported file type: $fileExtension');
       }
+      print('📚 _importSingleBook: ✅ File type supported: $fileExtension');
       
       // Copy file to app storage
+      print('📚 _importSingleBook: Copying file to app storage...');
       final targetPath = await _fileService.importBook(sourceFile);
+      print('📚 _importSingleBook: ✅ File copied to: $targetPath');
+      
+      // Verify copied file exists
+      final targetFile = File(targetPath);
+      if (!await targetFile.exists()) {
+        print('📚 _importSingleBook: ❌ Target file not found after copy: $targetPath');
+        return BookImportResult.error('Failed to copy file to app storage');
+      }
+      print('📚 _importSingleBook: ✅ Target file verified at: $targetPath');
       
       // Extract metadata
+      print('📚 _importSingleBook: Extracting metadata...');
       BookMetadata? metadata;
       if (fileExtension == '.pdf') {
+        print('📚 _importSingleBook: Extracting PDF metadata...');
         metadata = await _extractPdfMetadata(targetPath);
       } else if (fileExtension == '.epub') {
+        print('📚 _importSingleBook: Extracting EPUB metadata...');
         metadata = await _extractEpubMetadata(targetPath);
       }
       
       if (metadata == null) {
+        print('📚 _importSingleBook: ❌ Failed to extract metadata');
         return BookImportResult.error('Failed to extract book metadata');
       }
       
+      print('📚 _importSingleBook: ✅ Metadata extracted:');
+      print('  - Title: ${metadata.title}');
+      print('  - Author: ${metadata.author ?? "Unknown"}');
+      print('  - Language: ${metadata.language}');
+      print('  - Pages: ${metadata.totalPages ?? "Unknown"}');
+      print('  - Chapters: ${metadata.totalChapters ?? "Unknown"}');
+      
       // Generate cover image
+      print('📚 _importSingleBook: Generating cover image...');
       String? coverPath;
       try {
         final coverImage = await _generateCoverImage(targetPath, fileExtension);
         if (coverImage != null) {
+          print('📚 _importSingleBook: Cover image generated (${coverImage.length} bytes)');
           coverPath = await _fileService.saveCoverImage(
             coverImage, 
             metadata.title.replaceAll(RegExp(r'[^\w\s-]'), ''),
           );
+          print('📚 _importSingleBook: ✅ Cover saved to: $coverPath');
+        } else {
+          print('📚 _importSingleBook: No cover image generated');
         }
       } catch (e) {
+        print('📚 _importSingleBook: ⚠️ Cover generation failed: $e');
         // Cover generation failed, continue without cover
         ErrorService.logFileSystemError(
           'Failed to generate cover image',
@@ -111,6 +170,7 @@ class BookImportService {
       }
       
       // Save to database
+      print('📚 _importSingleBook: Saving to database...');
       final companion = BooksCompanion.insert(
         title: metadata.title,
         author: Value(metadata.author),
@@ -124,8 +184,11 @@ class BookImportService {
         importedAt: Value(DateTime.now()),
       );
       
+      print('📚 _importSingleBook: Database companion created, inserting...');
       final bookId = await _database.into(_database.books).insert(companion);
+      print('📚 _importSingleBook: ✅ Book saved to database with ID: $bookId');
       
+      print('📚 _importSingleBook: ✅✅✅ IMPORT COMPLETED SUCCESSFULLY ✅✅✅');
       return BookImportResult.success(
         bookId: bookId,
         title: metadata.title,
@@ -135,6 +198,10 @@ class BookImportService {
       );
       
     } catch (e) {
+      print('📚 _importSingleBook: ❌❌❌ IMPORT FAILED ❌❌❌');
+      print('📚 _importSingleBook: Error: $e');
+      print('📚 _importSingleBook: Error type: ${e.runtimeType}');
+      print('📚 _importSingleBook: Stack trace: ${StackTrace.current}');
       ErrorService.logFileSystemError(
         'Failed to import book',
         details: e.toString(),
@@ -147,23 +214,33 @@ class BookImportService {
   /// Extract metadata from PDF file
   Future<BookMetadata?> _extractPdfMetadata(String filePath) async {
     try {
+      print('📚 _extractPdfMetadata: Opening PDF file: $filePath');
       final document = await PdfDocument.openFile(filePath);
+      print('📚 _extractPdfMetadata: PDF opened successfully');
+      
       final pageCount = document.pagesCount;
+      print('📚 _extractPdfMetadata: Page count: $pageCount');
       
       // Get document info if available
       // Note: pdfx doesn't expose metadata directly, so we use filename
       final fileName = path.basenameWithoutExtension(filePath);
+      print('📚 _extractPdfMetadata: Using filename as title: $fileName');
       
       await document.close();
+      print('📚 _extractPdfMetadata: PDF document closed');
       
-      return BookMetadata(
+      final metadata = BookMetadata(
         title: fileName,
         author: null,
         language: 'unknown', // TODO: Implement language detection
         totalPages: pageCount,
         totalChapters: null,
       );
+      
+      print('📚 _extractPdfMetadata: ✅ PDF metadata extracted successfully');
+      return metadata;
     } catch (e) {
+      print('📚 _extractPdfMetadata: ❌ Failed to extract PDF metadata: $e');
       ErrorService.logParsingError(
         'Failed to extract PDF metadata',
         details: e.toString(),
@@ -176,17 +253,37 @@ class BookImportService {
   /// Extract metadata from EPUB file
   Future<BookMetadata?> _extractEpubMetadata(String filePath) async {
     try {
+      print('📚 _extractEpubMetadata: Reading EPUB file: $filePath');
       final bytes = await File(filePath).readAsBytes();
-      final book = await epubx.EpubReader.readBook(bytes);
+      print('📚 _extractEpubMetadata: File read, ${bytes.length} bytes');
       
-      return BookMetadata(
-        title: book.Title ?? path.basenameWithoutExtension(filePath),
-        author: book.Author,
-        language: book.Schema?.Package?.Metadata?.Languages?.firstOrNull ?? 'unknown',
+      print('📚 _extractEpubMetadata: Parsing EPUB...');
+      final book = await epubx.EpubReader.readBook(bytes);
+      print('📚 _extractEpubMetadata: EPUB parsed successfully');
+      
+      final title = book.Title ?? path.basenameWithoutExtension(filePath);
+      final author = book.Author;
+      final language = book.Schema?.Package?.Metadata?.Languages?.firstOrNull ?? 'unknown';
+      final chapters = book.Chapters?.length;
+      
+      print('📚 _extractEpubMetadata: Extracted metadata:');
+      print('  - Title: $title');
+      print('  - Author: $author');
+      print('  - Language: $language');
+      print('  - Chapters: $chapters');
+      
+      final metadata = BookMetadata(
+        title: title,
+        author: author,
+        language: language,
         totalPages: null,
-        totalChapters: book.Chapters?.length,
+        totalChapters: chapters,
       );
+      
+      print('📚 _extractEpubMetadata: ✅ EPUB metadata extracted successfully');
+      return metadata;
     } catch (e) {
+      print('📚 _extractEpubMetadata: ❌ Failed to extract EPUB metadata: $e');
       ErrorService.logParsingError(
         'Failed to extract EPUB metadata',
         details: e.toString(),
@@ -199,18 +296,29 @@ class BookImportService {
   /// Generate cover image from book
   Future<Uint8List?> _generateCoverImage(String filePath, String fileType) async {
     try {
+      print('📚 _generateCoverImage: Generating cover for $fileType file: $filePath');
+      
       if (fileType == '.epub') {
+        print('📚 _generateCoverImage: Processing EPUB cover...');
         final bytes = await File(filePath).readAsBytes();
         final book = await epubx.EpubReader.readBook(bytes);
         
         // Try to get existing cover
         if (book.CoverImage != null) {
+          print('📚 _generateCoverImage: Found existing cover image in EPUB');
           final encoded = img.encodeJpg(book.CoverImage!);
+          print('📚 _generateCoverImage: ✅ EPUB cover encoded successfully (${encoded.length} bytes)');
           return Uint8List.fromList(encoded);
+        } else {
+          print('📚 _generateCoverImage: No cover image found in EPUB');
         }
       } else if (fileType == '.pdf') {
+        print('📚 _generateCoverImage: Processing PDF cover (first page)...');
         final document = await PdfDocument.openFile(filePath);
+        print('📚 _generateCoverImage: PDF opened, pages: ${document.pagesCount}');
+        
         if (document.pagesCount > 0) {
+          print('📚 _generateCoverImage: Rendering first page...');
           final page = await document.getPage(1);
           final pageImage = await page.render(
             width: 200,
@@ -220,19 +328,29 @@ class BookImportService {
           await page.close();
           await document.close();
           
-          return pageImage?.bytes;
+          if (pageImage?.bytes != null) {
+            print('📚 _generateCoverImage: ✅ PDF cover generated successfully (${pageImage!.bytes.length} bytes)');
+            return pageImage.bytes;
+          } else {
+            print('📚 _generateCoverImage: PDF page rendering returned null');
+          }
+        } else {
+          print('📚 _generateCoverImage: PDF has no pages');
+          await document.close();
         }
-        await document.close();
       }
+      
+      print('📚 _generateCoverImage: No cover image generated');
+      return null;
     } catch (e) {
+      print('📚 _generateCoverImage: ❌ Cover generation failed: $e');
       // Cover generation failed
       ErrorService.logFileSystemError(
         'Cover generation failed',
         details: e.toString(),
       );
+      return null;
     }
-    
-    return null;
   }
   
   /// Delete a book and its files

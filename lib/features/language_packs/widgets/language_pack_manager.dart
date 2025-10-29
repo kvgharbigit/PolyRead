@@ -141,9 +141,23 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
         
         // Language packs list with progress stream
         StreamBuilder<DownloadProgress>(
-          stream: ref.watch(combinedLanguagePackServiceProvider).progressStream,
+          stream: () {
+            final service = ref.watch(combinedLanguagePackServiceProvider);
+            print('📱 UI: Getting progress stream from service: ${service.hashCode}');
+            return service.progressStream;
+          }(),
           builder: (context, progressSnapshot) {
-            // Load available language packs from registry
+            // When progress updates come in, rebuild the available packs list
+            // This ensures UI updates in real-time during downloads
+            if (progressSnapshot.hasData) {
+              final progress = progressSnapshot.data!;
+              print('📱 UI: Progress update received for ${progress.packId}: ${progress.progressPercent.toStringAsFixed(1)}% - ${progress.stageDescription}');
+              print('📱 UI: Rebuilding language packs list due to progress update');
+            } else if (progressSnapshot.hasError) {
+              print('📱 UI: Stream error: ${progressSnapshot.error}');
+            } else {
+              print('📱 UI: Building initial language packs list (no progress data yet)');
+            }
             return _buildAvailableLanguagePacks();
           },
         ),
@@ -237,8 +251,13 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
       downloadProgress = null;
     }
     
+    // Debug logging for progress state
+    if (downloadProgress != null) {
+      print('📱 UI: Pack $packId progress: ${downloadProgress.progressPercent.toStringAsFixed(1)}% - ${downloadProgress.stageDescription} (Status: ${downloadProgress.status})');
+    }
+    
     // Check download state
-    final isDownloading = downloadProgress?.status == DownloadStatus.downloading;
+    final isDownloading = downloadProgress?.status == DownloadStatus.downloading || downloadProgress?.status == DownloadStatus.pending;
     final isFailed = downloadProgress?.status == DownloadStatus.failed;
     final isComingSoon = priority == 'coming-soon';
     
@@ -312,8 +331,44 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
                             : isComingSoon
                                 ? Colors.orange.shade700
                                 : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                fontWeight: isDownloading ? FontWeight.w500 : null,
               ),
             ),
+            // Add additional progress info during download
+            if (isDownloading && downloadProgress != null) ...[
+              const SizedBox(height: 4),
+              LinearProgressIndicator(
+                value: downloadProgress.progressPercent / 100,
+                backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${(downloadProgress.downloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB / ${(downloadProgress.totalBytes / 1024 / 1024).toStringAsFixed(1)} MB',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                      fontSize: 11,
+                    ),
+                  ),
+                  if (downloadProgress.currentFile?.isNotEmpty == true)
+                    Text(
+                      downloadProgress.currentFile == 'ml-kit-models' 
+                          ? 'ML Kit' 
+                          : (downloadProgress.currentFile ?? '').replaceAll('.sqlite.zip', ''),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                        fontSize: 10,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                ],
+              ),
+            ],
             if (isInstalled) ...[
               const SizedBox(height: 4),
               FutureBuilder<Map<String, dynamic>>(
@@ -987,7 +1042,7 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
       final dictionarySize = await _getActualDictionaryFileSize(packId);
       final mlKitSize = await _getActualMLKitSize(sourceCode, targetCode);
       
-      final entries = stats['total_entries'] ?? 0;
+      final entries = stats['total'] ?? 0;
       final fileCount = stats['file_count'] ?? 1;
       
       print('🔍 _getPackDetails: REAL SIZE BREAKDOWN:');

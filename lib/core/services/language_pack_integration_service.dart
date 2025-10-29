@@ -67,16 +67,23 @@ class LanguagePackIntegrationService {
       // 2. Load dictionary data if this is a dictionary pack
       print('🔧 LanguagePackIntegrationService: Checking pack type for dictionary loading...');
       print('🔧 LanguagePackIntegrationService: Pack type: "${manifest.packType}"');
-      print('🔧 LanguagePackIntegrationService: Is dictionary pack? ${manifest.packType == 'dictionary' || manifest.packType == 'combined'}');
+      print('🔧 LanguagePackIntegrationService: Is dictionary pack? ${manifest.packType == 'dictionary' || manifest.packType == 'combined' || manifest.packType == 'main'}');
       
-      if (manifest.packType == 'dictionary' || manifest.packType == 'combined') {
+      if (manifest.packType == 'dictionary' || manifest.packType == 'combined' || manifest.packType == 'main') {
         print('🔧 LanguagePackIntegrationService: ✅ Loading dictionary data...');
+        print('🔧 LanguagePackIntegrationService: Pack details: ${manifest.sourceLanguage} -> ${manifest.targetLanguage}');
+        print('🔧 LanguagePackIntegrationService: Dictionary files: ${manifest.files.where((f) => f.name.endsWith('.sqlite.zip')).length}');
+        
         final result = await _loadDictionaryFromPack(manifest, downloadPath);
         dictionaryInstalled = result.success;
         
         print('🔧 LanguagePackIntegrationService: Dictionary loading result: ${result.success}');
+        print('🔧 LanguagePackIntegrationService: Dictionary entries loaded: ${result.entriesLoaded}');
         if (result.error != null) {
-          print('🔧 LanguagePackIntegrationService: Dictionary loading error: ${result.error}');
+          print('🔧 LanguagePackIntegrationService: ❌ Dictionary loading error: ${result.error}');
+        }
+        if (result.message != null) {
+          print('🔧 LanguagePackIntegrationService: Dictionary loading message: ${result.message}');
         }
         
         if (result.success) {

@@ -257,6 +257,9 @@ class GitHubReleasesRepository {
         ),
       ],
       supportedTargetLanguages: supportedTargetCodes, // Use registry data or computed fallback
+      sourceLanguage: sourceCode, // Use converted 2-letter code
+      targetLanguage: targetCode, // Use converted 2-letter code  
+      packType: packData['pack_type'] as String? ?? 'dictionary',
       releaseDate: DateTime.parse(release['published_at']),
       author: 'PolyRead Team',
       license: 'CC BY-SA 4.0',

@@ -270,7 +270,7 @@ class StorageManagementService {
   
   Future<void> _deletePackFiles(String packId) async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
+      final appDir = await getApplicationSupportDirectory();
       final packDir = Directory(path.join(appDir.path, 'language_packs', packId));
       
       if (await packDir.exists()) {
@@ -283,7 +283,7 @@ class StorageManagementService {
   
   Future<bool> _packDirectoryExists(String packId) async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
+      final appDir = await getApplicationSupportDirectory();
       final packDir = Directory(path.join(appDir.path, 'language_packs', packId));
       return await packDir.exists();
     } catch (e) {
