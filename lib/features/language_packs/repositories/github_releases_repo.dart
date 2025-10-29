@@ -107,8 +107,8 @@ class GitHubReleasesRepository {
       
       final manifests = <LanguagePackManifest>[];
       
-      // Only include the most complete packs available - match what's actually in registry
-      final readyPacks = ['de-en', 'eng-spa']; // Use larger eng-spa (11,598 entries vs es-en 4,497 entries)
+      // Only include the most complete packs available - use standard naming convention
+      final readyPacks = ['de-en', 'es-en']; // Standard source-target naming convention
       for (final packData in packsList) {
         final packId = packData['id'] as String?;
         
@@ -239,7 +239,7 @@ class GitHubReleasesRepository {
     final targetCode = _convertLanguageCode(targetLanguage);
     
     return LanguagePackManifest(
-      id: '$sourceCode-$targetCode',
+      id: packId, // Keep original pack ID to match file name
       name: '$sourceCode ↔ $targetCode Dictionary (Bidirectional)',
       language: sourceCode,
       version: packData['version'] ?? '2.0.0',

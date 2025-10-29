@@ -1,0 +1,89 @@
+{
+  "version": "2.0",
+  "timestamp": "2025-10-29T06:40:00Z",
+  "description": "PolyRead Language Pack Registry - Bidirectional System v2.0",
+  "total_language_pairs": 2,
+  "total_languages_supported": 3,
+  "packs": [
+    {
+      "id": "de-en",
+      "name": "🇩🇪 German ↔ 🇺🇸 English",
+      "description": "Bidirectional German-English dictionary with Wiktionary content",
+      "source_language": "de",
+      "target_language": "en",
+      "type": "bidirectional",
+      "pack_type": "main",
+      "hidden": false,
+      "format": "sqlite",
+      "file": "de-en.sqlite.zip",
+      "size_bytes": 1609110,
+      "size_mb": 1.6,
+      "entries": 30492,
+      "source": "Wiktionary",
+      "version": "2.0.0",
+      "checksum": "",
+      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/de-en.sqlite.zip",
+      "created": "2025-10-29T06:29:00Z",
+      "supports_bidirectional": true,
+      "ml_kit_supported": true
+    },
+    {
+      "id": "es-en",
+      "name": "🇪🇸 Spanish ↔ 🇺🇸 English", 
+      "description": "Bidirectional Spanish-English dictionary with Wiktionary content",
+      "source_language": "es",
+      "target_language": "en",
+      "type": "bidirectional",
+      "pack_type": "main",
+      "hidden": false,
+      "format": "sqlite",
+      "file": "es-en.sqlite.zip",
+      "size_bytes": 1487456,
+      "size_mb": 1.5,
+      "entries": 29548,
+      "source": "Wiktionary", 
+      "version": "2.0.0",
+      "checksum": "",
+      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/es-en.sqlite.zip",
+      "created": "2025-10-29T06:29:00Z",
+      "supports_bidirectional": true,
+      "ml_kit_supported": true
+    }
+  ],
+  "supported_languages": [
+    {
+      "code": "de",
+      "name": "German",
+      "supported_pairs": ["en"],
+      "main_packs": ["de-en"],
+      "ml_kit_supported": true
+    },
+    {
+      "code": "es", 
+      "name": "Spanish",
+      "supported_pairs": ["en"],
+      "main_packs": ["es-en"],
+      "ml_kit_supported": true
+    },
+    {
+      "code": "en",
+      "name": "English", 
+      "supported_pairs": ["de", "es"],
+      "main_packs": ["de-en", "es-en"],
+      "ml_kit_supported": true
+    }
+  ],
+  "coming_soon": [
+    "French ↔ English",
+    "Italian ↔ English", 
+    "Portuguese ↔ English",
+    "Russian ↔ English"
+  ],
+  "technical_notes": {
+    "bidirectional_approach": "Single database per language pair with direction field for optimal lookup",
+    "download_behavior": "Each pack contains bidirectional dictionary data for both translation directions",
+    "wiktionary_format": "Rich HTML formatting preserved with examples and part-of-speech information",
+    "ml_kit_integration": "All language pairs support ML Kit offline translation",
+    "file_format": "SQLite databases compressed as .zip files"
+  }
+}

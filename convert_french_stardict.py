@@ -11,56 +11,87 @@ import hashlib
 import json
 import struct
 import gzip
+import logging
+import time
 from pathlib import Path
 from typing import List, Tuple, Dict
 import re
 
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('french_conversion.log'),
+        logging.StreamHandler()
+    ]
+)
+
 def read_ifo_file(ifo_path: str) -> Dict[str, str]:
     """Read StarDict .ifo file to get dictionary metadata"""
+    logging.info(f"Reading IFO file: {ifo_path}")
     metadata = {}
     
-    with open(ifo_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if '=' in line:
-                key, value = line.split('=', 1)
-                metadata[key] = value
+    try:
+        with open(ifo_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    metadata[key] = value
+        logging.info(f"IFO metadata loaded: {len(metadata)} keys")
+    except Exception as e:
+        logging.error(f"Error reading IFO file: {e}")
+        raise
     
     return metadata
 
 def read_idx_file(idx_path: str) -> List[Tuple[str, int, int]]:
     """Read StarDict .idx file to get word index"""
+    logging.info(f"Reading IDX file: {idx_path}")
     words = []
+    start_time = time.time()
     
-    with open(idx_path, 'rb') as f:
-        while True:
-            # Read null-terminated word
-            word_bytes = b''
+    try:
+        with open(idx_path, 'rb') as f:
             while True:
-                byte = f.read(1)
-                if not byte or byte == b'\x00':
+                # Read null-terminated word
+                word_bytes = b''
+                while True:
+                    byte = f.read(1)
+                    if not byte or byte == b'\x00':
+                        break
+                    word_bytes += byte
+                
+                if not word_bytes:
                     break
-                word_bytes += byte
-            
-            if not word_bytes:
-                break
+                    
+                try:
+                    word = word_bytes.decode('utf-8')
+                except:
+                    continue
                 
-            try:
-                word = word_bytes.decode('utf-8')
-            except:
-                continue
-            
-            # Read offset and size
-            offset_data = f.read(4)
-            size_data = f.read(4)
-            
-            if len(offset_data) != 4 or len(size_data) != 4:
-                break
+                # Read offset and size
+                offset_data = f.read(4)
+                size_data = f.read(4)
                 
-            offset = struct.unpack('>I', offset_data)[0]
-            size = struct.unpack('>I', size_data)[0]
-            
-            words.append((word, offset, size))
+                if len(offset_data) != 4 or len(size_data) != 4:
+                    break
+                    
+                offset = struct.unpack('>I', offset_data)[0]
+                size = struct.unpack('>I', size_data)[0]
+                
+                words.append((word, offset, size))
+                
+                # Log progress periodically
+                if len(words) % 10000 == 0:
+                    logging.info(f"Loaded {len(words)} words from IDX...")
+    
+        elapsed = time.time() - start_time
+        logging.info(f"IDX file loaded: {len(words)} words in {elapsed:.2f}s")
+    except Exception as e:
+        logging.error(f"Error reading IDX file: {e}")
+        raise
     
     return words
 
@@ -183,13 +214,23 @@ def convert_stardict_to_bidirectional(stardict_dir: str, output_path: str):
         ]
         cursor.executemany('INSERT INTO pack_metadata (key, value) VALUES (?, ?)', pack_metadata)
         
-        forward_entries = []
-        reverse_entries = []
+        forward_count = 0
+        reverse_count = 0
+        batch_size = 1000
+        forward_batch = []
+        reverse_batch = []
         
-        # Process each word entry
+        # Process each word entry in batches
+        start_time = time.time()
+        processed_count = 0
+        error_count = 0
+        
         for i, (word, offset, size) in enumerate(words):
             if i % 1000 == 0:
-                print(f"   Processing {i}/{len(words)} entries...")
+                elapsed = time.time() - start_time
+                rate = i / elapsed if elapsed > 0 else 0
+                eta = (len(words) - i) / rate if rate > 0 else 0
+                logging.info(f"Processing {i}/{len(words)} entries ({rate:.1f}/s, ETA: {eta:.0f}s, errors: {error_count})")
             
             try:
                 # Read definition from dict file
@@ -205,30 +246,58 @@ def convert_stardict_to_bidirectional(stardict_dir: str, output_path: str):
                     continue
                 
                 # Add forward entry (French → English)
-                forward_entries.append((word.strip(), clean_def.strip()))
+                forward_batch.append((word.strip(), clean_def.strip()))
                 
                 # Create reverse entry (English → French)
                 # Use the clean definition as the lemma and the word as the definition
                 if clean_def != word:  # Avoid circular definitions
-                    reverse_entries.append((clean_def.strip(), word.strip()))
+                    reverse_batch.append((clean_def.strip(), word.strip()))
+                
+                processed_count += 1
+                
+                # Insert batches when they reach batch_size
+                if len(forward_batch) >= batch_size:
+                    cursor.executemany('''
+                        INSERT INTO dictionary_entries (lemma, definition, direction, source_language, target_language)
+                        VALUES (?, ?, 'forward', 'fr', 'en')
+                    ''', forward_batch)
+                    forward_count += len(forward_batch)
+                    logging.debug(f"Inserted {len(forward_batch)} forward entries (total: {forward_count})")
+                    forward_batch = []
+                    
+                if len(reverse_batch) >= batch_size:
+                    cursor.executemany('''
+                        INSERT INTO dictionary_entries (lemma, definition, direction, source_language, target_language)
+                        VALUES (?, ?, 'reverse', 'en', 'fr')
+                    ''', reverse_batch)
+                    reverse_count += len(reverse_batch)
+                    logging.debug(f"Inserted {len(reverse_batch)} reverse entries (total: {reverse_count})")
+                    reverse_batch = []
+                    
+                    # Commit periodically
+                    conn.commit()
+                    logging.debug(f"Database committed at entry {i}")
                 
             except Exception as e:
-                print(f"Error processing {word}: {e}")
+                error_count += 1
+                if error_count <= 10:  # Only log first 10 errors
+                    logging.warning(f"Error processing word '{word}': {e}")
                 continue
         
-        # Insert forward entries (French → English)
-        print(f"📝 Inserting {len(forward_entries)} forward entries (fr→en)...")
-        cursor.executemany('''
-            INSERT INTO dictionary_entries (lemma, definition, direction, source_language, target_language)
-            VALUES (?, ?, 'forward', 'fr', 'en')
-        ''', forward_entries)
+        # Insert remaining entries
+        if forward_batch:
+            cursor.executemany('''
+                INSERT INTO dictionary_entries (lemma, definition, direction, source_language, target_language)
+                VALUES (?, ?, 'forward', 'fr', 'en')
+            ''', forward_batch)
+            forward_count += len(forward_batch)
         
-        # Insert reverse entries (English → French) 
-        print(f"📝 Inserting {len(reverse_entries)} reverse entries (en→fr)...")
-        cursor.executemany('''
-            INSERT INTO dictionary_entries (lemma, definition, direction, source_language, target_language)
-            VALUES (?, ?, 'reverse', 'en', 'fr')
-        ''', reverse_entries)
+        if reverse_batch:
+            cursor.executemany('''
+                INSERT INTO dictionary_entries (lemma, definition, direction, source_language, target_language)
+                VALUES (?, ?, 'reverse', 'en', 'fr')
+            ''', reverse_batch)
+            reverse_count += len(reverse_batch)
         
         conn.commit()
         

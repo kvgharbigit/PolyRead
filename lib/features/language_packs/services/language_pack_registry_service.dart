@@ -72,33 +72,41 @@ class LanguagePackRegistryService {
       final isHidden = pack['hidden'] == true;
       final packId = pack['id'] as String;
       
-      // Available files on GitHub (verified)
-      final availableFiles = ['de-en', 'eng-spa'];
+      // Available files on GitHub (using standard naming convention)
+      final availableFiles = ['de-en', 'es-en'];
       final shouldInclude = availableFiles.contains(packId) && packType != 'companion';
       
       if (shouldInclude) {
         foundPacks.add(packId);
+        
+        // Override registry data with corrected information for our available packs
+        final correctedName = packId == 'de-en' ? '🇩🇪 German ↔ 🇺🇸 English' : '🇪🇸 Spanish ↔ 🇺🇸 English';
+        final correctedDescription = 'Bidirectional dictionary • Wiktionary source';
+        final correctedEntries = packId == 'de-en' ? 30492 : 29548;
+        final correctedSize = packId == 'de-en' ? 1609110 : 1487456;
+        final correctedSizeMB = packId == 'de-en' ? 1.6 : 1.5;
+        
         packs.add(LanguagePackInfo(
-          id: pack['id'] as String,
-          name: pack['name'] as String,
-          description: pack['description'] as String? ?? '',
-          sourceLanguage: pack['source_language'] as String,
-          targetLanguage: pack['target_language'] as String,
-          entries: pack['entries'] as int? ?? 0,
-          sizeBytes: pack['size_bytes'] as int? ?? 0,
-          sizeMb: (pack['size_mb'] as num?)?.toDouble() ?? 0.0,
-          downloadUrl: pack['download_url'] as String? ?? '',
+          id: packId,
+          name: correctedName,
+          description: correctedDescription,
+          sourceLanguage: packId == 'de-en' ? 'de' : 'es',
+          targetLanguage: packId == 'de-en' ? 'en' : 'en',
+          entries: correctedEntries,
+          sizeBytes: correctedSize,
+          sizeMb: correctedSizeMB,
+          downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/$packId.sqlite.zip',
           checksum: pack['checksum'] as String? ?? '',
-          version: pack['version'] as String? ?? '1.0.0',
-          packType: pack['pack_type'] as String? ?? 'main',
+          version: '2.0.0',
+          packType: 'main', // Force to main instead of legacy
           isAvailable: true,
-          priority: _determinePriority(pack),
+          priority: 'high',
         ));
       }
     }
     
     // Add missing packs that exist on GitHub but not in registry
-    final missingPacks = ['de-en', 'eng-spa'].where((pack) => !foundPacks.contains(pack)).toList();
+    final missingPacks = ['de-en', 'es-en'].where((pack) => !foundPacks.contains(pack)).toList();
     for (final packId in missingPacks) {
       final parts = packId.split('-');
       final sourceCode = parts[0];
@@ -323,15 +331,15 @@ class LanguagePackRegistryService {
         priority: 'high',
       ),
       LanguagePackInfo(
-        id: 'eng-spa',
-        name: '🇪🇸 English ↔ Spanish',
+        id: 'es-en',
+        name: '🇪🇸 Spanish ↔ 🇺🇸 English',
         description: 'Bidirectional dictionary • 29,548 entries',
-        sourceLanguage: 'en',
-        targetLanguage: 'es',
+        sourceLanguage: 'es',
+        targetLanguage: 'en',
         entries: 29548,
         sizeBytes: 1487456, // Actual GitHub file size
         sizeMb: 1.5,
-        downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/eng-spa.sqlite.zip',
+        downloadUrl: 'https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/es-en.sqlite.zip',
         checksum: '',
         version: '2.0.0',
         packType: 'main',
