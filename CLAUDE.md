@@ -60,6 +60,8 @@ PolyRead is a Flutter-based language learning application that enables users to 
 - ML Kit integration for offline translation
 - Database schema with proper constraints
 - Error handling and logging throughout
+- iOS build compatibility with expanded language support
+- German and additional Spanish language variants
 
 ### 🔄 Development Commands
 ```bash
@@ -74,6 +76,9 @@ flutter test
 
 # Build for release
 flutter build apk
+
+# Build for iOS (no codesigning)
+flutter build ios --no-codesign
 ```
 
 ### 📁 Key File Structure
@@ -114,6 +119,8 @@ lib/
 4. **Auto-Recovery**: Startup validation with automatic repair suggestions
 5. **UI Consolidation**: Simplified language pack management interface
 6. **Error Handling**: Robust error recovery and user feedback
+7. **iOS Build Compatibility**: Fixed import conflicts and Drift syntax for successful iOS compilation
+8. **Expanded Language Support**: Added German (de-en) and additional Spanish variants compatibility
 
 ## Testing
 - Unit tests for translation services
