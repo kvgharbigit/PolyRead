@@ -657,7 +657,22 @@ class CombinedLanguagePackService {
           
           if (await File(zipFilePath).exists()) {
             print('CombinedLanguagePackService._installDictionaryPack: Calling integration service to process ZIP file...');
-            final result = await _integrationService.installLanguagePack(matchingPack, zipFilePath);
+            
+            // Create a manifest with dictionary file for the integration service
+            final dictionaryManifest = LanguagePackManifest(
+              id: matchingPack.id,
+              name: matchingPack.name,
+              language: matchingPack.language,
+              version: matchingPack.version,
+              description: matchingPack.description,
+              totalSize: matchingPack.totalSize,
+              files: matchingPack.files,
+              supportedTargetLanguages: matchingPack.supportedTargetLanguages,
+              releaseDate: matchingPack.releaseDate,
+              author: matchingPack.author,
+              license: matchingPack.license,
+            );
+            final result = await _integrationService.installLanguagePack(dictionaryManifest, zipFilePath);
             
             if (result.success) {
               print('CombinedLanguagePackService._installDictionaryPack: ✅ Dictionary data loaded successfully');

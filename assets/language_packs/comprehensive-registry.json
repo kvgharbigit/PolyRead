@@ -1,190 +1,31 @@
 {
   "version": "2.0",
-  "timestamp": "auto-generated",
-  "description": "PolyRead Language Pack Registry - Migrated from PolyBook with bidirectional support",
-  "strategy": "companion_pack_approach",
-  "total_language_pairs": 3,
-  "total_languages_supported": 3,
-  "packs": [
-    {
-      "id": "en-de",
-      "name": "English \u2192 German (Companion)",
-      "description": "Companion pack for German-English bidirectional lookup",
-      "source_language": "en",
-      "target_language": "de",
-      "type": "bilingual",
-      "pack_type": "companion",
-      "main_pack_id": "de-en",
-      "hidden": true,
-      "format": "sqlite",
-      "file": "en-de.sqlite.zip",
-      "size_bytes": 521234,
-      "size_mb": 0.5,
-      "entries": 12130,
-      "source": "Wiktionary",
-      "version": "1.0.0",
-      "checksum": "24433534c4e2189b863266dd9c3277941fa15f98f264998919b20e1730cbfa43",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/en-de.sqlite.zip",
-      "created": "2024-10-28T22:15:00Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
-    },
-    {
-      "id": "en-es",
-      "name": "English \u2192 Spanish (Companion)",
-      "description": "Companion pack for Spanish-English bidirectional lookup",
-      "source_language": "en",
-      "target_language": "es",
-      "type": "bilingual",
-      "pack_type": "companion",
-      "main_pack_id": "es-en",
-      "hidden": true,
-      "format": "sqlite",
-      "file": "en-es.sqlite.zip",
-      "size_bytes": 421768,
-      "size_mb": 0.4,
-      "entries": 11598,
-      "source": "Wiktionary",
-      "version": "1.0.0",
-      "checksum": "8dc39425d58e862b9c473e204adeaa70d280f953f0afda42c3220f8e92305ca3",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/en-es.sqlite.zip",
-      "created": "2024-10-28T22:15:00Z",
-      "supports_bidirectional": true,
-      "ml_kit_supported": true
-    },
-    {
-      "id": "eng-spa",
-      "name": "English \u2194 Spanish (Legacy)",
-      "description": "Legacy English-Spanish dictionary pack - use es-en for better bidirectional support",
-      "source_language": "en",
-      "target_language": "es",
-      "type": "bilingual",
-      "pack_type": "legacy",
-      "companion_pack_id": null,
-      "hidden": true,
-      "format": "sqlite",
-      "file": "eng-spa.sqlite.zip",
-      "size_bytes": 3180095,
-      "size_mb": 3.0,
-      "entries": 11598,
-      "source": "Wiktionary",
-      "version": "1.0.0",
-      "checksum": "ed00db525b955291ef1505ddaef215e2785cf30c8b8a6a43fb06d84dc88df186",
-      "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.0/eng-spa.sqlite.zip",
-      "created": "2024-10-28T22:15:00Z",
-      "supports_bidirectional": false,
-      "ml_kit_supported": true
+  "schema_version": "2.0",
+  "last_updated": "2025-10-29",
+  "description": "Comprehensive bidirectional language pack registry",
+  "packs": {
+    "it-en": {
+      "id": "it-en",
+      "name": "Italian ↔ English",
+      "language": "it",
+      "version": "2.0.0",
+      "description": "Single bidirectional dictionary with optimized lookup for both it ↔ en directions",
+      "pack_type": "bidirectional",
+      "total_entries": 124778,
+      "forward_entries": 52006,
+      "reverse_entries": 72772,
+      "size_bytes": 5110680,
+      "size_mb": 4.9,
+      "checksum": "10bae1a203290bfc7030c9819151e5d4135a2616919616f5732152c730867044",
+      "source": "wiktionary-stardict",
+      "priority": "high",
+      "created_date": "2025-10-29",
+      "source_language": "it",
+      "target_language": "en",
+      "supported_target_languages": [
+        "en",
+        "it"
+      ]
     }
-  ],
-  "language_support": {
-    "de": {
-      "name": "German",
-      "code": "de",
-      "supported_pairs": [
-        "en"
-      ],
-      "main_packs": [
-        "de-en"
-      ],
-      "companion_packs": [
-        "en-de"
-      ],
-      "ml_kit_supported": true,
-      "total_entries": 12130
-    },
-    "en": {
-      "name": "English",
-      "code": "en",
-      "supported_pairs": [
-        "de",
-        "es"
-      ],
-      "main_packs": [
-        "de-en",
-        "es-en"
-      ],
-      "companion_packs": [
-        "en-de",
-        "en-es"
-      ],
-      "ml_kit_supported": true,
-      "total_entries": 16627
-    },
-    "es": {
-      "name": "Spanish",
-      "code": "es",
-      "supported_pairs": [
-        "en"
-      ],
-      "main_packs": [
-        "es-en"
-      ],
-      "companion_packs": [
-        "en-es"
-      ],
-      "ml_kit_supported": true,
-      "total_entries": 4497
-    }
-  },
-  "missing_from_polybook": [
-    "fr-en (French \u2194 English)",
-    "it-en (Italian \u2194 English)",
-    "pt-en (Portuguese \u2194 English)",
-    "ru-en (Russian \u2194 English)",
-    "ko-en (Korean \u2194 English)",
-    "ar-en (Arabic \u2194 English)",
-    "hi-en (Hindi \u2194 English)",
-    "ja-en (Japanese \u2194 English)",
-    "zh-en (Chinese \u2194 English)"
-  ],
-  "roadmap": {
-    "phase_1_completed": [
-      "German \u2194 English with companion pack approach",
-      "Spanish \u2194 English with companion pack approach",
-      "Bidirectional lookup working for both language pairs"
-    ],
-    "phase_2_next": [
-      "French \u2194 English (high priority)",
-      "Italian \u2194 English (high priority)",
-      "Portuguese \u2194 English (medium priority)"
-    ],
-    "phase_3_future": [
-      "Russian \u2194 English",
-      "Korean \u2194 English",
-      "Arabic \u2194 English",
-      "Hindi \u2194 English",
-      "Japanese \u2194 English",
-      "Chinese \u2194 English"
-    ]
-  },
-  "technical_notes": {
-    "companion_pack_approach": "Each main pack (e.g., de-en) has a companion pack (e.g., en-de) for true bidirectional lookup",
-    "download_behavior": "User sees only main packs in UI. Selecting one downloads both directions automatically",
-    "wiktionary_format": "All dictionaries use Wiktionary schema: lemma, def with HTML formatting",
-    "ml_kit_integration": "All language pairs support ML Kit offline translation where available",
-    "file_format": "SQLite databases compressed as .zip files for efficient storage and transfer"
-  },
-  "migration_status": {
-    "from_polybook": "Partial migration completed - 3 language pairs out of 22",
-    "missing_pairs": 19,
-    "completion_percentage": 13.6,
-    "priority_languages_migrated": [
-      "German",
-      "Spanish"
-    ],
-    "priority_languages_pending": [
-      "French",
-      "Italian",
-      "Portuguese",
-      "Russian",
-      "Korean",
-      "Arabic",
-      "Hindi",
-      "Japanese",
-      "Chinese"
-    ]
-  },
-  "pack_count": 3,
-  "total_entries": 0,
-  "schema_version": "2.0"
+  }
 }

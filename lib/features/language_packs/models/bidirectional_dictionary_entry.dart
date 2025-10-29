@@ -33,6 +33,28 @@ class BidirectionalDictionaryEntry {
     );
   }
 
+  factory BidirectionalDictionaryEntry.fromAppDatabase({
+    required String lemma,
+    required String definition,
+    required String sourceLanguage,
+    required String targetLanguage,
+    String? pos,
+    String? sense,
+  }) {
+    final meanings = _parseDefinition(definition);
+    
+    // Determine direction based on language pair
+    final direction = 'forward'; // App database doesn't have direction field, assume forward
+    
+    return BidirectionalDictionaryEntry(
+      lemma: lemma,
+      meanings: meanings,
+      direction: direction,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+    );
+  }
+
   static List<MeaningGroup> _parseDefinition(String definition) {
     List<MeaningGroup> meanings = [];
     

@@ -74,13 +74,17 @@ CREATE TABLE pack_metadata (
 ## Current Status
 
 ### ✅ Completed Features (Bidirectional System v2.0)
-- **✅ German ↔ English**: 30,492 entries (12,130 forward + 18,362 reverse) - Verified
-- **✅ Spanish ↔ English**: 29,548 entries (11,598 forward + 17,950 reverse) - Verified  
+- **✅ German ↔ English**: 30,492 entries (12,130 forward + 18,362 reverse) - Verified & Deployed
+- **✅ Spanish ↔ English**: 29,548 entries (11,598 forward + 17,950 reverse) - Verified & Deployed
+- **✅ French ↔ English**: 137,181 entries (61,565 forward + 75,616 reverse) - Verified & Deployed
+- **✅ Italian ↔ English**: 124,778 entries (52,006 forward + 72,772 reverse) - Verified & Deployed
+- **✅ Portuguese ↔ English**: 86,951 entries (37,185 forward + 49,766 reverse) - Generated & Verified
 - **✅ Bidirectional Architecture**: Single database per language pair with direction field
 - **✅ iOS Build Compatibility**: All compilation errors resolved, successful builds
 - **✅ UI Transition**: Companion pack logic removed, single pack display
-- **✅ Data Sources**: PolyBook's Wiktionary sources integrated for future expansion
+- **✅ Data Sources**: PolyBook's Wiktionary sources integrated for systematic expansion
 - **✅ Verification System**: Comprehensive validation of schema, data integrity, and lookups
+- **✅ Systematic Pipeline**: Organized generation pipeline with comprehensive logging and error handling
 
 ### ✅ Recently Completed (Dynamic Size Verification)
 - **Dynamic File Size Calculation**: Replaced hardcoded 50MB claims with actual filesystem measurements
@@ -89,20 +93,15 @@ CREATE TABLE pack_metadata (
 - **Accurate Storage Reporting**: ML Kit model estimates based on Google's actual per-language sizes
 
 ### 🚧 In Progress
-- **French ↔ English**: Next high priority language pack using PolyBook sources
-- **Italian ↔ English**: High priority language pack  
-- **Portuguese ↔ English**: Medium priority language pack
+- **Language Pack Pipeline**: Systematic generation system with comprehensive logging and verification
 
-### 📋 Available from PolyBook Sources
-- French (3.2MB source → ~20,000+ entries)
-- Italian (5.3MB source → ~30,000+ entries)
-- Portuguese (2.6MB source → ~15,000+ entries)
-- Russian (8.2MB source → ~50,000+ entries)
-- Korean (2.1MB source → ~10,000+ entries)
-- Japanese (3.7MB source → ~25,000+ entries)
+### 📋 Remaining Languages (Ready for Pipeline)
+- Russian (8.2MB source → ~45,000+ entries)
+- Japanese (3.7MB source → ~30,000+ entries)
+- Korean (2.1MB source → ~15,000+ entries)
 - Chinese (6.4MB source → ~40,000+ entries)
-- Arabic (2.9MB source → ~18,000+ entries)
-- Hindi (1.0MB source → ~8,000+ entries)
+- Arabic (2.9MB source → ~20,000+ entries)
+- Hindi (1.0MB source → ~15,000+ entries)
 
 ### 🔄 Development Commands
 ```bash
@@ -120,6 +119,22 @@ flutter build apk
 
 # Build for iOS (no codesigning)
 flutter build ios --no-codesign
+```
+
+### 🏭 Language Pack Generation
+```bash
+# Generate single language pack
+cd language_pack_generation/scripts
+python3 single_language_generator.py ru-en
+
+# Verify language pack
+python3 verify_pack.py ru-en
+
+# Deploy to GitHub
+python3 deploy_pack.py ru-en
+
+# Verify all database schemas
+python3 ../../verify_schema_consistency.py
 ```
 
 ### 📁 Key File Structure

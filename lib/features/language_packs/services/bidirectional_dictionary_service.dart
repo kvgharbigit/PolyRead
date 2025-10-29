@@ -4,6 +4,7 @@
 import 'dart:io';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:path/path.dart' as path;
+import 'package:drift/drift.dart';
 
 import '../models/bidirectional_dictionary_entry.dart';
 import '../../../core/database/app_database.dart';
@@ -14,49 +15,52 @@ class BidirectionalDictionaryService {
 
   BidirectionalDictionaryService(this._database);
 
-  /// Open a bidirectional language pack database
-  Future<sqflite.Database> _openPackDatabase(String packId) async {
-    if (_packDatabases.containsKey(packId)) {
-      return _packDatabases[packId]!;
-    }
-
-    // Get the pack file path
-    final packPath = await _getPackDatabasePath(packId);
-    if (packPath == null) {
-      throw Exception('Language pack database not found: $packId');
-    }
-
-    // Open the database
-    final database = await sqflite.openDatabase(packPath, readOnly: true);
-    
-    _packDatabases[packId] = database;
-    return database;
+  /// Legacy method - no longer used but kept for compatibility
+  Future<sqflite.Database?> _openPackDatabase(String packId) async {
+    // This method is no longer used since we query the main app database directly
+    throw UnimplementedError('Pack databases are no longer used - data is in main app database');
   }
 
-  /// Get the file path for a language pack database
-  Future<String?> _getPackDatabasePath(String packId) async {
+  /// Check if a language pack is installed and has dictionary data
+  Future<bool> _isPackInstalled(String packId) async {
+    print('BidirectionalDictionaryService: Checking if pack $packId is installed...');
+    
     // Check if pack is installed in app database
     final packRecord = await (_database.select(_database.languagePacks)
         ..where((tbl) => tbl.packId.equals(packId)))
         .getSingleOrNull();
 
     if (packRecord?.isInstalled != true) {
-      return null;
+      print('BidirectionalDictionaryService: Pack $packId not found in database or not marked as installed');
+      return false;
     }
+    
+    print('BidirectionalDictionaryService: Pack $packId found - sourceLanguage: ${packRecord!.sourceLanguage}, targetLanguage: ${packRecord.targetLanguage}');
 
-    // Construct the path to the extracted SQLite file
-    final appDocDir = Directory.systemTemp; // Replace with actual app documents directory
-    final packDir = Directory(path.join(appDocDir.path, 'language_packs', packId));
-    final dbFile = File(path.join(packDir.path, '$packId.sqlite'));
+    // Check if there are dictionary entries for this pack (bidirectional)
+    // Check both forward (source->target) and reverse (target->source) directions
+    final forwardEntryCount = await (_database.select(_database.dictionaryEntries)
+        ..where((tbl) => tbl.sourceLanguage.equals(packRecord.sourceLanguage) &
+                        tbl.targetLanguage.equals(packRecord.targetLanguage))
+        ..limit(1))
+        .get();
 
-    if (await dbFile.exists()) {
-      return dbFile.path;
-    }
+    final reverseEntryCount = await (_database.select(_database.dictionaryEntries)
+        ..where((tbl) => tbl.sourceLanguage.equals(packRecord.targetLanguage) &
+                        tbl.targetLanguage.equals(packRecord.sourceLanguage))
+        ..limit(1))
+        .get();
 
-    return null;
+    print('BidirectionalDictionaryService: Forward entries (${packRecord.sourceLanguage}->${packRecord.targetLanguage}): ${forwardEntryCount.length}');
+    print('BidirectionalDictionaryService: Reverse entries (${packRecord.targetLanguage}->${packRecord.sourceLanguage}): ${reverseEntryCount.length}');
+
+    final hasEntries = forwardEntryCount.isNotEmpty || reverseEntryCount.isNotEmpty;
+    print('BidirectionalDictionaryService: Pack $packId ${hasEntries ? "HAS" : "DOES NOT HAVE"} dictionary entries');
+    
+    return hasEntries;
   }
 
-  /// Perform bidirectional lookup
+  /// Perform bidirectional lookup using main app database
   Future<BidirectionalLookupResult> lookup({
     required String query,
     required String sourceLanguage,
@@ -65,21 +69,26 @@ class BidirectionalDictionaryService {
     final packId = '$sourceLanguage-$targetLanguage';
     
     try {
-      final database = await _openPackDatabase(packId);
+      // Check if pack is installed
+      if (!await _isPackInstalled(packId)) {
+        print('BidirectionalDictionaryService: Pack $packId not installed or has no data');
+        return BidirectionalLookupResult(
+          query: query,
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+        );
+      }
       
-      // Perform both forward and reverse lookups
-      final forwardEntry = await _lookupDirection(
-        database: database,
+      // Perform forward lookup (source -> target)
+      final forwardEntry = await _lookupInAppDatabase(
         query: query,
-        direction: 'forward',
         sourceLanguage: sourceLanguage,
         targetLanguage: targetLanguage,
       );
 
-      final reverseEntry = await _lookupDirection(
-        database: database,
+      // Perform reverse lookup (target -> source)
+      final reverseEntry = await _lookupInAppDatabase(
         query: query,
-        direction: 'reverse',
         sourceLanguage: targetLanguage,
         targetLanguage: sourceLanguage,
       );
@@ -101,42 +110,40 @@ class BidirectionalDictionaryService {
     }
   }
 
-  /// Lookup in a specific direction
-  Future<BidirectionalDictionaryEntry?> _lookupDirection({
-    required sqflite.Database database,
+  /// Lookup in app database for a specific language direction
+  Future<BidirectionalDictionaryEntry?> _lookupInAppDatabase({
     required String query,
-    required String direction,
     required String sourceLanguage,
     required String targetLanguage,
   }) async {
     try {
-      // Query the bidirectional database
-      final results = await database.query(
-        'dictionary_entries',
-        where: 'LOWER(lemma) = LOWER(?) AND direction = ?',
-        whereArgs: [query, direction],
-        limit: 1,
-      );
+      // Query the main app database dictionary_entries table
+      final entry = await (_database.select(_database.dictionaryEntries)
+          ..where((tbl) => tbl.writtenRep.equals(query) &
+                          tbl.sourceLanguage.equals(sourceLanguage) &
+                          tbl.targetLanguage.equals(targetLanguage))
+          ..limit(1))
+          .getSingleOrNull();
 
-      if (results.isNotEmpty) {
-        final row = results.first;
-        return BidirectionalDictionaryEntry.fromDatabase(
-          lemma: row['lemma'] as String,
-          definition: row['definition'] as String,
-          direction: row['direction'] as String,
-          sourceLanguage: row['source_language'] as String,
-          targetLanguage: row['target_language'] as String,
+      if (entry != null) {
+        return BidirectionalDictionaryEntry.fromAppDatabase(
+          lemma: entry.writtenRep,
+          definition: entry.transList ?? '',
+          sourceLanguage: entry.sourceLanguage,
+          targetLanguage: entry.targetLanguage,
+          pos: entry.pos,
+          sense: entry.sense,
         );
       }
 
       return null;
     } catch (e) {
-      print('BidirectionalDictionaryService: Direction lookup error: $e');
+      print('BidirectionalDictionaryService: App database lookup error: $e');
       return null;
     }
   }
 
-  /// Search for partial matches in both directions
+  /// Search for partial matches in both directions using app database
   Future<List<BidirectionalDictionaryEntry>> search({
     required String query,
     required String sourceLanguage,
@@ -146,29 +153,38 @@ class BidirectionalDictionaryService {
     final packId = '$sourceLanguage-$targetLanguage';
     
     try {
-      final database = await _openPackDatabase(packId);
+      // Check if pack is installed
+      if (!await _isPackInstalled(packId)) {
+        return [];
+      }
       
-      // Search in both directions  
-      final results = await database.rawQuery(
-        '''
-        SELECT lemma, definition, direction, source_language, target_language
-        FROM dictionary_entries 
-        WHERE LOWER(lemma) LIKE LOWER(?) 
-        ORDER BY 
-          CASE WHEN LOWER(lemma) = LOWER(?) THEN 0 ELSE 1 END,
-          LENGTH(lemma),
-          lemma
-        LIMIT ?
-        ''',
-        ['%$query%', query, limit],
-      );
+      // Search in forward direction (source->target) using LIKE operator
+      final forwardEntries = await (_database.select(_database.dictionaryEntries)
+          ..where((tbl) => tbl.writtenRep.like('%$query%') &
+                          tbl.sourceLanguage.equals(sourceLanguage) &
+                          tbl.targetLanguage.equals(targetLanguage))
+          ..orderBy([(entry) => OrderingTerm(expression: entry.writtenRep)])
+          ..limit(limit ~/ 2))
+          .get();
+      
+      // Search in reverse direction (target->source) using LIKE operator
+      final reverseEntries = await (_database.select(_database.dictionaryEntries)
+          ..where((tbl) => tbl.writtenRep.like('%$query%') &
+                          tbl.sourceLanguage.equals(targetLanguage) &
+                          tbl.targetLanguage.equals(sourceLanguage))
+          ..orderBy([(entry) => OrderingTerm(expression: entry.writtenRep)])
+          ..limit(limit ~/ 2))
+          .get();
 
-      return results.map((row) => BidirectionalDictionaryEntry.fromDatabase(
-        lemma: row['lemma'] as String,
-        definition: row['definition'] as String,
-        direction: row['direction'] as String,
-        sourceLanguage: row['source_language'] as String,
-        targetLanguage: row['target_language'] as String,
+      final entries = [...forwardEntries, ...reverseEntries];
+
+      return entries.map((entry) => BidirectionalDictionaryEntry.fromAppDatabase(
+        lemma: entry.writtenRep,
+        definition: entry.transList ?? '',
+        sourceLanguage: entry.sourceLanguage,
+        targetLanguage: entry.targetLanguage,
+        pos: entry.pos,
+        sense: entry.sense,
       )).toList();
     } catch (e) {
       print('BidirectionalDictionaryService: Search error for $query: $e');
@@ -176,76 +192,70 @@ class BidirectionalDictionaryService {
     }
   }
 
-  /// Get pack statistics
+  /// Get pack statistics from app database
   Future<Map<String, int>> getPackStatistics(String packId) async {
     try {
-      final database = await _openPackDatabase(packId);
+      print('BidirectionalDictionaryService: Getting statistics for pack $packId');
       
-      final results = await database.rawQuery(
-        '''
-        SELECT 
-          direction,
-          COUNT(*) as count
-        FROM dictionary_entries 
-        GROUP BY direction
-        ''',
-      );
-
-      Map<String, int> stats = {
-        'forward': 0,
-        'reverse': 0,
-        'total': 0,
-      };
-
-      for (final row in results) {
-        final direction = row['direction'] as String;
-        final count = row['count'] as int;
-        stats[direction] = count;
-        stats['total'] = stats['total']! + count;
+      // Parse pack ID to get languages
+      final parts = packId.split('-');
+      if (parts.length != 2) {
+        throw Exception('Invalid pack ID format: $packId');
       }
+      final sourceLanguage = parts[0];
+      final targetLanguage = parts[1];
+      
+      print('BidirectionalDictionaryService: Parsed languages - source: $sourceLanguage, target: $targetLanguage');
+      
+      // Check if pack is installed
+      if (!await _isPackInstalled(packId)) {
+        print('BidirectionalDictionaryService: Pack $packId not installed, returning zero stats');
+        return {'forward': 0, 'reverse': 0, 'total': 0};
+      }
+      
+      // Count forward entries (source -> target)
+      final forwardEntries = await (_database.select(_database.dictionaryEntries)
+          ..where((tbl) => tbl.sourceLanguage.equals(sourceLanguage) &
+                          tbl.targetLanguage.equals(targetLanguage)))
+          .get();
+      
+      // Count reverse entries (target -> source)
+      final reverseEntries = await (_database.select(_database.dictionaryEntries)
+          ..where((tbl) => tbl.sourceLanguage.equals(targetLanguage) &
+                          tbl.targetLanguage.equals(sourceLanguage)))
+          .get();
 
-      return stats;
+      final forward = forwardEntries.length;
+      final reverse = reverseEntries.length;
+      final total = forward + reverse;
+
+      print('BidirectionalDictionaryService: Pack $packId statistics - Forward: $forward, Reverse: $reverse, Total: $total');
+
+      return {
+        'forward': forward,
+        'reverse': reverse,
+        'total': total,
+      };
     } catch (e) {
       print('BidirectionalDictionaryService: Statistics error for $packId: $e');
       return {'forward': 0, 'reverse': 0, 'total': 0};
     }
   }
 
-  /// Validate pack database structure
+  /// Validate pack structure by checking if data exists in app database
   Future<bool> validatePackStructure(String packId) async {
     try {
-      final database = await _openPackDatabase(packId);
-      
-      // Check if required tables exist
-      final tables = await database.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table'"
-      );
-      
-      final tableNames = tables.map((row) => row['name'] as String).toSet();
-      
-      final requiredTables = {'dictionary_entries', 'pack_metadata'};
-      if (!requiredTables.every((table) => tableNames.contains(table))) {
-        return false;
-      }
-
-      // Check schema version
-      final metadata = await database.rawQuery(
-        "SELECT value FROM pack_metadata WHERE key = 'schema_version'"
-      );
-
-      final schemaVersion = metadata.isNotEmpty ? metadata.first['value'] as String? : null;
-      return schemaVersion == '2.0';
+      // Simply check if pack is installed and has data
+      return await _isPackInstalled(packId);
     } catch (e) {
       print('BidirectionalDictionaryService: Validation error for $packId: $e');
       return false;
     }
   }
 
-  /// Close all open pack databases
+  /// Dispose resources (no longer needed since we use main app database)
   void dispose() {
-    for (final database in _packDatabases.values) {
-      database.close();
-    }
+    // No resources to dispose since we use the main app database
     _packDatabases.clear();
   }
 }

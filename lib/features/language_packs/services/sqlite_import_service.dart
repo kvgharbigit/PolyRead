@@ -30,12 +30,14 @@ class SqliteImportService {
     try {
       onProgress?.call('Opening dictionary database...', 0);
       
-      // Open the source SQLite database
+      // Open the source SQLite database (read-only, no version to avoid write operations)
+      print('Import: Opening database at: $sqliteFilePath');
       sourceDb = await openDatabase(
         sqliteFilePath,
         readOnly: true,
-        version: 1,
+        // Remove version parameter to avoid PRAGMA user_version write operation
       );
+      print('Import: Database opened successfully');
       
       // Analyze source database structure
       onProgress?.call('Analyzing database structure...', 10);
@@ -169,8 +171,8 @@ class SqliteImportService {
       final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'");
       final tableNames = tables.map((t) => t['name'] as String).toList();
       
-      // Check for required Wiktionary tables
-      const requiredTables = ['entries'];
+      // Check for required PolyRead dictionary tables
+      const requiredTables = ['dictionary_entries'];
       final missingTables = requiredTables.where((table) => !tableNames.contains(table)).toList();
       
       if (missingTables.isNotEmpty) {
@@ -180,23 +182,23 @@ class SqliteImportService {
       // Get entry count
       int totalEntries = 0;
       try {
-        final countResult = await db.rawQuery('SELECT COUNT(*) as count FROM entries');
+        final countResult = await db.rawQuery('SELECT COUNT(*) as count FROM dictionary_entries');
         totalEntries = countResult.first['count'] as int;
       } catch (e) {
         issues.add('Could not count entries: $e');
       }
       
       // Check table structure
-      if (tableNames.contains('entries')) {
-        final columns = await db.rawQuery('PRAGMA table_info(entries)');
+      if (tableNames.contains('dictionary_entries')) {
+        final columns = await db.rawQuery('PRAGMA table_info(dictionary_entries)');
         final columnNames = columns.map((c) => c['name'] as String).toList();
         
-        // Check for required Wiktionary columns
-        const requiredColumns = ['word', 'part_of_speech', 'language', 'definitions'];
+        // Check for required PolyRead columns
+        const requiredColumns = ['lemma', 'definition', 'direction', 'source_language', 'target_language'];
         final missingColumns = requiredColumns.where((col) => !columnNames.contains(col)).toList();
         
         if (missingColumns.isNotEmpty) {
-          issues.add('Missing required columns in entries table: ${missingColumns.join(", ")}');
+          issues.add('Missing required columns in dictionary_entries table: ${missingColumns.join(", ")}');
         }
       }
       
@@ -235,16 +237,15 @@ class SqliteImportService {
         // Fetch batch from source database
         final batchResults = await sourceDb.rawQuery('''
           SELECT 
-            word,
-            part_of_speech,
-            language,
-            definitions,
-            etymology,
-            pronunciations
-          FROM entries 
-          WHERE language IN (?, ?, ?)
+            lemma,
+            definition,
+            direction,
+            source_language,
+            target_language
+          FROM dictionary_entries 
+          WHERE source_language = ? AND target_language = ?
           LIMIT ? OFFSET ?
-        ''', [sourceLanguage, targetLanguage, '$sourceLanguage-$targetLanguage', batchSize, offset]);
+        ''', [sourceLanguage, targetLanguage, batchSize, offset]);
         
         if (batchResults.isEmpty) break;
         
@@ -278,29 +279,25 @@ class SqliteImportService {
     required String dictionaryName,
   }) async {
     try {
-      final word = row['word'] as String? ?? '';
-      final partOfSpeech = row['part_of_speech'] as String?;
-      final definitions = row['definitions'] as String? ?? '';
-      final etymology = row['etymology'] as String?;
-      final pronunciations = row['pronunciations'] as String?;
+      final lemma = row['lemma'] as String? ?? '';
+      final definition = row['definition'] as String? ?? '';
+      final direction = row['direction'] as String? ?? '';
+      final rowSourceLanguage = row['source_language'] as String? ?? '';
+      final rowTargetLanguage = row['target_language'] as String? ?? '';
       
-      if (word.isEmpty || definitions.isEmpty) return;
-      
-      // Parse definitions (Wiktionary format may have multiple definitions separated by |)
-      final definitionList = definitions.split('|').where((d) => d.trim().isNotEmpty).toList();
-      final primaryDefinition = definitionList.isNotEmpty ? definitionList.first.trim() : definitions;
+      if (lemma.isEmpty || definition.isEmpty) return;
       
       // Create dictionary entry
       final companion = DictionaryEntriesCompanion.insert(
-        writtenRep: word.toLowerCase(),
-        sense: Value(primaryDefinition),
-        transList: definitions, // Store all definitions
-        pos: Value(partOfSpeech),
-        sourceLanguage: sourceLanguage,
-        targetLanguage: targetLanguage,
+        writtenRep: lemma.toLowerCase(),
+        sense: Value(definition),
+        transList: definition, // Store definition as translation
+        pos: const Value(null), // No part of speech in this format
+        sourceLanguage: rowSourceLanguage,
+        targetLanguage: rowTargetLanguage,
         frequency: const Value(1000), // Default frequency
-        pronunciation: Value(pronunciations),
-        examples: Value(etymology), // Store etymology in examples field for now
+        pronunciation: const Value(null),
+        examples: const Value(null),
         source: Value(dictionaryName),
       );
       
@@ -311,7 +308,7 @@ class SqliteImportService {
       
     } catch (e) {
       // Log error but continue with other entries
-      print('SqliteImport: Failed to import entry ${row['word']}: $e');
+      print('SqliteImport: Failed to import entry ${row['lemma']}: $e');
     }
   }
 }

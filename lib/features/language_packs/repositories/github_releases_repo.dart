@@ -229,18 +229,24 @@ class GitHubReleasesRepository {
       throw LanguagePackException('SQLite file not found for pack $packId');
     }
     
-    // Extract language codes from pack ID (e.g., "eng-spa" -> ["eng", "spa"])
-    final languages = packId.split('-');
-    final sourceLanguage = languages.isNotEmpty ? languages[0] : 'unknown';
-    final targetLanguage = languages.length > 1 ? languages[1] : 'unknown';
+    // Use language codes from registry data (preferred) or extract from pack ID as fallback
+    final sourceLanguage = packData['source_language'] as String? ?? 
+                          (packId.split('-').isNotEmpty ? packId.split('-')[0] : 'unknown');
+    final targetLanguage = packData['target_language'] as String? ?? 
+                          (packId.split('-').length > 1 ? packId.split('-')[1] : 'unknown');
     
-    // Convert 3-letter codes to 2-letter codes
+    // Convert 3-letter codes to 2-letter codes if needed
     final sourceCode = _convertLanguageCode(sourceLanguage);
     final targetCode = _convertLanguageCode(targetLanguage);
     
+    // Get supported target languages from registry or use computed values as fallback
+    final supportedTargets = packData['supported_target_languages'] as List<dynamic>? ?? 
+                           [targetLanguage, sourceLanguage];
+    final supportedTargetCodes = supportedTargets.map((lang) => _convertLanguageCode(lang.toString())).toList();
+    
     return LanguagePackManifest(
       id: packId, // Keep original pack ID to match file name
-      name: '$sourceCode ↔ $targetCode Dictionary (Bidirectional)',
+      name: packData['name'] as String? ?? '$sourceCode ↔ $targetCode Dictionary (Bidirectional)',
       language: sourceCode,
       version: packData['version'] ?? '2.0.0',
       description: packData['description'] ?? 'Single bidirectional dictionary with optimized lookup for both $sourceCode ↔ $targetCode directions',
@@ -255,7 +261,7 @@ class GitHubReleasesRepository {
           downloadUrl: sqliteAsset['browser_download_url'],
         ),
       ],
-      supportedTargetLanguages: [targetCode, sourceCode], // Bidirectional support
+      supportedTargetLanguages: supportedTargetCodes, // Use registry data or computed fallback
       releaseDate: DateTime.parse(release['published_at']),
       author: 'PolyRead Team',
       license: 'CC BY-SA 4.0',
