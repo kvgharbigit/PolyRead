@@ -110,11 +110,11 @@ CREATE TABLE dictionary_entries (
     source TEXT,                          -- Dictionary pack source name
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     
-    -- Legacy Compatibility Fields (Maintained for backward compatibility)
-    lemma TEXT DEFAULT '',                -- Legacy alias for written_rep
-    definition TEXT DEFAULT '',           -- Legacy alias for sense
-    part_of_speech TEXT,                  -- Legacy alias for pos
-    language_pair TEXT DEFAULT ''         -- Legacy computed field (e.g., en-es)
+    -- Legacy Compatibility Fields (Maintained for data migration only)
+    lemma TEXT DEFAULT '',                -- Deprecated: Use written_rep
+    definition TEXT DEFAULT '',           -- Deprecated: Use sense or trans_list
+    part_of_speech TEXT,                  -- Deprecated: Use pos
+    language_pair TEXT DEFAULT ''         -- Deprecated: Use source_language + target_language
 );
 ```
 

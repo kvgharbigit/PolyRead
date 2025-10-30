@@ -464,12 +464,15 @@ class MockTranslationService {
           request: request,
           dictionaryResult: DictionaryLookupResult(
             query: text,
-            language: sourceLanguage,
+            sourceLanguage: sourceLanguage.split('-').first,
+            targetLanguage: sourceLanguage.split('-').last,
             entries: [
               DictionaryEntry(
-                word: text,
-                language: sourceLanguage,
-                definition: 'Mock definition for $text',
+                writtenRep: text,
+                sourceLanguage: sourceLanguage.split('-').first,
+                targetLanguage: sourceLanguage.split('-').last,
+                sense: 'Mock definition for $text',
+                transList: 'Mock definition for $text',
                 sourceDictionary: 'mock_dictionary',
                 createdAt: DateTime.now(),
               )

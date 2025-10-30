@@ -27,8 +27,8 @@
       "target_language": "en",
       "entries": 2172196,
       "unique_headwords": 1086098,
-      "size_bytes": 84409229,
-      "size_mb": 80.5,
+      "size_bytes": 92477869,
+      "size_mb": 88.2,
       "download_url": "https://github.com/kvgharbigit/PolyRead/releases/download/language-packs-v2.1/es-en.sqlite.zip",
       "checksum": "",
       "version": "2.1.0",
@@ -38,8 +38,8 @@
         "complete_vocabulary",
         "fts5_search",
         "performance_indexes",
-        "html_definitions",
-        "part_of_speech_tags",
+        "modern_wiktionary_format",
+        "pos_tags",
         "legacy_compatibility"
       ],
       "technical_details": {
@@ -49,7 +49,7 @@
         "fts_type": "fts5_bm25",
         "lookup_performance": "<1ms",
         "search_performance": "<100ms",
-        "data_format": "html_formatted_definitions"
+        "data_format": "modern_wiktionary_schema"
       },
       "quality_metrics": {
         "common_words_coverage": "100%",

@@ -57,7 +57,7 @@ void main() async {
       );
       print('   "$word" -> ${results.length} results found');
       if (results.isNotEmpty) {
-        print('     First result: ${results.first.definition}');
+        print('     First result: ${results.first.sense ?? results.first.transList}');
       }
     }
     

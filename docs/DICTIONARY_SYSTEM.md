@@ -276,11 +276,12 @@ final synonyms = translations.length > 1 ? translations.skip(1).toList() : <Stri
 - **Legacy Support**: Backward compatibility maintained through field mapping
 
 ### Field Mapping Strategy
-**External → Internal Mapping:**
+**External → Internal Mapping (Modern Wiktionary Format):**
 ```
-lemma (external)      → writtenRep (primary) + lemma (legacy)
-definition (external) → sense (cleaned) + transList (formatted) + definition (legacy)
-direction (external)  → preserved for bidirectional lookups
+written_rep (external) → writtenRep (primary)
+sense (external)       → sense (definition/meaning)
+trans_list (external)  → transList (pipe-separated translations)
+pos (external)         → pos (part of speech)
 ```
 
 ## 📞 Development Support

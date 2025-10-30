@@ -95,12 +95,12 @@ class DictionaryEntries extends Table {
   TextColumn get source => text().nullable()(); // Dictionary pack source
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   
-  // Legacy compatibility fields (for backward compatibility with existing code)
-  // These will be populated by triggers to maintain compatibility
-  TextColumn get lemma => text().withDefault(const Constant(''))(); // Legacy alias for written_rep
-  TextColumn get definition => text().withDefault(const Constant(''))(); // Legacy alias for sense  
-  TextColumn get partOfSpeech => text().nullable()(); // Legacy alias for pos
-  TextColumn get languagePair => text().withDefault(const Constant(''))(); // Legacy computed field
+  // Deprecated fields (maintained for data migration only - DO NOT USE in new code)
+  // All new code should use modern Wiktionary fields: writtenRep, sense, transList, pos
+  TextColumn get lemma => text().withDefault(const Constant(''))(); // DEPRECATED: Use writtenRep
+  TextColumn get definition => text().withDefault(const Constant(''))(); // DEPRECATED: Use sense/transList  
+  TextColumn get partOfSpeech => text().nullable()(); // DEPRECATED: Use pos
+  TextColumn get languagePair => text().withDefault(const Constant(''))(); // DEPRECATED: Use sourceLanguage/targetLanguage
 }
 
 // FTS table for dictionary search (compatible with Wiktionary format)

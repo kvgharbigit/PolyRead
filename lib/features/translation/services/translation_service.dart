@@ -290,7 +290,8 @@ class TranslationService {
       
       return DictionaryLookupResult(
         query: word,
-        language: '$sourceLanguage-$targetLanguage',
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
         entries: entries,
         latencyMs: stopwatch.elapsedMilliseconds,
       );
@@ -298,7 +299,8 @@ class TranslationService {
       stopwatch.stop();
       return DictionaryLookupResult(
         query: word,
-        language: '$sourceLanguage-$targetLanguage',
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
         entries: [],
         latencyMs: stopwatch.elapsedMilliseconds,
       );

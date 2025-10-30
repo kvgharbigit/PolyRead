@@ -13,7 +13,7 @@ void main() {
   for (final word in words) {
     final result = service.translateWord(word, 'en', 'es');
     print('  • "$word" → "${result.translation}" (${result.source})');
-    print('    Definition: ${result.definition}');
+    print('    Sense: ${result.definition}');
     print('    Latency: ${result.latency}ms\n');
   }
   

@@ -38,7 +38,7 @@ void main() {
         if (response.source == TranslationSource.dictionary) {
           if (response.dictionaryEntries != null && response.dictionaryEntries!.isNotEmpty) {
             final entry = response.dictionaryEntries!.first;
-            print('  Definition: ${entry.definition}');
+            print('  Sense: ${entry.sense}');
             print('  Dictionary: ${entry.sourceDictionary}');
           }
         } else {
@@ -312,15 +312,18 @@ class MockTranslationService {
           request: request,
           dictionaryResult: DictionaryLookupResult(
             query: text,
-            language: sourceLanguage,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
             entries: [
               DictionaryEntry(
-                word: text,
-                language: sourceLanguage,
-                definition: 'Definition: A ${_getWordType(text)} meaning "${translatedText}" in $targetLanguage',
+                writtenRep: text,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                sense: 'A ${_getWordType(text)} meaning "${translatedText}" in $targetLanguage',
+                transList: translatedText,
+                pos: _getWordType(text),
                 pronunciation: _generatePronunciation(text),
-                partOfSpeech: _getWordType(text),
-                exampleSentence: 'Example: The word "$text" is commonly used in everyday conversation.',
+                examples: 'Example: The word "$text" is commonly used in everyday conversation.',
                 sourceDictionary: 'Enhanced Mock Dictionary v2.0',
                 createdAt: DateTime.now(),
               )
