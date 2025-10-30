@@ -78,11 +78,12 @@ class GitHubReleasesRepository {
           : registryData as Map<String, dynamic>;
       
       
-      final packsData = registry['packs'];
+      final packsData = registry['language_packs'] ?? registry['packs'];
       
       if (packsData == null) {
-        print('GitHubReleasesRepository: ERROR - No packs found in registry');
-        throw LanguagePackException('No packs found in registry');
+        print('GitHubReleasesRepository: ERROR - No language_packs or packs found in registry');
+        print('GitHubReleasesRepository: Available registry keys: ${registry.keys.toList()}');
+        throw LanguagePackException('No language_packs or packs found in registry');
       }
       
       // Handle both Map and List formats
@@ -242,8 +243,8 @@ class GitHubReleasesRepository {
     return LanguagePackManifest(
       id: packId, // Keep original pack ID to match file name
       name: packData['name'] as String? ?? '$sourceCode ↔ $targetCode Dictionary (Bidirectional)',
-      language: sourceCode,
-      version: packData['version'] ?? '2.0.0',
+      language: sourceCode, // Primary language (source)
+      version: packData['version'] ?? '2.1.0', // Updated to match registry version
       description: packData['description'] ?? 'Single bidirectional dictionary with optimized lookup for both $sourceCode ↔ $targetCode directions',
       totalSize: sqliteAsset['size'] ?? 0,
       files: [
@@ -259,10 +260,21 @@ class GitHubReleasesRepository {
       supportedTargetLanguages: supportedTargetCodes, // Use registry data or computed fallback
       sourceLanguage: sourceCode, // Use converted 2-letter code
       targetLanguage: targetCode, // Use converted 2-letter code  
-      packType: packData['pack_type'] as String? ?? 'dictionary',
+      packType: packData['pack_type'] as String? ?? packData['type'] as String? ?? 'dictionary',
       releaseDate: DateTime.parse(release['published_at']),
       author: 'PolyRead Team',
       license: 'CC BY-SA 4.0',
+      metadata: {
+        'entry_count': packData['entries'] ?? packData['entry_count'] ?? 0,
+        'unique_headwords': packData['unique_headwords'] ?? 0,
+        'size_mb': packData['size_mb'] ?? 0,
+        'size_bytes': packData['size_bytes'] ?? sqliteAsset['size'] ?? 0,
+        'technical_details': packData['technical_details'] ?? {},
+        'quality_metrics': packData['quality_metrics'] ?? {},
+        'features': packData['features'] ?? [],
+        'data_source': 'Vuizur Wiktionary-Dictionaries',
+        'registry_version': '2.1',
+      },
     );
   }
   

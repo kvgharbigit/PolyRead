@@ -22,9 +22,18 @@ class SqliteImportService {
     required String dictionaryName,
     Function(String message, int progress)? onProgress,
   }) async {
-    if (!await File(sqliteFilePath).exists()) {
+    print('');
+    print('📚 Starting SQLite import: $dictionaryName');
+    
+    // File existence check with detailed logging
+    final sqliteFile = File(sqliteFilePath);
+    final fileExists = await sqliteFile.exists();
+    if (!fileExists) {
       throw SqliteImportException('SQLite file not found: $sqliteFilePath');
     }
+    
+    final fileSize = await sqliteFile.length();
+    print('📚 SQLite file: ${(fileSize / 1024 / 1024).toStringAsFixed(1)} MB');
     
     Database? sourceDb;
     int importedCount = 0;
@@ -32,24 +41,34 @@ class SqliteImportService {
     try {
       onProgress?.call('Opening dictionary database...', 0);
       
-      // Open the source SQLite database (read-only, no version to avoid write operations)
-      print('Import: Opening database at: $sqliteFilePath');
       sourceDb = await openDatabase(
         sqliteFilePath,
         readOnly: true,
         // Remove version parameter to avoid PRAGMA user_version write operation
       );
-      print('Import: Database opened successfully');
+      print('📚 Database opened successfully');
       
-      // Analyze source database structure
       onProgress?.call('Analyzing database structure...', 10);
       final sourceInfo = await _analyzeSourceDatabase(sourceDb);
+      print('📚 Found ${(sourceInfo.totalEntries/1000).toStringAsFixed(0)}K entries');
       
       if (!sourceInfo.isValidWiktionary) {
-        throw SqliteImportException('Invalid Wiktionary database format');
+        throw SqliteImportException('Invalid Wiktionary database format: ${sourceInfo.issues.join(", ")}');
       }
       
       onProgress?.call('Found ${sourceInfo.totalEntries} entries to import...', 20);
+      
+      if (sourceInfo.totalEntries == 0) {
+        return SqliteImportResult(
+          success: false,
+          importedEntries: 0,
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+          dictionaryName: dictionaryName,
+          message: 'No entries found in source database',
+          error: 'Empty database',
+        );
+      }
       
       // Import entries in batches
       importedCount = await _importEntriesBatch(
@@ -60,9 +79,15 @@ class SqliteImportService {
         dictionaryName: dictionaryName,
         onProgress: (processed, total) {
           final progress = 20 + ((processed * 70) ~/ total);
+          // Log progress every 100,000 entries to keep user informed without spam
+          if (processed % 100000 == 0 || processed == total) {
+            print('📚 Import progress: ${(processed/1000).toStringAsFixed(0)}K/${(total/1000).toStringAsFixed(0)}K entries ($progress%)');
+          }
           onProgress?.call('Importing entries: $processed/$total', progress);
         },
       );
+      
+      print('📚 Import completed: ${(importedCount/1000).toStringAsFixed(0)}K entries');
       
       onProgress?.call('Import completed successfully', 100);
       
@@ -76,6 +101,8 @@ class SqliteImportService {
       );
       
     } catch (e) {
+      print('❌ Import failed: $e');
+      
       return SqliteImportResult(
         success: false,
         importedEntries: importedCount,
@@ -195,20 +222,25 @@ class SqliteImportService {
         final columns = await db.rawQuery('PRAGMA table_info(dictionary_entries)');
         final columnNames = columns.map((c) => c['name'] as String).toList();
         
-        // Check for required PolyRead columns
-        const requiredColumns = ['lemma', 'definition', 'direction', 'source_language', 'target_language'];
-        final missingColumns = requiredColumns.where((col) => !columnNames.contains(col)).toList();
+        // Check for required columns (support both Wiktionary and legacy formats)
+        const wiktionaryColumns = ['written_rep', 'sense', 'trans_list', 'source_language', 'target_language'];
+        const legacyColumns = ['lemma', 'definition', 'direction', 'source_language', 'target_language'];
         
-        if (missingColumns.isNotEmpty) {
-          issues.add('Missing required columns in dictionary_entries table: ${missingColumns.join(", ")}');
+        final hasWiktionaryFormat = wiktionaryColumns.every((col) => columnNames.contains(col));
+        final hasLegacyFormat = legacyColumns.every((col) => columnNames.contains(col));
+        
+        if (!hasWiktionaryFormat && !hasLegacyFormat) {
+          issues.add('Missing required columns for either Wiktionary format (${wiktionaryColumns.join(", ")}) or legacy format (${legacyColumns.join(", ")})');
         }
       }
+      
+      final isValid = issues.isEmpty && totalEntries > 0;
       
       return SourceDatabaseInfo(
         tables: tableNames,
         totalEntries: totalEntries,
         issues: issues,
-        isValidWiktionary: issues.isEmpty && totalEntries > 0,
+        isValidWiktionary: isValid,
       );
       
     } catch (e) {
@@ -230,20 +262,26 @@ class SqliteImportService {
     required String dictionaryName,
     Function(int processed, int total)? onProgress,
   }) async {
-    const batchSize = 1000;
+    print('📚 Starting dictionary import: ${sourceInfo.totalEntries} entries');
+    
+    const batchSize = 500; // Reduced batch size to use less memory
     int offset = 0;
     int totalImported = 0;
     
-    print('SqliteImport: Starting database transaction for batch import...');
-    print('SqliteImport: Target database: ${_appDatabase.hashCode}');
-    print('SqliteImport: Source database: ${sourceDb.hashCode}');
-    print('SqliteImport: Expected entries: ${sourceInfo.totalEntries}');
-    print('SqliteImport: Batch size: $batchSize');
+    // Memory-efficient initial count check using count query
+    final countQuery = _appDatabase.selectOnly(_appDatabase.dictionaryEntries)
+      ..addColumns([_appDatabase.dictionaryEntries.id.count()])
+      ..where(_appDatabase.dictionaryEntries.source.equals(dictionaryName));
+    final initialCount = await countQuery.map((row) => row.read(_appDatabase.dictionaryEntries.id.count()) ?? 0).getSingle();
+    print('📚 Initial entries: $initialCount');
     
     await _appDatabase.transaction(() async {
-      print('SqliteImport: Inside transaction, starting batch processing...');
       while (true) {
-        print('SqliteImport: Fetching batch at offset $offset...');
+        // Only log every 200th batch (100K entries) to reduce memory usage
+        if ((offset ~/ batchSize) % 200 == 0) {
+          print('📚 Processing batch ${(offset ~/ batchSize) + 1}...');
+        }
+        
         // Fetch batch from source database - get ALL entries for bidirectional pack
         final batchResults = await sourceDb.rawQuery('''
           SELECT 
@@ -256,24 +294,27 @@ class SqliteImportService {
           LIMIT ? OFFSET ?
         ''', [batchSize, offset]);
         
-        print('SqliteImport: Batch query returned ${batchResults.length} entries');
+        if (batchResults.isEmpty) {
+          break;
+        }
         
-        if (batchResults.isEmpty) break;
-        
-        // Convert and insert batch
-        print('SqliteImport: Processing ${batchResults.length} entries in current batch...');
+        // Log sample only for first batch (reduced logging)
+        if (offset == 0) {
+          print('📚 Sample entry: ${batchResults.first['lemma']} -> ${batchResults.first['definition']}');
+        }
         var batchInserted = 0;
         var batchSkipped = 0;
         var batchErrors = 0;
         
-        for (final row in batchResults) {
+        for (int i = 0; i < batchResults.length; i++) {
+          final row = batchResults[i];
           final result = await _insertDictionaryEntry(
             sourceDb: sourceDb,
             row: row,
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
             dictionaryName: dictionaryName,
-            entryNumber: totalImported,
+            entryNumber: totalImported + i,
           );
           
           if (result == InsertResult.inserted) {
@@ -286,27 +327,33 @@ class SqliteImportService {
           }
         }
         
-        print('SqliteImport: Batch complete - Inserted: $batchInserted, Skipped: $batchSkipped, Errors: $batchErrors');
+        // Log batch results every 100 batches (100K entries) for reasonable progress feedback
+        if ((offset ~/ batchSize) % 100 == 0) {
+          print('📚 Batch ${(offset ~/ batchSize) + 1}: ${(totalImported/1000).toStringAsFixed(0)}K entries imported');
+        }
         
         offset += batchSize;
-        onProgress?.call(totalImported, sourceInfo.totalEntries);
+        
+        // Call progress callback every 200 batches (100K entries) to reduce overhead
+        if ((offset ~/ batchSize) % 200 == 0 || batchResults.length < batchSize) {
+          onProgress?.call(totalImported, sourceInfo.totalEntries);
+        }
         
         if (batchResults.length < batchSize) {
-          print('SqliteImport: Reached end of data (batch size ${batchResults.length} < $batchSize)');
           break;
         }
       }
     });
     
-    print('SqliteImport: Transaction completed. Verifying entries in database...');
+    print('📚 Import transaction completed');
     
-    // Verify entries were actually inserted
-    final verificationCount = await (_appDatabase.select(_appDatabase.dictionaryEntries)
-        ..where((tbl) => tbl.source.equals(dictionaryName)))
-        .get();
+    // Memory-efficient verification using count query instead of loading all entries
+    final verificationQuery = _appDatabase.selectOnly(_appDatabase.dictionaryEntries)
+      ..addColumns([_appDatabase.dictionaryEntries.id.count()])
+      ..where(_appDatabase.dictionaryEntries.source.equals(dictionaryName));
+    final verificationCount = await verificationQuery.map((row) => row.read(_appDatabase.dictionaryEntries.id.count()) ?? 0).getSingle();
     
-    print('SqliteImport: Verification - Found ${verificationCount.length} entries in database for source "$dictionaryName"');
-    print('SqliteImport: Import reported: $totalImported, Database contains: ${verificationCount.length}');
+    print('📚 Import completed: ${(verificationCount/1000).toStringAsFixed(0)}K entries verified');
     
     return totalImported;
   }
@@ -326,17 +373,13 @@ class SqliteImportService {
       final rowSourceLanguage = row['source_language'] as String? ?? '';
       final rowTargetLanguage = row['target_language'] as String? ?? '';
       
-      if (lemma.isEmpty || definition.isEmpty) {
-        if (entryNumber < 10) {
-          print('SqliteImport: Entry #${entryNumber + 1}: SKIPPED - empty lemma or definition');
-        }
-        return InsertResult.skipped;
+      // Minimal logging for first entry only
+      if (entryNumber == 0) {
+        print('📚 Processing entries: "$lemma" ($rowSourceLanguage→$rowTargetLanguage)');
       }
       
-      // Debug: Log first few entries to understand language mapping
-      if (entryNumber < 3) {
-        print('SqliteImport: Entry #${entryNumber + 1}: "${lemma}" MANIFEST(${sourceLanguage}->${targetLanguage}) vs SQLITE(${rowSourceLanguage}->${rowTargetLanguage}) (direction: $direction)');
-        print('SqliteImport: Entry #${entryNumber + 1}: Will use SQLITE codes: ${rowSourceLanguage}->${rowTargetLanguage}');
+      if (lemma.isEmpty || definition.isEmpty) {
+        return InsertResult.skipped;
       }
       
       // Create dictionary entry using ACTUAL language codes from the database row
@@ -359,29 +402,34 @@ class SqliteImportService {
         languagePair: Value('$rowSourceLanguage-$rowTargetLanguage'), // Fix: Use actual row languages for legacy field
       );
       
+      // Minimal companion logging (first entry only)
+      if (entryNumber == 0) {
+        print('📚 Sample entry: "${lemma.toLowerCase()}" -> "$definition" ($rowSourceLanguage→$rowTargetLanguage)');
+      }
+      
+      // Insert with minimal logging to prevent memory issues
       final insertResult = await _appDatabase.into(_appDatabase.dictionaryEntries).insert(
         companion,
-        mode: InsertMode.insertOrIgnore, // Avoid duplicates (now that constraints are properly satisfied)
+        mode: InsertMode.insertOrIgnore, // Avoid duplicates
       );
       
-      if (entryNumber < 3) {
-        print('SqliteImport: Entry #${entryNumber + 1} inserted with ID: $insertResult');
+      // Only log first few entries to verify format
+      if (entryNumber < 2) {
+        print('📚 Entry ${entryNumber + 1}: ${insertResult > 0 ? "inserted" : "skipped"}');
       }
       
       // Check if actually inserted (insertOrIgnore returns -1 for ignored duplicates)
       if (insertResult > 0) {
         return InsertResult.inserted;
       } else {
-        if (entryNumber < 10) {
-          print('SqliteImport: Entry #${entryNumber + 1}: DUPLICATE IGNORED (ID: $insertResult)');
-        }
         return InsertResult.skipped;
       }
       
     } catch (e) {
-      // Log error but continue with other entries
-      print('SqliteImport: ❌ FAILED to import entry #${entryNumber + 1} "${row['lemma']}": $e');
-      print('SqliteImport: ❌ Error details: ${e.runtimeType}');
+      // Only log first few errors to prevent spam
+      if (entryNumber < 5) {
+        print('❌ Import error ${entryNumber + 1}: $e');
+      }
       return InsertResult.error;
     }
   }

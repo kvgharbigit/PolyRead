@@ -34,30 +34,23 @@ class LanguagePackIntegrationService {
        _sqliteImporter = sqliteImporter ?? SqliteImportService(database);
 
   /// Install a downloaded language pack into the system
-  Future<LanguagePackInstallationResult> installLanguagePack(LanguagePackManifest manifest, String downloadPath) async {
+  Future<LanguagePackInstallationResult> installLanguagePack(
+    LanguagePackManifest manifest, 
+    String downloadPath, {
+    Function(String message, int progress)? progressCallback,
+  }) async {
     try {
-      print('');
-      print('🔧 LanguagePackIntegrationService.installLanguagePack: STARTING INSTALLATION');
-      print('🔧 LanguagePackIntegrationService: Pack ID: ${manifest.id}');
-      print('🔧 LanguagePackIntegrationService: Pack name: ${manifest.name}');
-      print('🔧 LanguagePackIntegrationService: Pack type: ${manifest.packType}');
-      print('🔧 LanguagePackIntegrationService: Download path: $downloadPath');
-      print('🔧 LanguagePackIntegrationService: Files: ${manifest.files.length}');
-      
-      for (final file in manifest.files) {
-        print('🔧 LanguagePackIntegrationService: File: ${file.name} (${file.type})');
-      }
+      print('🔧 Installing language pack: ${manifest.name} (${manifest.files.length} files)');
 
       // 1. Validate pack files exist - handle both directory and direct file paths
       late bool isDirectory;
       if (await Directory(downloadPath).exists()) {
         isDirectory = true;
-        print('🔧 LanguagePackIntegrationService: Download path is a directory');
+        isDirectory = true;
       } else if (await File(downloadPath).exists()) {
         isDirectory = false;
-        print('🔧 LanguagePackIntegrationService: Download path is a file');
       } else {
-        print('🔧 LanguagePackIntegrationService: ❌ Path not found: $downloadPath');
+        print('❌ Pack path not found: $downloadPath');
         throw Exception('Language pack path not found: $downloadPath');
       }
 
@@ -74,16 +67,13 @@ class LanguagePackIntegrationService {
         print('🔧 LanguagePackIntegrationService: Pack details: ${manifest.sourceLanguage} -> ${manifest.targetLanguage}');
         print('🔧 LanguagePackIntegrationService: Dictionary files: ${manifest.files.where((f) => f.name.endsWith('.sqlite.zip')).length}');
         
-        final result = await _loadDictionaryFromPack(manifest, downloadPath);
+        final result = await _loadDictionaryFromPack(manifest, downloadPath, progressCallback);
         dictionaryInstalled = result.success;
         
-        print('🔧 LanguagePackIntegrationService: Dictionary loading result: ${result.success}');
-        print('🔧 LanguagePackIntegrationService: Dictionary entries loaded: ${result.entriesLoaded}');
         if (result.error != null) {
-          print('🔧 LanguagePackIntegrationService: ❌ Dictionary loading error: ${result.error}');
-        }
-        if (result.message != null) {
-          print('🔧 LanguagePackIntegrationService: Dictionary loading message: ${result.message}');
+          print('❌ Dictionary loading error: ${result.error}');
+        } else {
+          print('✅ Dictionary loaded: ${result.entriesLoaded} entries');
         }
         
         if (result.success) {
@@ -92,10 +82,10 @@ class LanguagePackIntegrationService {
             sourceLanguage: manifest.sourceLanguage,
             targetLanguage: manifest.targetLanguage,
           );
-          print('🔧 LanguagePackIntegrationService: Dictionary availability after installation: ${availability.isAvailable}');
+          // Dictionary availability updated
         }
       } else {
-        print('🔧 LanguagePackIntegrationService: ⚠️ Skipping dictionary loading - pack type is "${manifest.packType}"');
+        print('⚠️ Skipping dictionary loading - pack type: ${manifest.packType}');
       }
 
       // 3. Install ML Kit models if this is a translation model pack
@@ -106,7 +96,7 @@ class LanguagePackIntegrationService {
       // 4. Update pack status in database
       await _updatePackStatus(manifest, isInstalled: true);
 
-      print('Successfully installed language pack: ${manifest.name}');
+      print('✅ Successfully installed: ${manifest.name}');
 
       return LanguagePackInstallationResult(
         success: true,
@@ -134,44 +124,45 @@ class LanguagePackIntegrationService {
   }
 
   /// Load dictionary data from a language pack
-  Future<DictionaryLoadResult> _loadDictionaryFromPack(LanguagePackManifest manifest, String packPath) async {
+  Future<DictionaryLoadResult> _loadDictionaryFromPack(
+    LanguagePackManifest manifest, 
+    String packPath, 
+    Function(String message, int progress)? progressCallback,
+  ) async {
     try {
-      print('📚 _loadDictionaryFromPack: Loading dictionary from pack: ${manifest.name}');
-      print('📚 _loadDictionaryFromPack: Pack path: $packPath');
+      print('📚 Loading dictionary: ${manifest.name}');
       
       List<String> zipFilePaths = [];
       
       // Handle both directory and direct file path cases
       if (await Directory(packPath).exists()) {
-        print('📚 _loadDictionaryFromPack: Pack path is a directory, searching for ZIP files...');
         final packDir = Directory(packPath);
         final zipFiles = await packDir.list().where((file) => 
           file is File && file.path.endsWith('.sqlite.zip')
         ).toList();
         zipFilePaths = zipFiles.map((f) => f.path).toList();
-        print('📚 _loadDictionaryFromPack: Found ${zipFilePaths.length} ZIP files in directory');
+        print('📁 Found ${zipFilePaths.length} ZIP files');
       } else if (await File(packPath).exists() && packPath.endsWith('.sqlite.zip')) {
-        print('📚 _loadDictionaryFromPack: Pack path is a direct ZIP file');
+        print('📁 Processing direct ZIP file');
         zipFilePaths = [packPath];
       } else {
-        print('📚 _loadDictionaryFromPack: ❌ Pack path is neither valid directory nor ZIP file');
+        print('❌ Invalid pack path: not a directory or ZIP file');
       }
       
       if (zipFilePaths.isNotEmpty) {
-        print('📚 _loadDictionaryFromPack: Processing ${zipFilePaths.length} SQLite ZIP file(s)...');
+        print('📁 Processing ${zipFilePaths.length} SQLite files...');
         
         var totalEntriesLoaded = 0;
         
         for (final zipFilePath in zipFilePaths) {
-          print('📚 _loadDictionaryFromPack: Processing ZIP: $zipFilePath');
           final result = await _loadDictionaryFromSqliteZip(
             zipFilePath: zipFilePath,
             manifest: manifest,
+            progressCallback: progressCallback,
           );
           
-          print('📚 _loadDictionaryFromPack: ZIP processing result: success=${result.success}, entries=${result.entriesLoaded}');
           if (result.error != null) {
-            print('📚 _loadDictionaryFromPack: ZIP processing error: ${result.error}');
+            print('❌ ZIP error: ${result.error}');
           }
           
           if (result.success) {
@@ -179,7 +170,7 @@ class LanguagePackIntegrationService {
           }
         }
         
-        print('📚 _loadDictionaryFromPack: Total entries loaded: $totalEntriesLoaded');
+        print('✅ Total entries loaded: $totalEntriesLoaded');
         
         if (totalEntriesLoaded > 0) {
           return DictionaryLoadResult(
@@ -217,7 +208,7 @@ class LanguagePackIntegrationService {
         );
       }
       
-      print('No dictionary files found in pack');
+      print('⚠️ No dictionary files found in pack');
       return DictionaryLoadResult(
         success: false,
         entriesLoaded: 0,
@@ -243,6 +234,7 @@ class LanguagePackIntegrationService {
   Future<DictionaryLoadResult> _loadDictionaryFromSqliteZip({
     required String zipFilePath,
     required LanguagePackManifest manifest,
+    Function(String message, int progress)? progressCallback,
   }) async {
     try {
       print('Processing SQLite ZIP: $zipFilePath');
@@ -270,7 +262,14 @@ class LanguagePackIntegrationService {
           sourceLanguage: manifest.sourceLanguage,
           targetLanguage: manifest.targetLanguage,
           dictionaryName: manifest.name,
-          onProgress: (message, progress) => print('Import: $message ($progress%)'),
+          onProgress: (message, importProgress) {
+            // Only log significant progress milestones to prevent memory issues
+            if (importProgress % 20 == 0 || importProgress >= 90) {
+              print('📚 Import: $importProgress%');
+            }
+            // Forward progress to UI via callback
+            progressCallback?.call(message, importProgress);
+          },
         );
         
         if (importResult.success) {

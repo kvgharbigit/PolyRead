@@ -50,19 +50,19 @@ class LanguagePackManifest {
       language: json['language'] as String,
       version: json['version'] as String,
       description: json['description'] as String,
-      totalSize: json['total_size'] as int,
+      totalSize: json['total_size'] as int? ?? json['totalSize'] as int? ?? 0,
       files: (json['files'] as List<dynamic>)
           .map((file) => LanguagePackFile.fromJson(file as Map<String, dynamic>))
           .toList(),
-      supportedTargetLanguages: (json['supported_target_languages'] as List<dynamic>)
-          .cast<String>(),
-      sourceLanguage: json['source_language'] as String,
-      targetLanguage: json['target_language'] as String,
-      packType: json['pack_type'] as String? ?? 'dictionary',
-      releaseDate: DateTime.parse(json['release_date'] as String),
+      supportedTargetLanguages: (json['supported_target_languages'] as List<dynamic>?)?.cast<String>() ?? 
+                                (json['supportedTargetLanguages'] as List<dynamic>?)?.cast<String>() ?? [],
+      sourceLanguage: json['source_language'] as String? ?? json['sourceLanguage'] as String,
+      targetLanguage: json['target_language'] as String? ?? json['targetLanguage'] as String,
+      packType: json['pack_type'] as String? ?? json['packType'] as String? ?? 'dictionary',
+      releaseDate: DateTime.parse(json['release_date'] as String? ?? json['releaseDate'] as String),
       author: json['author'] as String?,
       license: json['license'] as String?,
-      downloadUrl: json['download_url'] as String?,
+      downloadUrl: json['download_url'] as String? ?? json['downloadUrl'] as String?,
       checksum: json['checksum'] as String?,
       metadata: json['metadata'] as Map<String, dynamic>? ?? {},
     );
@@ -77,12 +77,22 @@ class LanguagePackManifest {
       'version': version,
       'description': description,
       'total_size': totalSize,
+      'totalSize': totalSize, // Duplicate for compatibility
       'files': files.map((file) => file.toJson()).toList(),
       'supported_target_languages': supportedTargetLanguages,
+      'supportedTargetLanguages': supportedTargetLanguages, // Duplicate for compatibility
+      'source_language': sourceLanguage,
+      'sourceLanguage': sourceLanguage, // Duplicate for compatibility  
+      'target_language': targetLanguage,
+      'targetLanguage': targetLanguage, // Duplicate for compatibility
+      'pack_type': packType,
+      'packType': packType, // Duplicate for compatibility
       'release_date': releaseDate.toIso8601String(),
+      'releaseDate': releaseDate.toIso8601String(), // Duplicate for compatibility
       'author': author,
       'license': license,
       'download_url': downloadUrl,
+      'downloadUrl': downloadUrl, // Duplicate for compatibility
       'checksum': checksum,
       'metadata': metadata,
     };

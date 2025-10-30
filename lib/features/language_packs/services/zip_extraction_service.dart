@@ -8,8 +8,8 @@ import 'package:path/path.dart' as path;
 import 'package:crypto/crypto.dart';
 
 class ZipExtractionService {
-  static const int _maxFileSize = 100 * 1024 * 1024; // 100MB limit per file
-  static const int _maxTotalSize = 500 * 1024 * 1024; // 500MB total limit
+  static const int _maxFileSize = 1024 * 1024 * 1024; // 1GB limit per file (for large dictionaries)
+  static const int _maxTotalSize = 1024 * 1024 * 1024; // 1GB total limit
   static const List<String> _allowedExtensions = ['.sqlite', '.db'];
   
   /// Extract a ZIP file to a destination directory

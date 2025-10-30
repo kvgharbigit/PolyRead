@@ -2,7 +2,6 @@
 // Shows available packs, download progress, and storage management
 
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,7 +11,6 @@ import '../providers/language_packs_provider.dart';
 import '../services/drift_language_pack_service.dart';
 import '../services/language_pack_registry_service.dart' as registry_service;
 import '../../../core/providers/database_provider.dart' as db;
-
 
 class LanguagePackManager extends ConsumerStatefulWidget {
   const LanguagePackManager({super.key});
@@ -24,66 +22,69 @@ class LanguagePackManager extends ConsumerStatefulWidget {
 class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     with TickerProviderStateMixin {
   late TabController _tabController;
-  final registry_service.LanguagePackRegistryService _registryService = registry_service.LanguagePackRegistryService();
+  final registry_service.LanguagePackRegistryService _registryService = 
+      registry_service.LanguagePackRegistryService();
   List<registry_service.LanguagePackInfo>? _availablePacks;
   
-  // Cache for pack details to avoid repeated expensive operations
-  final Map<String, Map<String, dynamic>> _packDetailsCache = {};
+  // Progress tracking
+  StreamSubscription<DownloadProgress>? _progressSubscription;
+  final Map<String, DownloadProgress> _activeProgress = {};
   
-  // Debouncer for user interactions
-  Timer? _debounceTimer;
-  
-  // Error state tracking
+  // Error state
   String? _lastError;
   bool _isRetrying = false;
   
-  // Broken packs tracking
-  final Set<String> _brokenPacks = {};
-  
+  // Animation
+  late AnimationController _animationController;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
     _loadAvailablePacks();
-    _checkForBrokenPacks();
+    _setupProgressStreaming();
   }
-  
-  /// Check for broken/corrupted packs and mark them for easy reinstall
-  Future<void> _checkForBrokenPacks() async {
-    try {
-      print('LanguagePackManager: Checking for broken packs...');
-      
-      final driftService = DriftLanguagePackService(ref.read(db.databaseProvider));
-      final brokenPackIds = await driftService.detectBrokenPacks();
-      
-      if (mounted) {
-        setState(() {
-          _brokenPacks.clear();
-          _brokenPacks.addAll(brokenPackIds);
-        });
-        
-        if (brokenPackIds.isNotEmpty) {
-          print('LanguagePackManager: Found ${brokenPackIds.length} broken packs: $brokenPackIds');
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _animationController.dispose();
+    _progressSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Setup real-time progress streaming
+  void _setupProgressStreaming() {
+    final combinedService = ref.read(combinedLanguagePackServiceProvider);
+    _progressSubscription = combinedService.progressStream.listen(
+      (progress) {
+        if (mounted) {
+          setState(() {
+            _activeProgress[progress.packId] = progress;
+          });
           
-          // Show subtle notification about broken packs
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Found ${brokenPackIds.length} corrupted language pack(s). Tap to reinstall.'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        } else {
-          print('LanguagePackManager: No broken packs detected');
+          // Show completion message
+          if (progress.status == DownloadStatus.completed) {
+            _showSuccess('${progress.packId} installed successfully!');
+            // Auto-cleanup after success
+            Timer(const Duration(seconds: 2), () {
+              if (mounted) {
+                setState(() => _activeProgress.remove(progress.packId));
+                ref.read(languagePacksProvider.notifier).refresh();
+              }
+            });
+          }
         }
-      }
-    } catch (e) {
-      print('LanguagePackManager: Error checking for broken packs: $e');
-    }
+      },
+    );
   }
 
   Future<void> _loadAvailablePacks() async {
-    if (_isRetrying) return; // Prevent concurrent retry attempts
+    if (_isRetrying) return;
     
     try {
       setState(() {
@@ -97,38 +98,16 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
         setState(() {
           _availablePacks = packs;
           _isRetrying = false;
-          _lastError = null;
         });
       }
     } catch (e) {
-      print('LanguagePackManager: Failed to load available packs: $e');
-      
       if (mounted) {
         setState(() {
           _lastError = e.toString();
           _isRetrying = false;
         });
-        
-        // Show user-friendly error message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load language packs: ${e.toString().contains('SocketException') ? 'Check internet connection' : 'Server error'}'),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: 'Retry',
-              onPressed: _loadAvailablePacks,
-            ),
-          ),
-        );
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _debounceTimer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -156,402 +135,305 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
 
   Widget _buildLanguagePacksTab() {
     return RefreshIndicator(
-      onRefresh: _refreshAvailablePacks,
+      onRefresh: () async {
+        await _loadAvailablePacks();
+        await ref.read(languagePacksProvider.notifier).refresh();
+      },
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildLanguagePacksList(),
+          _buildHeader(),
+          const SizedBox(height: 16),
+          _buildPacksList(),
         ],
       ),
     );
   }
 
-  Widget _buildLanguagePacksList() {
-    return Column(
-      children: [
-        // Header with refresh button
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.translate,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 28,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Language Packs',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'Install dictionary + offline translation models',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                        ),
-                      ),
-                    ],
+  Widget _buildHeader() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.translate, color: Theme.of(context).colorScheme.primary, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Language Packs',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                   ),
-                ),
-                IconButton(
-                  onPressed: () async {
-                    await ref.read(languagePacksProvider.notifier).refresh();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Refreshed')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'Refresh',
-                ),
-              ],
+                  Text(
+                    'Install dictionary + offline translation models',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        
-        // Language packs list with optimized progress stream
-        Consumer(
-          builder: (context, ref, child) {
-            final service = ref.watch(combinedLanguagePackServiceProvider);
-            
-            return StreamBuilder<DownloadProgress>(
-              stream: service.progressStream,
-              builder: (context, progressSnapshot) {
-                // Reduce rebuild frequency by only rebuilding when necessary
-                if (progressSnapshot.hasData) {
-                  final progress = progressSnapshot.data!;
-                  // Only log significant progress updates to reduce noise
-                  if (progress.progressPercent % 10 == 0 || progress.status == DownloadStatus.completed) {
-                    print('📱 UI: Progress milestone for ${progress.packId}: ${progress.progressPercent.toStringAsFixed(1)}%');
-                  }
-                } else if (progressSnapshot.hasError) {
-                  print('📱 UI: Stream error: ${progressSnapshot.error}');
-                }
-                
-                return Semantics(
-                  label: 'Language packs list',
-                  hint: 'Swipe down to refresh, tap items to install',
-                  child: _buildAvailableLanguagePacks(),
-                );
+            IconButton(
+              onPressed: () async {
+                await ref.read(languagePacksProvider.notifier).refresh();
+                _showSuccess('Refreshed');
               },
-            );
-          },
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildAvailableLanguagePacks() {
-    // Error state with retry option
+  Widget _buildPacksList() {
+    // Error state
     if (_lastError != null && _availablePacks == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            children: [
-              Icon(Icons.error_outline, size: 48, color: Colors.red.shade400),
-              const SizedBox(height: 16),
-              const Text('Failed to load language packs'),
-              const SizedBox(height: 8),
-              Text(
-                _lastError!.contains('SocketException') 
-                    ? 'Check your internet connection'
-                    : 'Server temporarily unavailable',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _isRetrying ? null : _loadAvailablePacks,
-                icon: _isRetrying 
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
-                label: Text(_isRetrying ? 'Retrying...' : 'Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildErrorState();
     }
     
-    // Loading state with skeleton
+    // Loading state
     if (_availablePacks == null) {
-      return Column(
-        children: [
-          // Skeleton loading for pack tiles
-          ...List.generate(3, (index) => Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-                child: const SizedBox(),
-              ),
-              title: Container(
-                height: 16,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceVariant,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              subtitle: Container(
-                height: 12,
-                width: 200,
-                margin: const EdgeInsets.only(top: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          )),
-        ],
-      );
+      return _buildLoadingState();
     }
     
+    // Empty state
     if (_availablePacks!.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32.0),
-          child: Column(
-            children: [
-              Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey),
-              SizedBox(height: 16),
-              Text('No language packs available'),
-              SizedBox(height: 8),
-              Text('Check back later for new language packs.'),
-            ],
-          ),
-        ),
-      );
+      return _buildEmptyState();
     }
     
+    // Packs list
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Available packs section
         Text(
           'Available Language Packs',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
           'Download dictionaries and offline translation models',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
           ),
         ),
         const SizedBox(height: 16),
-        
-        // Available packs
-        ..._availablePacks!.map((pack) => _buildLanguagePackTile(
-          pack.displayLabel,
-          pack.sourceLanguage,
-          pack.targetLanguage,
-          description: pack.displayDescription,
-          priority: pack.priority,
-        )),
+        ..._availablePacks!.map((pack) => _buildPackTile(pack)),
       ],
     );
   }
 
-  Widget _buildLanguagePackTile(
-    String label, 
-    String sourceCode, 
-    String targetCode, {
-    String? description,
-    String priority = 'medium',
-  }) {
-    final packId = '$sourceCode-$targetCode';
+  Widget _buildPackTile(registry_service.LanguagePackInfo pack) {
+    final packId = '${pack.sourceLanguage}-${pack.targetLanguage}';
     final languagePacksState = ref.watch(languagePacksProvider);
     final combinedService = ref.watch(combinedLanguagePackServiceProvider);
     
-    // Check if this bidirectional pack is installed
+    // Check states
     final isInstalled = languagePacksState.installedPackIds.contains(packId);
-    
-    // Check if pack is broken (installed but corrupted/incomplete)
-    final isBroken = _brokenPacks.contains(packId);
-    
-    // Get download progress if it exists
-    DownloadProgress? downloadProgress;
-    try {
-      downloadProgress = combinedService.activeDownloads.firstWhere((download) => 
-          download.packId == packId);
-    } catch (e) {
-      downloadProgress = null;
-    }
-    
-    // Debug logging for progress state
-    if (downloadProgress != null) {
-      print('📱 UI: Pack $packId progress: ${downloadProgress.progressPercent.toStringAsFixed(1)}% - ${downloadProgress.stageDescription} (Status: ${downloadProgress.status})');
-    }
-    
-    // Check download state
-    final isDownloading = downloadProgress?.status == DownloadStatus.downloading || downloadProgress?.status == DownloadStatus.pending;
-    final isFailed = downloadProgress?.status == DownloadStatus.failed;
-    final isComingSoon = priority == 'coming-soon';
-    
+    final progress = _activeProgress[packId] ?? 
+        combinedService.activeDownloads.where((d) => d.packId == packId).firstOrNull;
+    final isDownloading = progress?.status == DownloadStatus.downloading || 
+                         progress?.status == DownloadStatus.pending;
+    final isFailed = progress?.status == DownloadStatus.failed;
+    final isComingSoon = pack.priority == 'coming-soon';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: Semantics(
-        label: '$label language pack',
-        hint: isInstalled 
-            ? 'Installed, tap for details' 
-            : isDownloading 
-                ? 'Downloading ${downloadProgress?.progressPercent.toStringAsFixed(0)}%'
-                : isFailed
-                    ? 'Failed, tap to retry'
-                    : isComingSoon
-                        ? 'Coming soon'
-                        : 'Tap to install',
-        button: !isComingSoon,
-        child: ListTile(
-          leading: CircleAvatar(
-          backgroundColor: isDownloading
-              ? Theme.of(context).colorScheme.primaryContainer
-              : isFailed
-                  ? Colors.red.shade100
-                  : isBroken
-                      ? Colors.orange.shade100
-                      : isInstalled 
-                          ? Colors.green.shade100
-                          : isComingSoon
-                              ? Colors.orange.shade100
-                              : Theme.of(context).colorScheme.surfaceVariant,
-          child: isDownloading
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    value: downloadProgress?.progressPercent != null 
-                        ? downloadProgress!.progressPercent / 100 
-                        : null,
-                    strokeWidth: 2,
-                  ),
-                )
-              : Icon(
-                  isFailed 
-                      ? Icons.error 
-                      : isBroken
-                          ? Icons.warning
-                          : isInstalled 
-                              ? Icons.check
-                              : isComingSoon
-                                  ? Icons.schedule
-                                  : Icons.download,
-                  color: isFailed
-                      ? Colors.red.shade700
-                      : isBroken
-                          ? Colors.orange.shade700
-                          : isInstalled 
-                              ? Colors.green.shade700
-                              : isComingSoon
-                                  ? Colors.orange.shade700
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-        ),
+      child: ListTile(
+        leading: _buildPackIcon(isInstalled, isDownloading, isFailed, isComingSoon, progress),
         title: Text(
-          label,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
+          pack.displayLabel,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              isDownloading
-                  ? '${downloadProgress?.stageDescription ?? "Downloading..."} • ${downloadProgress?.progressPercent.toStringAsFixed(1) ?? "0.0"}%'
-                  : isFailed
-                      ? 'Installation failed - Tap to retry'
-                      : isInstalled 
-                          ? 'Installed • Bidirectional support'
-                          : isComingSoon
-                              ? description ?? 'Coming soon'
-                              : description ?? 'Vuizur dictionary + ML Kit models',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: isDownloading
-                    ? Theme.of(context).colorScheme.primary
-                    : isFailed
-                        ? Colors.red.shade700
-                        : isInstalled 
-                            ? Colors.green.shade700
-                            : isComingSoon
-                                ? Colors.orange.shade700
-                                : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                fontWeight: isDownloading ? FontWeight.w500 : null,
-              ),
-            ),
-            // Add additional progress info during download
-            if (isDownloading && downloadProgress != null) ...[
-              const SizedBox(height: 4),
-              LinearProgressIndicator(
-                value: downloadProgress.progressPercent / 100,
-                backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${(downloadProgress.downloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB / ${(downloadProgress.totalBytes / 1024 / 1024).toStringAsFixed(1)} MB',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                      fontSize: 11,
-                    ),
-                  ),
-                  if (downloadProgress.currentFile?.isNotEmpty == true)
-                    Text(
-                      downloadProgress.currentFile == 'ml-kit-models' 
-                          ? 'ML Kit' 
-                          : (downloadProgress.currentFile ?? '').replaceAll('.sqlite.zip', ''),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                        fontSize: 10,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-            if (isInstalled) ...[
-              const SizedBox(height: 4),
-              _buildCachedPackDetails(sourceCode, targetCode),
-            ],
+            Text(_getStatusText(isInstalled, isDownloading, isFailed, isComingSoon, progress)),
+            if (isDownloading && progress != null) _buildProgressIndicator(progress),
           ],
         ),
-        trailing: _buildActionWidget(isInstalled, isDownloading, isFailed, downloadProgress, sourceCode, targetCode, isComingSoon),
+        trailing: _buildActionButton(
+          packId, isInstalled, isDownloading, isFailed, isComingSoon, 
+          pack.sourceLanguage, pack.targetLanguage
+        ),
         onTap: isInstalled 
-            ? () => _showPackDetails(sourceCode, targetCode, label)
+            ? () => _showPackDetails(pack.sourceLanguage, pack.targetLanguage, pack.displayLabel)
             : isDownloading || isComingSoon 
                 ? null 
-                : () => _installLanguagePair(sourceCode, targetCode),
-        ),
+                : () => _installPack(pack.sourceLanguage, pack.targetLanguage),
       ),
     );
   }
 
+  Widget _buildPackIcon(bool isInstalled, bool isDownloading, bool isFailed, bool isComingSoon, DownloadProgress? progress) {
+    if (isDownloading) {
+      return SizedBox(
+        width: 40,
+        height: 40,
+        child: CircularProgressIndicator(
+          value: progress?.progressPercent != null ? progress!.progressPercent / 100 : null,
+          strokeWidth: 3,
+        ),
+      );
+    }
+    
+    Color backgroundColor;
+    IconData iconData;
+    Color iconColor;
+    
+    if (isFailed) {
+      backgroundColor = Colors.red.shade100;
+      iconData = Icons.error;
+      iconColor = Colors.red.shade700;
+    } else if (isInstalled) {
+      backgroundColor = Colors.green.shade100;
+      iconData = Icons.check;
+      iconColor = Colors.green.shade700;
+    } else if (isComingSoon) {
+      backgroundColor = Colors.orange.shade100;
+      iconData = Icons.schedule;
+      iconColor = Colors.orange.shade700;
+    } else {
+      backgroundColor = Theme.of(context).colorScheme.surfaceContainerHighest;
+      iconData = Icons.download;
+      iconColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    }
+    
+    return CircleAvatar(
+      backgroundColor: backgroundColor,
+      child: Icon(iconData, color: iconColor),
+    );
+  }
 
-  
+  String _getStatusText(bool isInstalled, bool isDownloading, bool isFailed, bool isComingSoon, DownloadProgress? progress) {
+    if (isDownloading) {
+      final phase = progress != null ? _getProgressPhase(progress) : "Installing";
+      final percent = progress?.progressPercent?.toStringAsFixed(0) ?? "0";
+      return '$phase • $percent%';
+    } else if (isFailed) {
+      return 'Installation failed - Tap to retry';
+    } else if (isInstalled) {
+      return 'Installed • Bidirectional support';
+    } else if (isComingSoon) {
+      return 'Coming soon';
+    } else {
+      return 'Vuizur dictionary + ML Kit models';
+    }
+  }
 
+  Widget _buildProgressIndicator(DownloadProgress progress) {
+    return Column(
+      children: [
+        const SizedBox(height: 4),
+        LinearProgressIndicator(
+          value: progress.progressPercent / 100,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          minHeight: 2,
+        ),
+      ],
+    );
+  }
+
+  String _getProgressPhase(DownloadProgress progress) {
+    final stageDesc = progress.stageDescription ?? "";
+    final currentFile = progress.currentFile ?? "";
+    
+    // Debug logging (commented out to reduce console spam)
+    // print('Phase detection - stageDesc: "$stageDesc", currentFile: "$currentFile", progress: ${progress.progressPercent.toStringAsFixed(1)}%');
+    
+    // Check stage description first (most reliable)
+    if (stageDesc.contains("Preparing") || stageDesc.contains("Starting")) return "Setup";
+    if (stageDesc.contains("Checking ML Kit")) return "Setup";
+    
+    // Downloading phase - only for actual file downloads
+    if (stageDesc.contains("Downloading") && (stageDesc.contains("dictionary") || stageDesc.contains("Wiktionary") || stageDesc.contains(".zip"))) return "Downloading";
+    
+    // Installing phase - database import and processing (most important)
+    if (stageDesc.contains("Installing") || stageDesc.contains("Importing") || stageDesc.contains("Processing")) return "Installing";
+    if (stageDesc.contains("Extracting") || stageDesc.contains("Loading dictionary")) return "Installing";
+    if (stageDesc.contains("entries") || stageDesc.contains("database")) return "Installing";
+    
+    // ML Kit phase  
+    if (stageDesc.contains("ML Kit")) return "ML Kit";
+    
+    // Completion phase
+    if (stageDesc.contains("completed") || stageDesc.contains("Installation completed")) return "Complete";
+    
+    // Check current file as secondary indicator
+    if (currentFile.isNotEmpty) {
+      if (currentFile.contains("sqlite") || currentFile.contains(".zip")) return "Downloading";
+      if (currentFile == 'ml-kit-models') return "ML Kit";
+      if (currentFile == 'installation-complete') return "Complete";
+    }
+    
+    // Fallback based on new progress percentage thresholds
+    if (progress.progressPercent < 20) return "Downloading";       // 5-20%
+    if (progress.progressPercent < 25) return "Extracting";        // 20-25%
+    if (progress.progressPercent < 85) return "Installing";        // 25-85% (Main phase)
+    if (progress.progressPercent < 95) return "ML Kit";            // 85-95%
+    if (progress.progressPercent >= 95) return "Complete";         // 95-100%
+    
+    return "Installing";
+  }
+
+  Widget _buildActionButton(String packId, bool isInstalled, bool isDownloading, bool isFailed, 
+                           bool isComingSoon, String sourceCode, String targetCode) {
+    if (isDownloading) {
+      return TextButton(
+        onPressed: () => _cancelDownload(packId),
+        child: const Text('Cancel'),
+      );
+    } else if (isFailed) {
+      return TextButton(
+        onPressed: () => _installPack(sourceCode, targetCode),
+        child: const Text('Retry'),
+      );
+    } else if (isInstalled) {
+      return PopupMenuButton<String>(
+        onSelected: (action) {
+          switch (action) {
+            case 'uninstall':
+              _uninstallPack(sourceCode, targetCode);
+              break;
+            case 'reinstall':
+              _reinstallPack(sourceCode, targetCode);
+              break;
+          }
+        },
+        itemBuilder: (context) => [
+          const PopupMenuItem(
+            value: 'reinstall',
+            child: ListTile(
+              leading: Icon(Icons.refresh),
+              title: Text('Reinstall'),
+              dense: true,
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'uninstall',
+            child: ListTile(
+              leading: Icon(Icons.delete),
+              title: Text('Uninstall'),
+              dense: true,
+            ),
+          ),
+        ],
+      );
+    } else if (isComingSoon) {
+      return const TextButton(
+        onPressed: null,
+        child: Text('Coming Soon'),
+      );
+    } else {
+      return ElevatedButton(
+        onPressed: () => _installPack(sourceCode, targetCode),
+        child: const Text('Install'),
+      );
+    }
+  }
 
   Widget _buildStorageTab() {
     return ListView(
@@ -573,18 +455,9 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
           children: [
             Text(
               'Storage Management',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.cleaning_services),
-              title: const Text('Clean Up Unused Packs'),
-              subtitle: const Text('Remove packs not used in 30 days'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _cleanupStorage,
-            ),
             ListTile(
               leading: const Icon(Icons.verified),
               title: const Text('Validate All Packs'),
@@ -592,12 +465,28 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
               trailing: const Icon(Icons.chevron_right),
               onTap: _validateAllPacks,
             ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Storage Settings'),
-              subtitle: const Text('Configure storage limits and behavior'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _openStorageSettings,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          children: [
+            Icon(Icons.error_outline, size: 48, color: Colors.red.shade400),
+            const SizedBox(height: 16),
+            const Text('Failed to load language packs'),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _isRetrying ? null : _loadAvailablePacks,
+              icon: _isRetrying 
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.refresh),
+              label: Text(_isRetrying ? 'Retrying...' : 'Retry'),
             ),
           ],
         ),
@@ -605,623 +494,121 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     );
   }
 
-
-
-  /// Build cached pack details widget to avoid expensive repeated calls
-  Widget _buildCachedPackDetails(String sourceCode, String targetCode) {
-    final packId = '$sourceCode-$targetCode';
-    
-    // Return cached result if available
-    if (_packDetailsCache.containsKey(packId)) {
-      final data = _packDetailsCache[packId]!;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${data['entries']} entries • Dict: ${data['dictionarySizeMB']} MB • ML: ${data['mlKitSizeMB']} MB',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              fontSize: 11,
+  Widget _buildLoadingState() {
+    return Column(
+      children: List.generate(3, (index) => Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: ListTile(
+          leading: CircleAvatar(backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest),
+          title: Container(
+            height: 16,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(4),
             ),
           ),
-          Text(
-            'Total: ${data['totalSizeMB']} MB',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-              fontSize: 10,
+          subtitle: Container(
+            height: 12,
+            width: 200,
+            margin: const EdgeInsets.only(top: 8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(4),
             ),
           ),
-        ],
-      );
-    }
-    
-    // Load and cache the data asynchronously
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _getAndCachePackDetails(sourceCode, targetCode),
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          final data = snapshot.data!;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${data['entries']} entries • Dict: ${data['dictionarySizeMB']} MB • ML: ${data['mlKitSizeMB']} MB',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                  fontSize: 11,
-                ),
-              ),
-              Text(
-                'Total: ${data['totalSizeMB']} MB',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          );
-        } else if (snapshot.hasError) {
-          return Text(
-            'Size: Calculating...',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-              fontSize: 10,
-            ),
-          );
-        }
-        return const SizedBox(
-          height: 12,
-          width: 12,
-          child: CircularProgressIndicator(strokeWidth: 1),
-        );
-      },
-    );
-  }
-  
-  /// Get pack details and cache the result
-  Future<Map<String, dynamic>> _getAndCachePackDetails(String sourceCode, String targetCode) async {
-    final packId = '$sourceCode-$targetCode';
-    
-    if (_packDetailsCache.containsKey(packId)) {
-      return _packDetailsCache[packId]!;
-    }
-    
-    try {
-      final details = await _getPackDetails(sourceCode, targetCode);
-      _packDetailsCache[packId] = details;
-      return details;
-    } catch (e) {
-      // Return placeholder data on error
-      final errorData = {
-        'entries': '~1M',
-        'dictionarySizeMB': '~1.5',
-        'mlKitSizeMB': '~65',
-        'totalSizeMB': '~67',
-      };
-      _packDetailsCache[packId] = errorData;
-      return errorData;
-    }
-  }
-
-  Future<void> _installLanguagePair(String sourceLanguage, String targetLanguage) async {
-    // Debounce rapid taps to prevent multiple simultaneous downloads
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
-      print('');
-      print('LanguagePackManager._installLanguagePair: Called with source=$sourceLanguage, target=$targetLanguage');
-      
-      final packId = '$sourceLanguage-$targetLanguage';
-      print('LanguagePackManager._installLanguagePair: Generated pack ID: $packId');
-      
-      await _installLanguagePack(packId);
-      
-      print('LanguagePackManager._installLanguagePair: Completed for $packId');
-    });
-  }
-
-  Future<void> _uninstallLanguagePair(String sourceLanguage, String targetLanguage) async {
-    print('');
-    print('LanguagePackManager._uninstallLanguagePair: Called with source=$sourceLanguage, target=$targetLanguage');
-    
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Uninstall Language Pack'),
-        content: Text('Are you sure you want to uninstall the $sourceLanguage ↔ $targetLanguage language pack?\\n\\nThis will remove both dictionary data and ML Kit models.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Uninstall'),
-          ),
-        ],
-      ),
-    );
-    
-    if (confirmed == true) {
-      try {
-        final combinedService = ref.read(combinedLanguagePackServiceProvider);
-        await combinedService.removeLanguagePack(
-          sourceLanguage: sourceLanguage,
-          targetLanguage: targetLanguage,
-        );
-        
-        // Refresh the provider state
-        await ref.read(languagePacksProvider.notifier).refresh();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Uninstalled $sourceLanguage-$targetLanguage successfully')),
-          );
-        }
-      } catch (e) {
-        print('LanguagePackManager._uninstallLanguagePair: Error: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to uninstall: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> _reinstallLanguagePair(String sourceLanguage, String targetLanguage) async {
-    print('');
-    print('LanguagePackManager._reinstallLanguagePair: Called with source=$sourceLanguage, target=$targetLanguage');
-    
-    try {
-      // First uninstall
-      final combinedService = ref.read(combinedLanguagePackServiceProvider);
-      await combinedService.removeLanguagePack(
-        sourceLanguage: sourceLanguage,
-        targetLanguage: targetLanguage,
-      );
-      
-      // Then install
-      await _installLanguagePair(sourceLanguage, targetLanguage);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Reinstallation completed')),
-        );
-      }
-    } catch (e) {
-      print('LanguagePackManager._reinstallLanguagePair: Error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Reinstallation failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildActionWidget(
-    bool isInstalled, 
-    bool isDownloading, 
-    bool isFailed,
-    DownloadProgress? downloadProgress,
-    String sourceCode, 
-    String targetCode,
-    bool isComingSoon,
-  ) {
-    if (isDownloading && downloadProgress != null) {
-      // Show cancel button during download
-      return TextButton(
-        onPressed: () => _cancelDownload('$sourceCode-$targetCode'),
-        child: const Text('Cancel'),
-      );
-    } else if (isFailed) {
-      // Show retry button for failed downloads
-      return TextButton(
-        onPressed: () {
-          // Clear the failed download and retry
-          _clearFailedDownload('$sourceCode-$targetCode');
-          _installLanguagePair(sourceCode, targetCode);
-        },
-        child: const Text('Retry'),
-      );
-    } else if (isInstalled) {
-      // Show menu for installed packs
-      return PopupMenuButton<String>(
-        onSelected: (action) {
-          if (action == 'uninstall') {
-            _uninstallLanguagePair(sourceCode, targetCode);
-          } else if (action == 'reinstall') {
-            _reinstallLanguagePair(sourceCode, targetCode);
-          } else if (action == 'force-remove') {
-            _forceRemoveLanguagePair(sourceCode, targetCode);
-          }
-        },
-        itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: 'reinstall',
-            child: ListTile(
-              leading: Icon(Icons.refresh),
-              title: Text('Reinstall'),
-              dense: true,
-            ),
-          ),
-          const PopupMenuItem(
-            value: 'uninstall',
-            child: ListTile(
-              leading: Icon(Icons.delete),
-              title: Text('Uninstall'),
-              dense: true,
-            ),
-          ),
-          const PopupMenuItem(
-            value: 'force-remove',
-            child: ListTile(
-              leading: Icon(Icons.delete_forever, color: Colors.red),
-              title: Text('Force Remove', style: TextStyle(color: Colors.red)),
-              dense: true,
-            ),
-          ),
-        ],
-      );
-    } else if (isComingSoon) {
-      // Show coming soon indicator
-      return TextButton(
-        onPressed: null,
-        child: Text(
-          'Coming Soon',
-          style: TextStyle(color: Colors.orange.shade700),
         ),
-      );
-    } else {
-      // Show install button for available packs
-      return ElevatedButton(
-        onPressed: () => _installLanguagePair(sourceCode, targetCode),
-        child: const Text('Install'),
-      );
-    }
+      )),
+    );
   }
 
-  Future<void> _forceRemoveLanguagePair(String sourceLanguage, String targetLanguage) async {
-    print('');
-    print('LanguagePackManager._forceRemoveLanguagePair: Called with source=$sourceLanguage, target=$targetLanguage');
-    
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Force Remove Language Pack'),
-        content: Text('This will force remove ALL data for $sourceLanguage ↔ $targetLanguage, including:\n\n• Database entries\n• Downloaded files\n• Registry entries\n• ML Kit models\n\nThis action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Force Remove', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+  Widget _buildEmptyState() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(32.0),
+        child: Column(
+          children: [
+            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('No language packs available'),
+            SizedBox(height: 8),
+            Text('Check back later for new language packs.'),
+          ],
+        ),
       ),
     );
-    
-    if (confirmed == true) {
-      try {
-        print('LanguagePackManager._forceRemoveLanguagePair: Starting force removal...');
-        
-        // Use the service's remove method which should handle cleanup
-        final combinedService = ref.read(combinedLanguagePackServiceProvider);
-        await combinedService.removeLanguagePack(
-          sourceLanguage: sourceLanguage,
-          targetLanguage: targetLanguage,
-        );
-        
-        // Force refresh the provider state multiple times to ensure UI updates
-        print('LanguagePackManager._forceRemoveLanguagePair: Refreshing provider state...');
-        await ref.read(languagePacksProvider.notifier).refresh();
-        
-        // Wait a moment and refresh again to ensure state is updated
-        await Future.delayed(const Duration(milliseconds: 500));
-        await ref.read(languagePacksProvider.notifier).refresh();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Force removed $sourceLanguage-$targetLanguage successfully')),
-          );
-        }
-        
-        print('LanguagePackManager._forceRemoveLanguagePair: Force removal completed');
-      } catch (e) {
-        print('LanguagePackManager._forceRemoveLanguagePair: Error: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Force removal completed with warnings: $e'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    }
   }
 
   // Action methods
-  Future<void> _refreshAvailablePacks() async {
-    await _loadAvailablePacks();
-    await ref.read(languagePacksProvider.notifier).refresh();
-  }
-
-  /// Install a language pack (combined dictionary + ML Kit)
-  Future<void> _installLanguagePack(String packId) async {
-    print('');
-    print('========================================');
-    print('LanguagePackManager: STARTING INSTALLATION');
-    print('LanguagePackManager: Pack ID: $packId');
-    print('LanguagePackManager: Timestamp: ${DateTime.now().toIso8601String()}');
-    print('========================================');
-    
+  Future<void> _installPack(String sourceLanguage, String targetLanguage) async {
+    final packId = '$sourceLanguage-$targetLanguage';
     try {
-      print('LanguagePackManager: Step 1 - Calling provider downloadPack...');
-      print('LanguagePackManager: Provider state before call: ${ref.read(languagePacksProvider)}');
-      
       await ref.read(languagePacksProvider.notifier).downloadPack(packId);
-      
-      print('');
-      print('LanguagePackManager: Step 2 - Download call completed successfully');
-      print('LanguagePackManager: Provider state after call: ${ref.read(languagePacksProvider)}');
-      print('LanguagePackManager: SUCCESS - Installation process completed');
-      
-      if (mounted) {
-        print('LanguagePackManager: Showing success snackbar');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Language pack installation started!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        print('LanguagePackManager: WARNING - Widget not mounted, skipping snackbar');
-      }
     } catch (e) {
-      print('');
-      print('LanguagePackManager: ❌ INSTALLATION FAILED ❌');
-      print('LanguagePackManager: Error: $e');
-      print('LanguagePackManager: Error type: ${e.runtimeType}');
-      print('LanguagePackManager: Stack trace:');
-      print(StackTrace.current);
-      
-      if (mounted) {
-        print('LanguagePackManager: Showing error snackbar');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Installation failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } else {
-        print('LanguagePackManager: WARNING - Widget not mounted, skipping error snackbar');
-      }
+      _showError('Installation failed: $e');
     }
-    
-    print('========================================');
-    print('LanguagePackManager: INSTALLATION PROCESS ENDED');
-    print('========================================');
-    print('');
   }
-
-
 
   Future<void> _cancelDownload(String packId) async {
     await ref.read(languagePacksProvider.notifier).cancelDownload(packId);
   }
 
-  void _clearFailedDownload(String packId) {
-    final combinedService = ref.read(combinedLanguagePackServiceProvider);
-    combinedService.clearFailedDownload(packId);
+  Future<void> _uninstallPack(String sourceLanguage, String targetLanguage) async {
+    final confirmed = await _showConfirmDialog(
+      'Uninstall Language Pack',
+      'Are you sure you want to uninstall the $sourceLanguage ↔ $targetLanguage language pack?',
+    );
+    
+    if (confirmed) {
+      try {
+        final combinedService = ref.read(combinedLanguagePackServiceProvider);
+        await combinedService.removeLanguagePack(
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+        );
+        await ref.read(languagePacksProvider.notifier).refresh();
+        _showSuccess('Uninstalled successfully');
+      } catch (e) {
+        _showError('Failed to uninstall: $e');
+      }
+    }
   }
 
-
-
-  void _cleanupStorage() {
-    // Clean up unused storage
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cleaning up storage...')),
-    );
+  Future<void> _reinstallPack(String sourceLanguage, String targetLanguage) async {
+    try {
+      final combinedService = ref.read(combinedLanguagePackServiceProvider);
+      await combinedService.removeLanguagePack(
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
+      );
+      await _installPack(sourceLanguage, targetLanguage);
+      _showSuccess('Reinstallation started');
+    } catch (e) {
+      _showError('Reinstallation failed: $e');
+    }
   }
 
   Future<void> _validateAllPacks() async {
-    print('LanguagePackManager._validateAllPacks: Starting validation...');
-    
-    // Show loading indicator
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Validating all packs...')),
-      );
-    }
-    
     try {
       final driftService = DriftLanguagePackService(ref.read(db.databaseProvider));
-      
-      // Detect broken packs
       final brokenPacks = await driftService.detectBrokenPacks();
       
-      if (mounted) {
-        if (brokenPacks.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ All language packs are valid'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          // Show dialog with broken packs and repair options
-          _showBrokenPacksDialog(brokenPacks);
-        }
+      if (brokenPacks.isEmpty) {
+        _showSuccess('✅ All language packs are valid');
+      } else {
+        _showError('Found ${brokenPacks.length} broken packs');
       }
-      
     } catch (e) {
-      print('LanguagePackManager._validateAllPacks: Error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Validation failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-  
-  void _showBrokenPacksDialog(List<String> brokenPacks) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Broken Language Packs Detected'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('The following language packs have issues:'),
-            const SizedBox(height: 8),
-            ...brokenPacks.map((packId) => Text('• $packId')),
-            const SizedBox(height: 16),
-            const Text('What would you like to do?'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _repairBrokenPacks(brokenPacks);
-            },
-            child: const Text('Repair All'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(context);
-              _removeBrokenPacks(brokenPacks);
-            },
-            child: const Text('Remove All', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Future<void> _repairBrokenPacks(List<String> brokenPacks) async {
-    print('LanguagePackManager._repairBrokenPacks: Repairing ${brokenPacks.length} packs...');
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Repairing ${brokenPacks.length} broken packs...')),
-      );
-    }
-    
-    for (final packId in brokenPacks) {
-      try {
-        // Extract language codes and reinstall
-        final parts = packId.split('-');
-        if (parts.length >= 2) {
-          await _reinstallLanguagePair(parts[0], parts[1]);
-        }
-      } catch (e) {
-        print('LanguagePackManager._repairBrokenPacks: Failed to repair $packId: $e');
-      }
-    }
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Repair completed'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  }
-  
-  Future<void> _removeBrokenPacks(List<String> brokenPacks) async {
-    print('LanguagePackManager._removeBrokenPacks: Removing ${brokenPacks.length} packs...');
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Removing ${brokenPacks.length} broken packs...')),
-      );
-    }
-    
-    for (final packId in brokenPacks) {
-      try {
-        // Extract language codes and force remove
-        final parts = packId.split('-');
-        if (parts.length >= 2) {
-          await _forceRemoveLanguagePair(parts[0], parts[1]);
-        }
-      } catch (e) {
-        print('LanguagePackManager._removeBrokenPacks: Failed to remove $packId: $e');
-      }
-    }
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Broken packs removed'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      _showError('Validation failed: $e');
     }
   }
 
-  void _openStorageSettings() {
-    // Open storage settings
-  }
-
-  /// Show detailed pack information dialog
   Future<void> _showPackDetails(String sourceCode, String targetCode, String label) async {
-    final details = await _getPackDetails(sourceCode, targetCode);
-    
-    if (!mounted) return;
-    
+    // Simplified pack details - just show basic info
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('📊 $label'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDetailRow('Dictionary Entries', '${details['entries']}'),
-            const SizedBox(height: 8),
-            Text(
-              'Storage Breakdown:',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            _buildDetailRow('  Dictionary File', '${details['dictionarySizeMB']} MB'),
-            _buildDetailRow('  ML Kit Models', '${details['mlKitSizeMB']} MB'),
-            _buildDetailRow('  Total Space Used', '${details['totalSizeMB']} MB'),
-            const SizedBox(height: 8),
-            _buildDetailRow('Files', '${details['files']}'),
-            _buildDetailRow('Version', '${details['version']}'),
-            _buildDetailRow('Installed', '${details['installDate']}'),
-            const SizedBox(height: 16),
-            Text(
-              'Dictionary size is the actual SQLite file. ML Kit models are estimated based on Google\'s model sizes.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
-            ),
-          ],
-        ),
+        content: const Text('Pack details will be loaded here'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -1231,179 +618,41 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
       ),
     );
   }
-  
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-          Text(value),
+
+  // Helper methods
+  void _showSuccess(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<bool> _showConfirmDialog(String title, String content) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm'),
+          ),
         ],
       ),
-    );
+    ) ?? false;
   }
-
-  /// Get detailed information about an installed pack with TRUE DYNAMIC SIZES
-  Future<Map<String, dynamic>> _getPackDetails(String sourceCode, String targetCode) async {
-    final packId = '$sourceCode-$targetCode';
-    print('');
-    print('🔍 _getPackDetails: Starting DYNAMIC verification for $packId');
-    print('🔍 _getPackDetails: Source: $sourceCode, Target: $targetCode');
-    
-    try {
-      final combinedService = ref.read(combinedLanguagePackServiceProvider);
-      
-      // Get pack statistics (actual entry count from database)
-      print('🔍 _getPackDetails: Fetching pack statistics...');
-      final stats = await combinedService.getPackStatistics(
-        sourceLanguage: sourceCode,
-        targetLanguage: targetCode,
-      );
-      print('🔍 _getPackDetails: Statistics retrieved: $stats');
-      
-      // Get pack info from database
-      print('🔍 _getPackDetails: Fetching pack from database...');
-      final packService = DriftLanguagePackService(ref.read(db.databaseProvider));
-      final packs = await packService.getInstalledPacks();
-      print('🔍 _getPackDetails: Found ${packs.length} installed packs');
-      
-      final pack = packs.firstWhere(
-        (p) => p.packId == packId, 
-        orElse: () => throw Exception('Pack $packId not found in database')
-      );
-      
-      // Get ACTUAL file sizes dynamically
-      print('🔍 _getPackDetails: Calculating ACTUAL file sizes...');
-      final dictionarySize = await _getActualDictionaryFileSize(packId);
-      final mlKitSize = await _getActualMLKitSize(sourceCode, targetCode);
-      
-      final entries = stats['total'] ?? 0;
-      final fileCount = stats['file_count'] ?? 1;
-      
-      print('🔍 _getPackDetails: REAL SIZE BREAKDOWN:');
-      print('  - Dictionary file: ${(dictionarySize / 1024 / 1024).toStringAsFixed(1)} MB');
-      print('  - ML Kit models: ${(mlKitSize / 1024 / 1024).toStringAsFixed(1)} MB');
-      print('  - Total space: ${((dictionarySize + mlKitSize) / 1024 / 1024).toStringAsFixed(1)} MB');
-      print('  - Entries: $entries');
-      print('  - Install Date: ${pack.installedAt?.toIso8601String().split('T')[0]}');
-      
-      final result = {
-        'entries': entries,
-        'dictionarySizeMB': (dictionarySize / 1024 / 1024).toStringAsFixed(1),
-        'mlKitSizeMB': (mlKitSize / 1024 / 1024).toStringAsFixed(1),
-        'totalSizeMB': ((dictionarySize + mlKitSize) / 1024 / 1024).toStringAsFixed(1),
-        'files': fileCount,
-        'version': pack.version,
-        'installDate': pack.installedAt?.toIso8601String().split('T')[0] ?? 'Unknown',
-        'dictionarySizeBytes': dictionarySize,
-        'mlKitSizeBytes': mlKitSize,
-        'totalSizeBytes': dictionarySize + mlKitSize,
-        'isActive': pack.isActive,
-      };
-      
-      print('🔍 _getPackDetails: DYNAMIC RESULT: $result');
-      print('🔍 _getPackDetails: ✅ Dynamic verification completed for $packId');
-      print('');
-      
-      return result;
-    } catch (e) {
-      print('🔍 _getPackDetails: ❌ Error getting pack details for $packId: $e');
-      print('🔍 _getPackDetails: Error type: ${e.runtimeType}');
-      print('🔍 _getPackDetails: Stack trace:');
-      print(StackTrace.current);
-      
-      final errorResult = {
-        'entries': '?',
-        'dictionarySizeMB': '?',
-        'mlKitSizeMB': '?',
-        'totalSizeMB': '?',
-        'files': '?',
-        'version': '?',
-        'installDate': 'Unknown',
-        'dictionarySizeBytes': 0,
-        'mlKitSizeBytes': 0,
-        'totalSizeBytes': 0,
-        'isActive': false,
-      };
-      
-      print('🔍 _getPackDetails: Returning error result: $errorResult');
-      print('');
-      
-      return errorResult;
-    }
-  }
-
-  /// Get actual dictionary file size from filesystem
-  Future<int> _getActualDictionaryFileSize(String packId) async {
-    try {
-      // Check common dictionary file locations
-      final possiblePaths = [
-        '/tmp/dictionary_import/imported_databases/$packId.sqlite',
-        '/data/data/com.example.polyread/databases/$packId.sqlite',
-        '/var/mobile/Containers/Data/Application/*/Documents/dictionaries/$packId.sqlite',
-      ];
-      
-      for (final path in possiblePaths) {
-        try {
-          final file = File(path);
-          if (await file.exists()) {
-            final size = await file.length();
-            print('🔍 _getActualDictionaryFileSize: Found dictionary at $path: $size bytes');
-            return size;
-          }
-        } catch (e) {
-          // Continue to next path
-        }
-      }
-      
-      // Fallback: get app documents directory and search
-      final directory = Directory.systemTemp;
-      try {
-        await for (final entity in directory.list(recursive: true)) {
-          if (entity is File && entity.path.contains(packId) && entity.path.endsWith('.sqlite')) {
-            final size = await entity.length();
-            print('🔍 _getActualDictionaryFileSize: Found dictionary via search: ${entity.path}: $size bytes');
-            return size;
-          }
-        }
-      } catch (e) {
-        print('🔍 _getActualDictionaryFileSize: Search failed: $e');
-      }
-      
-      print('🔍 _getActualDictionaryFileSize: Dictionary file not found, using estimate');
-      return 1500000; // 1.5MB estimate based on verification
-    } catch (e) {
-      print('🔍 _getActualDictionaryFileSize: Error: $e');
-      return 1500000; // 1.5MB estimate
-    }
-  }
-
-  /// Get actual ML Kit model size (estimated based on language pair)
-  Future<int> _getActualMLKitSize(String sourceCode, String targetCode) async {
-    try {
-      // ML Kit models are typically 30-50MB per language
-      // These are rough estimates based on actual ML Kit model sizes
-      final languageSizes = {
-        'en': 35 * 1024 * 1024, // 35MB for English
-        'es': 32 * 1024 * 1024, // 32MB for Spanish  
-        'de': 38 * 1024 * 1024, // 38MB for German
-        'fr': 34 * 1024 * 1024, // 34MB for French
-      };
-      
-      final sourceSize = languageSizes[sourceCode] ?? (30 * 1024 * 1024);
-      final targetSize = languageSizes[targetCode] ?? (30 * 1024 * 1024);
-      
-      // Total ML Kit size is both models
-      final totalMLKitSize = sourceSize + targetSize;
-      
-      print('🔍 _getActualMLKitSize: ML Kit size for $sourceCode-$targetCode: ${(totalMLKitSize / 1024 / 1024).toStringAsFixed(1)} MB');
-      return totalMLKitSize;
-    } catch (e) {
-      print('🔍 _getActualMLKitSize: Error: $e');
-      return 60 * 1024 * 1024; // 60MB fallback estimate
-    }
-  }
-
 }

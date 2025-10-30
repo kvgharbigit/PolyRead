@@ -8,6 +8,7 @@ import '../services/drift_dictionary_service.dart';
 import '../services/translation_cache_service.dart';
 import '../models/dictionary_entry.dart';
 import '../models/translation_request.dart';
+import '../models/translation_response.dart' as response_model;
 
 class TranslationService {
   final DriftDictionaryService _dictionaryService;
@@ -44,7 +45,7 @@ class TranslationService {
   }
   
   /// Main translation method with fallback strategy
-  Future<TranslationResponse> translateText({
+  Future<response_model.TranslationResponse> translateText({
     required String text,
     required String sourceLanguage,
     required String targetLanguage,
@@ -61,7 +62,7 @@ class TranslationService {
     if (useCache) {
       final cachedResult = await _cacheService.getCachedTranslation(request);
       if (cachedResult != null) {
-        return TranslationResponse.fromCached(cachedResult);
+        return response_model.TranslationResponse.fromCached(cachedResult);
       }
     }
     
@@ -74,7 +75,7 @@ class TranslationService {
       );
       
       if (dictionaryResult.hasResults) {
-        final response = TranslationResponse.fromDictionary(
+        final response = response_model.TranslationResponse.fromDictionary(
           request: request,
           dictionaryResult: dictionaryResult,
         );
@@ -103,16 +104,24 @@ class TranslationService {
         );
         
         if (modelsAvailable) {
-          final mlKitResult = await _mlKitProvider.translateText(
+          final translationResult = await _mlKitProvider.translateText(
             text: text,
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
           );
           
-          if (mlKitResult.success) {
-            final response = TranslationResponse.fromProvider(
+          if (translationResult.success) {
+            final mlKitResult = response_model.MlKitResult(
+              translatedText: translationResult.translatedText,
+              providerId: translationResult.providerId,
+              latencyMs: translationResult.latencyMs,
+              success: translationResult.success,
+              error: translationResult.error,
+            );
+            
+            final response = response_model.TranslationResponse.fromMlKit(
               request: request,
-              result: mlKitResult,
+              mlKitResult: mlKitResult,
             );
             
             // Cache ML Kit results
@@ -124,7 +133,7 @@ class TranslationService {
           }
         } else {
           // Models not downloaded - could trigger download here
-          return TranslationResponse.modelsNotDownloaded(
+          return response_model.TranslationResponse.modelsNotDownloaded(
             request: request,
             providerId: _mlKitProvider.providerId,
           );
@@ -140,16 +149,24 @@ class TranslationService {
       );
       
       if (serverSupported) {
-        final serverResult = await _serverProvider.translateText(
+        final translationResult = await _serverProvider.translateText(
           text: text,
           sourceLanguage: sourceLanguage,
           targetLanguage: targetLanguage,
         );
         
-        if (serverResult.success) {
-          final response = TranslationResponse.fromProvider(
+        if (translationResult.success) {
+          final serverResult = response_model.ServerResult(
+            translatedText: translationResult.translatedText,
+            providerId: translationResult.providerId,
+            latencyMs: translationResult.latencyMs,
+            success: translationResult.success,
+            error: translationResult.error,
+          );
+          
+          final response = response_model.TranslationResponse.fromServer(
             request: request,
-            result: serverResult,
+            serverResult: serverResult,
           );
           
           // Cache server results
@@ -163,7 +180,7 @@ class TranslationService {
     }
     
     // All providers failed
-    return TranslationResponse.error(
+    return response_model.TranslationResponse.error(
       request: request,
       error: 'No translation providers available',
     );
@@ -312,109 +329,6 @@ class ProviderStatus {
     required this.isOfflineCapable,
     this.additionalInfo,
   });
-}
-
-class TranslationResponse {
-  final TranslationRequest request;
-  final String? translatedText;
-  final List<DictionaryEntry>? dictionaryEntries;
-  final String? providerId;
-  final int latencyMs;
-  final bool success;
-  final String? error;
-  final TranslationSource source;
-  final bool fromCache;
-  
-  const TranslationResponse({
-    required this.request,
-    this.translatedText,
-    this.dictionaryEntries,
-    this.providerId,
-    required this.latencyMs,
-    required this.success,
-    this.error,
-    required this.source,
-    this.fromCache = false,
-  });
-  
-  factory TranslationResponse.fromDictionary({
-    required TranslationRequest request,
-    required DictionaryLookupResult dictionaryResult,
-  }) {
-    return TranslationResponse(
-      request: request,
-      dictionaryEntries: dictionaryResult.entries,
-      latencyMs: dictionaryResult.latencyMs,
-      success: dictionaryResult.hasResults,
-      source: TranslationSource.dictionary,
-      providerId: 'dictionary',
-    );
-  }
-  
-  factory TranslationResponse.fromProvider({
-    required TranslationRequest request,
-    required TranslationResult result,
-  }) {
-    return TranslationResponse(
-      request: request,
-      translatedText: result.translatedText,
-      providerId: result.providerId,
-      latencyMs: result.latencyMs,
-      success: result.success,
-      error: result.error,
-      source: result.providerId == 'ml_kit' 
-          ? TranslationSource.mlKit 
-          : TranslationSource.server,
-    );
-  }
-  
-  factory TranslationResponse.fromCached(TranslationResponse cached) {
-    return TranslationResponse(
-      request: cached.request,
-      translatedText: cached.translatedText,
-      dictionaryEntries: cached.dictionaryEntries,
-      providerId: cached.providerId,
-      latencyMs: 0, // Cache lookups are essentially instant
-      success: cached.success,
-      error: cached.error,
-      source: cached.source,
-      fromCache: true,
-    );
-  }
-  
-  factory TranslationResponse.modelsNotDownloaded({
-    required TranslationRequest request,
-    required String providerId,
-  }) {
-    return TranslationResponse(
-      request: request,
-      providerId: providerId,
-      latencyMs: 0,
-      success: false,
-      error: 'Translation models not downloaded',
-      source: TranslationSource.mlKit,
-    );
-  }
-  
-  factory TranslationResponse.error({
-    required TranslationRequest request,
-    required String error,
-  }) {
-    return TranslationResponse(
-      request: request,
-      latencyMs: 0,
-      success: false,
-      error: error,
-      source: TranslationSource.none,
-    );
-  }
-}
-
-enum TranslationSource {
-  dictionary,
-  mlKit,
-  server,
-  none,
 }
 
 // Import needed models

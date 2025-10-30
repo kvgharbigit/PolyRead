@@ -34,7 +34,7 @@ class DriftDictionaryService {
         return [];
       }
       
-      // First try exact match using Wiktionary format
+      // First try exact match using Wiktionary format (forward direction)
       print('DriftDictionary: Looking for exact match of "${word.toLowerCase()}" (${sourceLanguage} -> ${targetLanguage})');
       
       final exactQuery = _database.select(_database.dictionaryEntries)
@@ -49,17 +49,46 @@ class DriftDictionaryService {
         ..limit(limit);
       
       final exactResults = await exactQuery.get();
-      print('DriftDictionary: Exact match found ${exactResults.length} results');
+      print('DriftDictionary: Forward direction (${sourceLanguage}->${targetLanguage}) found ${exactResults.length} results');
       
       // Log exact matches if found
       for (int i = 0; i < exactResults.length && i < 3; i++) {
         final result = exactResults[i];
-        print('DriftDictionary: Exact match ${i + 1}: word="${result.writtenRep}" trans="${result.transList}" (${result.sourceLanguage}->${result.targetLanguage})');
+        print('DriftDictionary: Forward match ${i + 1}: word="${result.writtenRep}" trans="${result.transList}" (${result.sourceLanguage}->${result.targetLanguage})');
       }
       
       if (exactResults.isNotEmpty) {
         stopwatch.stop();
         return exactResults.map((row) => _convertToModelEntry(row)).toList();
+      }
+      
+      // If no forward match found, try reverse direction for bidirectional support
+      print('DriftDictionary: No forward match found, trying reverse direction (${targetLanguage} -> ${sourceLanguage})');
+      
+      final reverseQuery = _database.select(_database.dictionaryEntries)
+        ..where((e) => 
+          e.writtenRep.equals(word.toLowerCase()) & 
+          e.sourceLanguage.equals(targetLanguage) &
+          e.targetLanguage.equals(sourceLanguage)
+        )
+        ..orderBy([
+          (e) => OrderingTerm(expression: e.frequency, mode: OrderingMode.desc),
+        ])
+        ..limit(limit);
+      
+      final reverseResults = await reverseQuery.get();
+      print('DriftDictionary: Reverse direction (${targetLanguage}->${sourceLanguage}) found ${reverseResults.length} results');
+      
+      // Log reverse matches if found
+      for (int i = 0; i < reverseResults.length && i < 3; i++) {
+        final result = reverseResults[i];
+        print('DriftDictionary: Reverse match ${i + 1}: word="${result.writtenRep}" trans="${result.transList}" (${result.sourceLanguage}->${result.targetLanguage})');
+      }
+      
+      if (reverseResults.isNotEmpty) {
+        stopwatch.stop();
+        // Reverse results are actually in the correct direction already
+        return reverseResults.map((row) => _convertToModelEntry(row)).toList();
       }
       
       // No exact match found - let's debug why common words aren't found
@@ -540,6 +569,7 @@ class DriftDictionaryService {
       synonyms: synonyms,
     );
   }
+  
   
   model.DictionaryEntry _convertToModelEntryFromMap(Map<String, Object?> data) {
     // Parse pipe-separated translations from WikiDict format

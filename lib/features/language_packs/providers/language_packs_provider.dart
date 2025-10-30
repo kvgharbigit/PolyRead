@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 
 import '../repositories/github_releases_repo.dart';
 import '../services/combined_language_pack_service.dart';
+import '../models/download_progress.dart';
 import '../../../core/utils/constants.dart';
 import '../../../core/providers/database_provider.dart';
 
@@ -29,6 +30,13 @@ final combinedLanguagePackServiceProvider = Provider<CombinedLanguagePackService
     database: database,
     repository: repository,
   );
+});
+
+/// Download Progress Stream Provider
+/// Provides real-time download progress updates for UI consumption
+final downloadProgressStreamProvider = StreamProvider<DownloadProgress>((ref) {
+  final combinedService = ref.watch(combinedLanguagePackServiceProvider);
+  return combinedService.progressStream;
 });
 
 /// Language Pack Manager State Provider
@@ -253,14 +261,18 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
       // Clear any previous error state since installation succeeded
       state = state.copyWith(error: null);
       
-      // Update installed packs list immediately without full refresh
-      // This prevents registry fetch errors from blocking UI updates
-      await _updateInstalledPacksOnly();
+      // Simple state update - prevent infinite rebuilds
+      print('LanguagePacksProvider: Installation completed, updating state...');
       
-      // Additional fallback: if no packs were detected, force check the database directly
-      if (state.installedPackIds.isEmpty) {
-        print('LanguagePacksProvider: No installed packs detected, checking database directly...');
-        await _forceCheckInstalledPacks(packId);
+      // Add the pack ID directly to installed list
+      final currentIds = state.installedPackIds.toList();
+      if (!currentIds.contains(packId)) {
+        currentIds.add(packId);
+        state = state.copyWith(
+          installedPackIds: currentIds,
+          error: null,
+        );
+        print('LanguagePacksProvider: Added $packId to installed packs: $currentIds');
       }
       
     } catch (e) {
