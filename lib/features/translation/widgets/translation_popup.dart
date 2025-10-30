@@ -124,12 +124,14 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
 
   response_model.TranslationResponse _createMockResponse() {
     final mockDictEntry = DictionaryEntry(
-      word: widget.selectedText.toLowerCase(),
-      language: widget.sourceLanguage,
-      definition: 'Example definition for "${widget.selectedText}"',
+      writtenRep: widget.selectedText.toLowerCase(),
+      sourceLanguage: widget.sourceLanguage,
+      targetLanguage: widget.targetLanguage,
+      sense: 'Example definition for "${widget.selectedText}"',
+      transList: 'Example definition for "${widget.selectedText}"',
+      pos: 'noun',
       pronunciation: 'pronunciation',
-      partOfSpeech: 'noun',
-      exampleSentence: 'This is an example sentence.',
+      examples: 'This is an example sentence.',
       sourceDictionary: 'Oxford Dictionary',
       createdAt: DateTime.now(),
     );
@@ -143,7 +145,8 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
       ),
       dictionaryResult: DictionaryLookupResult(
         query: widget.selectedText,
-        language: widget.sourceLanguage,
+        sourceLanguage: widget.sourceLanguage,
+        targetLanguage: widget.targetLanguage,
         entries: [mockDictEntry],
         latencyMs: 5,
       ),
@@ -495,7 +498,7 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
       }
       
       final entry = _currentResponse!.dictionaryResult!.entries[_currentResultIndex];
-      final extractedTranslation = _extractTranslationFromDefinition(entry.definition);
+      final extractedTranslation = _extractTranslationFromDefinition(entry.transList);
       print('📝 TranslationPopup: Extracted translation from definition: "$extractedTranslation"');
       return extractedTranslation;
     }
@@ -510,20 +513,25 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
     
     if (_currentResponse!.dictionaryResult?.entries.isNotEmpty == true) {
       final entry = _currentResponse!.dictionaryResult!.entries[_currentResultIndex];
-      print('📝 TranslationPopup: Dictionary entry - definition: "${entry.definition}"');
-      print('📝 TranslationPopup: Dictionary entry - synonyms: ${entry.synonyms}');
+      print('📝 TranslationPopup: Dictionary entry - transList: "${entry.transList}"');
       
       final synonyms = <String>[];
       
-      // Use primary translation from definition (this is now the first translation from transList)
-      final primaryTranslation = entry.definition;
+      // Parse translations from modern transList field (pipe-separated)
+      final translations = entry.transList.split(' | ')
+          .where((t) => t.trim().isNotEmpty)
+          .map((t) => t.trim())
+          .toList();
+      
+      final primaryTranslation = translations.isNotEmpty ? translations.first : entry.sense ?? '';
       synonyms.add(primaryTranslation);
       print('📝 TranslationPopup: Added primary translation: "$primaryTranslation"');
       
-      // Add synonyms from WikiDict pipe-separated translations
-      if (entry.synonyms.isNotEmpty) {
-        synonyms.addAll(entry.synonyms);
-        print('📝 TranslationPopup: Added ${entry.synonyms.length} additional synonyms: ${entry.synonyms}');
+      // Add additional translations as synonyms
+      if (translations.length > 1) {
+        final additionalTranslations = translations.skip(1).toList();
+        synonyms.addAll(additionalTranslations);
+        print('📝 TranslationPopup: Added ${additionalTranslations.length} additional synonyms: $additionalTranslations');
       }
       
       // Remove duplicates and empty entries
@@ -540,7 +548,7 @@ class _TranslationPopupState extends ConsumerState<TranslationPopup>
   String _getCurrentPartOfSpeech() {
     if (_currentResponse!.dictionaryResult?.entries.isNotEmpty == true) {
       final entry = _currentResponse!.dictionaryResult!.entries[_currentResultIndex];
-      return entry.partOfSpeech ?? 'general';
+      return entry.pos ?? 'general';
     }
     return 'general';
   }

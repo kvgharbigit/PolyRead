@@ -61,13 +61,14 @@ import sys
 conn = sqlite3.connect('$PAIR.db')
 cursor = conn.cursor()
 
-# Create dictionary_entries table (compatible with PolyRead import service)
+# Create dictionary_entries table (Modern Wiktionary format - PolyRead unified schema)
 cursor.execute('''
 CREATE TABLE dictionary_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lemma TEXT NOT NULL,
-    definition TEXT NOT NULL,
-    direction TEXT NOT NULL CHECK (direction IN ('forward', 'reverse')),
+    written_rep TEXT NOT NULL,
+    sense TEXT,
+    trans_list TEXT NOT NULL,
+    pos TEXT,
     source_language TEXT NOT NULL,
     target_language TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -85,8 +86,9 @@ CREATE TABLE pack_metadata (
 # Create FTS5 virtual table for fast search (will be populated after data insertion)
 cursor.execute('''
 CREATE VIRTUAL TABLE dictionary_fts USING fts5(
-    lemma,
-    definition,
+    written_rep,
+    sense,
+    trans_list,
     content='dictionary_entries',
     content_rowid='id'
 )
@@ -127,9 +129,9 @@ with open('dict.tsv', 'r', encoding='utf-8') as f:
                     # Create forward entry (source language -> target language)
                     cursor.execute('''
                         INSERT INTO dictionary_entries 
-                        (lemma, definition, direction, source_language, target_language) 
+                        (written_rep, sense, trans_list, source_language, target_language) 
                         VALUES (?, ?, ?, ?, ?)
-                    ''', (headword, definition, 'forward', source_lang, target_lang))
+                    ''', (headword, definition, definition, source_lang, target_lang))
                     count += 1
                     
                     # Create reverse entry (target language -> source language)  
@@ -142,9 +144,9 @@ with open('dict.tsv', 'r', encoding='utf-8') as f:
                     if len(simple_def) > 0:  # Only create reverse if we have clean text
                         cursor.execute('''
                             INSERT INTO dictionary_entries 
-                            (lemma, definition, direction, source_language, target_language) 
+                            (written_rep, sense, trans_list, source_language, target_language) 
                             VALUES (?, ?, ?, ?, ?)
-                        ''', (simple_def, headword, 'reverse', target_lang, source_lang))
+                        ''', (simple_def, headword, headword, target_lang, source_lang))
                         count += 1
             
             if count % 10000 == 0:
@@ -154,10 +156,10 @@ conn.commit()
 
 # Add performance indexes after data insertion
 print('🔧 Creating performance indexes...')
-cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_lemma ON dictionary_entries(lemma)''')
+cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_written_rep ON dictionary_entries(written_rep)''')
 cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_languages ON dictionary_entries(source_language, target_language)''')
-cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_lookup ON dictionary_entries(lemma, source_language, target_language)''')
-cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_direction ON dictionary_entries(direction)''')
+cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_lookup ON dictionary_entries(written_rep, source_language, target_language)''')
+cursor.execute('''CREATE INDEX IF NOT EXISTS idx_dictionary_pos ON dictionary_entries(pos)''')
 
 # Build FTS index after data insertion
 print('🔧 Building FTS search index...')
@@ -193,15 +195,15 @@ sqlite3 "$PAIR.db" "SELECT key, value FROM pack_metadata;"
 
 if [ "$WORD_COUNT" -lt 1000 ]; then
     echo "⚠️  Warning: Low word count, checking sample entries..."
-    sqlite3 "$PAIR.db" "SELECT lemma, substr(definition, 1, 80) FROM dictionary_entries LIMIT 5;"
+    sqlite3 "$PAIR.db" "SELECT written_rep, substr(sense, 1, 80) FROM dictionary_entries LIMIT 5;"
 fi
 
 echo "🧪 Testing common words..."
-COMMON_FOUND=$(sqlite3 "$PAIR.db" "SELECT COUNT(*) FROM dictionary_entries WHERE lemma IN ('casa', 'agua', 'hacer', 'tener', 'ser', 'hola', 'tiempo', 'año', 'día', 'vez');")
+COMMON_FOUND=$(sqlite3 "$PAIR.db" "SELECT COUNT(*) FROM dictionary_entries WHERE written_rep IN ('casa', 'agua', 'hacer', 'tener', 'ser', 'hola', 'tiempo', 'año', 'día', 'vez');")
 echo "Found $COMMON_FOUND common Spanish words out of 10 tested"
 
 echo "🔍 Sample lookup test..."
-sqlite3 "$PAIR.db" "SELECT lemma, substr(definition, 1, 60) as definition, direction, source_language, target_language FROM dictionary_entries WHERE lemma = 'agua' LIMIT 1;"
+sqlite3 "$PAIR.db" "SELECT written_rep, substr(sense, 1, 60) as sense, trans_list, source_language, target_language FROM dictionary_entries WHERE written_rep = 'agua' LIMIT 1;"
 
 echo "📦 Packaging..."
 zip "../$OUTPUT_DIR/${PAIR}.sqlite.zip" "$PAIR.db"

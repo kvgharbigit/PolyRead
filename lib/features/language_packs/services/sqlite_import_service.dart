@@ -1,5 +1,5 @@
-// SQLite Import Service - Handles importing dictionary data from downloaded SQLite files
-// Provides data migration from Wiktionary SQLite files to app database
+// SQLite Import Service - Handles importing dictionary data from modern Wiktionary format SQLite files
+// Unified single-format approach using modern Wiktionary schema (written_rep, sense, trans_list)
 
 import 'dart:io';
 import 'package:drift/drift.dart';
@@ -14,7 +14,7 @@ class SqliteImportService {
   
   SqliteImportService(this._appDatabase);
   
-  /// Import dictionary data from a Wiktionary SQLite file
+  /// Import dictionary data from a modern Wiktionary format SQLite file
   Future<SqliteImportResult> importWiktionarySqlite({
     required String sqliteFilePath,
     required String sourceLanguage,
@@ -53,7 +53,7 @@ class SqliteImportService {
       print('📚 Found ${(sourceInfo.totalEntries/1000).toStringAsFixed(0)}K entries');
       
       if (!sourceInfo.isValidWiktionary) {
-        throw SqliteImportException('Invalid Wiktionary database format: ${sourceInfo.issues.join(", ")}');
+        throw SqliteImportException('Invalid modern Wiktionary database format: ${sourceInfo.issues.join(", ")}');
       }
       
       onProgress?.call('Found ${sourceInfo.totalEntries} entries to import...', 20);
@@ -117,7 +117,7 @@ class SqliteImportService {
     }
   }
   
-  /// Validate a Wiktionary SQLite file before import
+  /// Validate a modern Wiktionary format SQLite file before import
   Future<WiktionaryValidationResult> validateWiktionaryDatabase(String sqliteFilePath) async {
     if (!await File(sqliteFilePath).exists()) {
       return WiktionaryValidationResult(
@@ -134,7 +134,7 @@ class SqliteImportService {
       return WiktionaryValidationResult(
         isValid: sourceInfo.isValidWiktionary,
         message: sourceInfo.isValidWiktionary 
-          ? 'Valid Wiktionary database with ${sourceInfo.totalEntries} entries'
+          ? 'Valid modern Wiktionary database with ${sourceInfo.totalEntries} entries'
           : 'Invalid database format: ${sourceInfo.issues.join(", ")}',
         totalEntries: sourceInfo.totalEntries,
         tables: sourceInfo.tables,
@@ -200,7 +200,7 @@ class SqliteImportService {
       final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'");
       final tableNames = tables.map((t) => t['name'] as String).toList();
       
-      // Check for required PolyRead dictionary tables
+      // Check for required dictionary tables
       const requiredTables = ['dictionary_entries'];
       final missingTables = requiredTables.where((table) => !tableNames.contains(table)).toList();
       
@@ -217,24 +217,29 @@ class SqliteImportService {
         issues.add('Could not count entries: $e');
       }
       
-      // Check table structure
+      // Check table structure - only support modern Wiktionary format
+      bool hasValidFormat = false;
       if (tableNames.contains('dictionary_entries')) {
         final columns = await db.rawQuery('PRAGMA table_info(dictionary_entries)');
         final columnNames = columns.map((c) => c['name'] as String).toList();
         
-        // Check for required columns (support both Wiktionary and legacy formats)
-        const wiktionaryColumns = ['written_rep', 'sense', 'trans_list', 'source_language', 'target_language'];
-        const legacyColumns = ['lemma', 'definition', 'direction', 'source_language', 'target_language'];
+        // Check for required modern Wiktionary columns
+        const requiredColumns = ['written_rep', 'trans_list', 'source_language', 'target_language'];
+        const optionalColumns = ['sense', 'pos'];
         
-        final hasWiktionaryFormat = wiktionaryColumns.every((col) => columnNames.contains(col));
-        final hasLegacyFormat = legacyColumns.every((col) => columnNames.contains(col));
+        final missingRequired = requiredColumns.where((col) => !columnNames.contains(col)).toList();
+        hasValidFormat = missingRequired.isEmpty;
         
-        if (!hasWiktionaryFormat && !hasLegacyFormat) {
-          issues.add('Missing required columns for either Wiktionary format (${wiktionaryColumns.join(", ")}) or legacy format (${legacyColumns.join(", ")})');
+        print('📊 Database schema analysis:');
+        print('  Available columns: $columnNames');
+        print('  Has modern Wiktionary format: $hasValidFormat');
+        
+        if (missingRequired.isNotEmpty) {
+          issues.add('Missing required modern Wiktionary columns: ${missingRequired.join(", ")}');
         }
       }
       
-      final isValid = issues.isEmpty && totalEntries > 0;
+      final isValid = issues.isEmpty && totalEntries > 0 && hasValidFormat;
       
       return SourceDatabaseInfo(
         tables: tableNames,
@@ -282,12 +287,17 @@ class SqliteImportService {
           print('📚 Processing batch ${(offset ~/ batchSize) + 1}...');
         }
         
-        // Fetch batch from source database - get ALL entries for bidirectional pack
+        // Fetch batch from source database using modern Wiktionary format
+        if (offset == 0) {
+          print('📊 Using modern Wiktionary format query');
+        }
+        
         final batchResults = await sourceDb.rawQuery('''
           SELECT 
-            lemma,
-            definition,
-            direction,
+            written_rep,
+            sense,
+            trans_list,
+            pos,
             source_language,
             target_language
           FROM dictionary_entries 
@@ -300,7 +310,7 @@ class SqliteImportService {
         
         // Log sample only for first batch (reduced logging)
         if (offset == 0) {
-          print('📚 Sample entry: ${batchResults.first['lemma']} -> ${batchResults.first['definition']}');
+          print('📚 Sample entry: ${batchResults.first['written_rep']} -> ${batchResults.first['trans_list']}');
         }
         var batchInserted = 0;
         var batchSkipped = 0;
@@ -315,6 +325,7 @@ class SqliteImportService {
             targetLanguage: targetLanguage,
             dictionaryName: dictionaryName,
             entryNumber: totalImported + i,
+            sourceInfo: sourceInfo,
           );
           
           if (result == InsertResult.inserted) {
@@ -365,46 +376,55 @@ class SqliteImportService {
     required String targetLanguage,
     required String dictionaryName,
     required int entryNumber,
+    required SourceDatabaseInfo sourceInfo,
   }) async {
     try {
-      final lemma = row['lemma'] as String? ?? '';
-      final definition = row['definition'] as String? ?? '';
-      final direction = row['direction'] as String? ?? '';
+      final writtenRep = row['written_rep'] as String? ?? '';
+      final sense = row['sense'] as String? ?? '';
+      final transList = row['trans_list'] as String? ?? '';
+      final pos = row['pos'] as String?;
       final rowSourceLanguage = row['source_language'] as String? ?? '';
       final rowTargetLanguage = row['target_language'] as String? ?? '';
       
       // Minimal logging for first entry only
       if (entryNumber == 0) {
-        print('📚 Processing entries: "$lemma" ($rowSourceLanguage→$rowTargetLanguage)');
+        print('📚 Processing entries: "$writtenRep" ($rowSourceLanguage→$rowTargetLanguage)');
       }
       
-      if (lemma.isEmpty || definition.isEmpty) {
+      if (writtenRep.isEmpty || transList.isEmpty) {
         return InsertResult.skipped;
       }
       
-      // Create dictionary entry using ACTUAL language codes from the database row
-      // This preserves the correct direction for bidirectional entries
+      // Validate data
+      if (transList.length > 200) {
+        if (entryNumber < 3) {
+          print('⚠️ Warning: Entry ${entryNumber + 1} has very long trans_list: "${transList.substring(0, 50)}..."');
+        }
+      }
+      
+      // Create dictionary entry using modern Wiktionary format
       final companion = DictionaryEntriesCompanion.insert(
-        writtenRep: lemma.toLowerCase(),
-        sense: Value(definition),
-        transList: definition, // Store definition as translation
-        pos: const Value(null), // No part of speech in this format
-        sourceLanguage: rowSourceLanguage, // Use actual row language codes to preserve direction
-        targetLanguage: rowTargetLanguage, // Use actual row language codes to preserve direction
-        frequency: const Value(1000), // Default frequency
+        // Modern Wiktionary fields (primary data)
+        writtenRep: writtenRep.toLowerCase(),
+        sense: Value(sense),
+        transList: transList,
+        pos: Value(pos),
+        sourceLanguage: rowSourceLanguage,
+        targetLanguage: rowTargetLanguage,
+        frequency: const Value(1000),
         pronunciation: const Value(null),
         examples: const Value(null),
         source: Value(dictionaryName),
-        // Legacy compatibility fields
-        lemma: Value(lemma.toLowerCase()), // Fix: Explicitly set legacy lemma field
-        definition: Value(definition), // Fix: Explicitly set legacy definition field
-        partOfSpeech: const Value(null), // Fix: Explicitly set legacy partOfSpeech field
-        languagePair: Value('$rowSourceLanguage-$rowTargetLanguage'), // Fix: Use actual row languages for legacy field
+        // Legacy compatibility fields (for backward compatibility)
+        lemma: Value(writtenRep.toLowerCase()),
+        definition: Value(sense ?? transList),
+        partOfSpeech: Value(pos),
+        languagePair: Value('$rowSourceLanguage-$rowTargetLanguage'),
       );
       
       // Minimal companion logging (first entry only)
       if (entryNumber == 0) {
-        print('📚 Sample entry: "${lemma.toLowerCase()}" -> "$definition" ($rowSourceLanguage→$rowTargetLanguage)');
+        print('📚 Sample entry: "${writtenRep.toLowerCase()}" -> "$transList" ($rowSourceLanguage→$rowTargetLanguage)');
       }
       
       // Insert with minimal logging to prevent memory issues

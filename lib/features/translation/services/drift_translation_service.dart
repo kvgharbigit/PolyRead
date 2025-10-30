@@ -350,14 +350,15 @@ class DriftTranslationService {
       print('🔍 DriftTranslation: Dictionary returned ${entries.length} entries:');
       for (int i = 0; i < entries.length && i < 3; i++) {
         final entry = entries[i];
-        print('🔍 DriftTranslation: Entry ${i + 1}: "${entry.word}" -> "${entry.definition}" (synonyms: ${entry.synonyms})');
+        print('🔍 DriftTranslation: Entry ${i + 1}: "${entry.writtenRep}" -> "${entry.transList}"');
       }
       
       stopwatch.stop();
       
       final result = DictionaryLookupResult(
         query: word,
-        language: sourceLanguage,
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
         entries: entries,
         latencyMs: stopwatch.elapsedMilliseconds,
       );
@@ -368,7 +369,8 @@ class DriftTranslationService {
       stopwatch.stop();
       return DictionaryLookupResult(
         query: word,
-        language: sourceLanguage,
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
         entries: [],
         latencyMs: stopwatch.elapsedMilliseconds,
       );

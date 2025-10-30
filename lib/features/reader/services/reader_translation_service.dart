@@ -17,7 +17,7 @@ class ReaderTranslationService extends ChangeNotifier {
   final AppDatabase _database;
   
   // Current translation state
-  TranslationResponse? _currentTranslation;
+  response_model.TranslationResponse? _currentTranslation;
   bool _isTranslating = false;
   String? _error;
   bool _needsModelDownload = false;
@@ -38,7 +38,7 @@ class ReaderTranslationService extends ChangeNotifier {
        _database = database;
 
   // Getters
-  TranslationResponse? get currentTranslation => _currentTranslation;
+  response_model.TranslationResponse? get currentTranslation => _currentTranslation;
   bool get isTranslating => _isTranslating;
   String? get error => _error;
   String? get selectedText => _selectedText;
@@ -117,11 +117,11 @@ class ReaderTranslationService extends ChangeNotifier {
       );
 
       // Check if models need to be downloaded
-      if (_currentTranslation!.source == TranslationSource.modelsNotDownloaded) {
+      if (_currentTranslation!.source == response_model.TranslationSource.modelsNotDownloaded) {
         _needsModelDownload = true;
         _missingModelProvider = _currentTranslation!.providerId;
         _error = _currentTranslation!.error;
-      } else if (_currentTranslation!.source == TranslationSource.error) {
+      } else if (_currentTranslation!.source == response_model.TranslationSource.error) {
         _error = _currentTranslation!.error;
       }
 
@@ -179,7 +179,9 @@ class ReaderTranslationService extends ChangeNotifier {
     final dictionaryResult = _currentTranslation?.dictionaryResult;
     if (dictionaryResult?.entries.isNotEmpty == true) {
       final entry = dictionaryResult!.entries.first;
-      return entry.definition;
+      // Extract primary translation from modern transList field
+      final translations = entry.transList.split(' | ');
+      return translations.isNotEmpty ? translations.first.trim() : entry.sense;
     }
     return null;
   }
@@ -237,7 +239,12 @@ class ReaderTranslationService extends ChangeNotifier {
     final dictionaryResult = _currentTranslation!.dictionaryResult;
     if (dictionaryResult?.entries.isNotEmpty == true) {
       for (final entry in dictionaryResult!.entries) {
-        suggestions.addAll(entry.translations);
+        // Parse translations from modern transList field (pipe-separated)
+        final translations = entry.transList.split(' | ')
+            .where((t) => t.trim().isNotEmpty)
+            .map((t) => t.trim())
+            .toList();
+        suggestions.addAll(translations);
       }
     }
     

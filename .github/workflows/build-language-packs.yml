@@ -68,7 +68,7 @@ jobs:
             echo "✅ Dictionary contains $ENTRY_COUNT entries"
             
             # Test basic lookup
-            sqlite3 "$DB_FILE" "SELECT lemma, substr(definition, 1, 50) FROM dictionary_entries LIMIT 3;"
+            sqlite3 "$DB_FILE" "SELECT written_rep, substr(sense, 1, 50) FROM dictionary_entries LIMIT 3;"
             
             if [ "$ENTRY_COUNT" -gt 1000 ]; then
               echo "✅ Package validation successful"
@@ -100,8 +100,8 @@ jobs:
             - **Spanish ↔ English**: `es-en.sqlite.zip` (80MB, 2.17M entries)
             
             ### 🔧 Technical Details
-            - **Schema**: PolyRead-compatible with lemma/definition/direction fields
-            - **Format**: SQLite database with proper bidirectional entries
+            - **Schema**: Modern Wiktionary format with written_rep/sense/trans_list fields
+            - **Format**: SQLite database with unified schema and bidirectional support
             - **Performance**: 4 indexes + FTS5 virtual table for optimal search speed
             - **Source**: [Vuizur Wiktionary-Dictionaries](https://github.com/Vuizur/Wiktionary-Dictionaries)
             

@@ -142,9 +142,18 @@ class _EnhancedTranslationPopupState extends State<EnhancedTranslationPopup>
     if (response.dictionaryResult?.entries.isNotEmpty == true) {
       final primarySynonyms = <String>[];
       for (final entry in response.dictionaryResult!.entries) {
-        primarySynonyms.addAll(entry.translations);
-        if (entry.synonyms.isNotEmpty) {
-          primarySynonyms.addAll(entry.synonyms);
+        // Get primary translation from transList
+        final primaryTranslation = entry.transList.split(' | ').first.trim();
+        if (primaryTranslation.isNotEmpty) {
+          primarySynonyms.add(primaryTranslation);
+        }
+        // Parse synonyms from modern transList field (pipe-separated)
+        final translations = entry.transList.split(' | ')
+            .where((t) => t.trim().isNotEmpty)
+            .map((t) => t.trim())
+            .toList();
+        if (translations.length > 1) {
+          primarySynonyms.addAll(translations.skip(1)); // Skip first (primary translation)
         }
       }
       
@@ -550,9 +559,9 @@ class _EnhancedTranslationPopupState extends State<EnhancedTranslationPopup>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (entry.partOfSpeech.isNotEmpty)
+          if (entry.pos?.isNotEmpty == true)
             Text(
-              entry.partOfSpeech,
+              entry.pos!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontStyle: FontStyle.italic,
                 color: Colors.grey.shade600,
@@ -560,13 +569,13 @@ class _EnhancedTranslationPopupState extends State<EnhancedTranslationPopup>
             ),
           
           Text(
-            entry.translations.join(', '),
+            entry.transList,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           
-          if (entry.examples.isNotEmpty)
+          if (entry.examples?.isNotEmpty == true)
             Text(
-              'e.g., ${entry.examples.first}',
+              'e.g., ${entry.examples}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontStyle: FontStyle.italic,
               ),

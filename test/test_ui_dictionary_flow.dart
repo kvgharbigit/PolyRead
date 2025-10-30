@@ -5,9 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 
 // Import the components we need to test
-import 'lib/features/translation/models/dictionary_entry.dart';
-import 'lib/features/translation/widgets/translation_popup.dart';
-import 'lib/features/translation/services/drift_dictionary_service.dart';
+import '../lib/features/translation/models/dictionary_entry.dart';
+import '../lib/features/translation/widgets/translation_popup.dart';
+import '../lib/features/translation/services/drift_dictionary_service.dart';
 
 void main() {
   print('=================================================');
@@ -19,30 +19,35 @@ void main() {
     test('DictionaryEntry model handles Wiktionary data correctly', () {
       print('📊 Testing DictionaryEntry model with Wiktionary data...');
       
-      // Test that DictionaryEntry model properly handles pipe-separated synonyms
+      // Test that DictionaryEntry model properly handles modern Wiktionary format
       final entry = DictionaryEntry(
-        word: 'cold',
-        language: 'en-es', 
-        definition: 'frío',  // Primary translation
-        synonyms: ['helado', 'gélido', 'frígido'], // Parsed from transList
-        partOfSpeech: 'adjective',
+        writtenRep: 'cold',
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        sense: 'frío',  // Definition/meaning
+        transList: 'frío | helado | gélido | frígido', // Pipe-separated translations
+        pos: 'adjective',
         sourceDictionary: 'WikiDict',
         createdAt: DateTime.now(),
       );
       
-      // Verify the data structure
-      expect(entry.word, equals('cold'));
-      expect(entry.definition, equals('frío')); // Primary translation
-      expect(entry.synonyms.length, equals(3)); // Additional synonyms
-      expect(entry.synonyms, contains('helado'));
-      expect(entry.synonyms, contains('gélido'));
-      expect(entry.synonyms, contains('frígido'));
-      expect(entry.partOfSpeech, equals('adjective'));
+      // Verify the modern data structure
+      expect(entry.writtenRep, equals('cold'));
+      expect(entry.sense, equals('frío')); // Definition
+      expect(entry.transList, equals('frío | helado | gélido | frígido')); // All translations
+      expect(entry.pos, equals('adjective'));
       
-      print('  ✅ DictionaryEntry correctly stores Wiktionary data');
-      print('  - Primary: ${entry.definition}');
-      print('  - Synonyms: ${entry.synonyms.join(', ')}');
-      print('  - Part of Speech: ${entry.partOfSpeech}');
+      // Parse translations from transList
+      final translations = entry.transList.split(' | ');
+      expect(translations.length, equals(4));
+      expect(translations, contains('helado'));
+      expect(translations, contains('gélido'));
+      expect(translations, contains('frígido'));
+      
+      print('  ✅ DictionaryEntry correctly stores modern Wiktionary data');
+      print('  - WrittenRep: ${entry.writtenRep}');
+      print('  - TransList: ${entry.transList}');
+      print('  - Part of Speech: ${entry.pos}');
       print('');
     });
 
@@ -52,20 +57,22 @@ void main() {
       // Simulate dictionary entries with pipe-separated synonyms
       final entries = [
         DictionaryEntry(
-          word: 'house',
-          language: 'en-es',
-          definition: 'casa', // Primary
-          synonyms: ['hogar', 'vivienda', 'residencia'], // From transList
-          partOfSpeech: 'noun',
+          writtenRep: 'house',
+          sourceLanguage: 'en',
+          targetLanguage: 'es',
+          sense: 'casa', // Primary definition
+          transList: 'casa | hogar | vivienda | residencia', // Pipe-separated translations
+          pos: 'noun',
           sourceDictionary: 'WikiDict',
           createdAt: DateTime.now(),
         ),
         DictionaryEntry(
-          word: 'house',
-          language: 'en-es', 
-          definition: 'albergar', // Different meaning
-          synonyms: ['alojar', 'hospedar'], // Different synonyms
-          partOfSpeech: 'verb',
+          writtenRep: 'house',
+          sourceLanguage: 'en',
+          targetLanguage: 'es',
+          sense: 'albergar', // Different meaning
+          transList: 'albergar | alojar | hospedar', // Different translations
+          pos: 'verb',
           sourceDictionary: 'WikiDict',
           createdAt: DateTime.now(),
         ),
@@ -73,20 +80,20 @@ void main() {
       
       // Test that we have multiple meanings for the same word
       expect(entries.length, equals(2));
-      expect(entries[0].partOfSpeech, equals('noun'));
-      expect(entries[1].partOfSpeech, equals('verb'));
+      expect(entries[0].pos, equals('noun'));
+      expect(entries[1].pos, equals('verb'));
       
-      // Test synonym cycling within a meaning
-      final nounSynonyms = [entries[0].definition] + entries[0].synonyms;
-      expect(nounSynonyms.length, equals(4)); // casa + 3 synonyms
-      expect(nounSynonyms, contains('casa'));
-      expect(nounSynonyms, contains('hogar'));
-      expect(nounSynonyms, contains('vivienda'));
-      expect(nounSynonyms, contains('residencia'));
+      // Test translation parsing within a meaning
+      final nounTranslations = entries[0].transList.split(' | ');
+      expect(nounTranslations.length, equals(4)); // casa + 3 synonyms
+      expect(nounTranslations, contains('casa'));
+      expect(nounTranslations, contains('hogar'));
+      expect(nounTranslations, contains('vivienda'));
+      expect(nounTranslations, contains('residencia'));
       
       print('  ✅ Synonym cycling data structure verified');
-      print('  - Noun meanings: ${nounSynonyms.join(' → ')}');
-      print('  - Verb meanings: ${([entries[1].definition] + entries[1].synonyms).join(' → ')}');
+      print('  - Noun meanings: ${nounTranslations.join(' → ')}');
+      print('  - Verb meanings: ${entries[1].transList.split(' | ').join(' → ')}');
       print('');
     });
 
@@ -102,21 +109,21 @@ void main() {
           .map((t) => t.trim())
           .toList();
       
-      // Primary translation is the first one, rest become synonyms
+      // Primary translation is the first one, rest become additional translations
       final primaryTranslation = translations.isNotEmpty ? translations.first : '';
-      final synonyms = translations.length > 1 ? translations.skip(1).toList() : <String>[];
+      final additionalTranslations = translations.length > 1 ? translations.skip(1).toList() : <String>[];
       
       // Verify parsing
       expect(primaryTranslation, equals('frío'));
-      expect(synonyms.length, equals(3));
-      expect(synonyms, contains('helado'));
-      expect(synonyms, contains('gélido')); 
-      expect(synonyms, contains('frígido'));
+      expect(additionalTranslations.length, equals(3));
+      expect(additionalTranslations, contains('helado'));
+      expect(additionalTranslations, contains('gélido')); 
+      expect(additionalTranslations, contains('frígido'));
       
       print('  ✅ Pipe-separated format correctly parsed');
       print('  - Raw: $rawTransList');
       print('  - Primary: $primaryTranslation');
-      print('  - Synonyms: ${synonyms.join(', ')}');
+      print('  - Additional translations: ${additionalTranslations.join(', ')}');
       print('');
     });
 
@@ -167,17 +174,15 @@ void main() {
       final entries = [
         // Entry 1: "cold" as adjective
         {
-          'word': 'cold',
+          'writtenRep': 'cold',
           'pos': 'adjective',
-          'primary': 'frío',
-          'synonyms': ['helado', 'gélido', 'frígido'],
+          'transList': 'frío | helado | gélido | frígido',
         },
         // Entry 2: "cold" as noun  
         {
-          'word': 'cold',
+          'writtenRep': 'cold',
           'pos': 'noun',
-          'primary': 'resfriado',
-          'synonyms': ['catarro', 'gripe'],
+          'transList': 'resfriado | catarro | gripe',
         },
       ];
       
@@ -187,32 +192,30 @@ void main() {
       
       // Test first meaning (adjective)
       var currentEntry = entries[currentEntryIndex];
-      var allTranslations = [currentEntry['primary']! as String] + 
-                           (currentEntry['synonyms']! as List<String>);
+      var allTranslations = (currentEntry['transList']! as String).split(' | ');
       
       expect(currentEntry['pos'], equals('adjective'));
       expect(allTranslations[currentSynonymIndex], equals('frío')); // Primary
       
-      // Level 2: Cycle through synonyms within the same meaning
+      // Level 2: Cycle through translations within the same meaning
       currentSynonymIndex = 1;
-      expect(allTranslations[currentSynonymIndex], equals('helado')); // First synonym
+      expect(allTranslations[currentSynonymIndex], equals('helado')); // First additional translation
       
       currentSynonymIndex = 2;
-      expect(allTranslations[currentSynonymIndex], equals('gélido')); // Second synonym
+      expect(allTranslations[currentSynonymIndex], equals('gélido')); // Second additional translation
       
       // Cycle to next meaning (noun)
       currentEntryIndex = 1;
       currentSynonymIndex = 0;
       currentEntry = entries[currentEntryIndex];
-      allTranslations = [currentEntry['primary']! as String] + 
-                       (currentEntry['synonyms']! as List<String>);
+      allTranslations = (currentEntry['transList']! as String).split(' | ');
       
       expect(currentEntry['pos'], equals('noun'));
       expect(allTranslations[currentSynonymIndex], equals('resfriado')); // Different meaning
       
       print('  ✅ Two-level cycling system verified');
       print('  - Level 1 (entries): adjective → noun');
-      print('  - Level 2 (synonyms): frío → helado → gélido → frígido');
+      print('  - Level 2 (translations): frío → helado → gélido → frígido');
       print('  - Next entry: resfriado → catarro → gripe');
       print('');
     });
@@ -252,13 +255,14 @@ class TranslationFlowSimulator {
     final primaryTranslation = translations.isNotEmpty ? translations.first : '';
     final synonyms = translations.length > 1 ? translations.skip(1).toList() : <String>[];
     
-    // Return as DictionaryEntry would be constructed
+    // Return as modern DictionaryEntry would be constructed
     return {
-      'word': mockDatabaseRow['written_rep'],
-      'definition': primaryTranslation,
-      'synonyms': synonyms,
-      'partOfSpeech': mockDatabaseRow['pos'],
-      'language': '${mockDatabaseRow['source_language']}-${mockDatabaseRow['target_language']}',
+      'writtenRep': mockDatabaseRow['written_rep'],
+      'sense': primaryTranslation,
+      'transList': mockDatabaseRow['trans_list'],
+      'pos': mockDatabaseRow['pos'],
+      'sourceLanguage': mockDatabaseRow['source_language'],
+      'targetLanguage': mockDatabaseRow['target_language'],
     };
   }
 }

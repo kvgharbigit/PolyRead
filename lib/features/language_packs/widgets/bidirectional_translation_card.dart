@@ -256,7 +256,7 @@ class BidirectionalDictionaryListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       title: Text(
-        entry.lemma,
+        entry.writtenRep,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w500,
         ),

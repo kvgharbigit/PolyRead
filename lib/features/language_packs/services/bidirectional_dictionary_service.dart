@@ -155,8 +155,8 @@ class BidirectionalDictionaryService {
 
       if (entry != null) {
         return BidirectionalDictionaryEntry.fromAppDatabase(
-          lemma: entry.writtenRep,
-          definition: entry.transList ?? '',
+          writtenRep: entry.writtenRep,
+          transList: entry.transList ?? '',
           sourceLanguage: entry.sourceLanguage,
           targetLanguage: entry.targetLanguage,
           pos: entry.pos,
@@ -207,8 +207,8 @@ class BidirectionalDictionaryService {
       final entries = [...forwardEntries, ...reverseEntries];
 
       return entries.map((entry) => BidirectionalDictionaryEntry.fromAppDatabase(
-        lemma: entry.writtenRep,
-        definition: entry.transList ?? '',
+        writtenRep: entry.writtenRep,
+        transList: entry.transList ?? '',
         sourceLanguage: entry.sourceLanguage,
         targetLanguage: entry.targetLanguage,
         pos: entry.pos,

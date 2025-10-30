@@ -110,7 +110,9 @@ class TranslationResponse {
     required DictionaryLookupResult dictionaryResult,
   }) {
     final primaryTranslation = dictionaryResult.entries.isNotEmpty
-        ? dictionaryResult.entries.first.definition
+        ? (dictionaryResult.entries.first.transList.split(' | ').first.trim().isNotEmpty 
+           ? dictionaryResult.entries.first.transList.split(' | ').first.trim()
+           : dictionaryResult.entries.first.sense ?? request.text)
         : request.text;
 
     return TranslationResponse(

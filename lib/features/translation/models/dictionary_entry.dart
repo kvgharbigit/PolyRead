@@ -1,91 +1,93 @@
-// Dictionary Entry model for SQLite storage
-// Represents a single word definition with metadata
+// Dictionary Entry model for modern Wiktionary format
+// Uses unified schema: written_rep, sense, trans_list, pos
 
 class DictionaryEntry {
   final int? id;
-  final String word;
-  final String language;
-  final String definition;
+  final String writtenRep;        // Modern: headword/lemma (Wiktionary standard)
+  final String sourceLanguage;    // Modern: source language code
+  final String targetLanguage;    // Modern: target language code  
+  final String? sense;            // Modern: definition/meaning description
+  final String transList;         // Modern: pipe-separated translations
+  final String? pos;              // Modern: part of speech
   final String? pronunciation;
-  final String? partOfSpeech;
-  final String? exampleSentence;
+  final String? examples;         // Modern: JSON array of example sentences
   final String sourceDictionary;
   final DateTime createdAt;
-  final List<String> synonyms; // Added for WikiDict pipe-separated translations
   
   const DictionaryEntry({
     this.id,
-    required this.word,
-    required this.language,
-    required this.definition,
+    required this.writtenRep,
+    required this.sourceLanguage,
+    required this.targetLanguage,
+    this.sense,
+    required this.transList,
+    this.pos,
     this.pronunciation,
-    this.partOfSpeech,
-    this.exampleSentence,
+    this.examples,
     required this.sourceDictionary,
     required this.createdAt,
-    this.synonyms = const [], // Default to empty list
   });
   
-  /// Create DictionaryEntry from database map
+  /// Create DictionaryEntry from modern Wiktionary database map
   factory DictionaryEntry.fromMap(Map<String, dynamic> map) {
-    // Parse synonyms if available
-    final synonymsList = map['synonyms'] as List<dynamic>? ?? [];
-    final synonyms = synonymsList.map((s) => s.toString()).toList();
-    
     return DictionaryEntry(
       id: map['id'] as int?,
-      word: map['word'] as String,
-      language: map['language'] as String,
-      definition: map['definition'] as String,
+      writtenRep: map['written_rep'] as String,
+      sourceLanguage: map['source_language'] as String,
+      targetLanguage: map['target_language'] as String,
+      sense: map['sense'] as String?,
+      transList: map['trans_list'] as String,
+      pos: map['pos'] as String?,
       pronunciation: map['pronunciation'] as String?,
-      partOfSpeech: map['part_of_speech'] as String?,
-      exampleSentence: map['example_sentence'] as String?,
-      sourceDictionary: map['source_dictionary'] as String,
+      examples: map['examples'] as String?,
+      sourceDictionary: map['source'] as String,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
-      synonyms: synonyms,
     );
   }
   
-  /// Convert DictionaryEntry to database map
+  /// Convert DictionaryEntry to modern Wiktionary database map
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
-      'word': word.toLowerCase(),
-      'language': language,
-      'definition': definition,
+      'written_rep': writtenRep.toLowerCase(),
+      'source_language': sourceLanguage,
+      'target_language': targetLanguage,
+      'sense': sense,
+      'trans_list': transList,
+      'pos': pos,
       'pronunciation': pronunciation,
-      'part_of_speech': partOfSpeech,
-      'example_sentence': exampleSentence,
-      'source_dictionary': sourceDictionary,
+      'examples': examples,
+      'source': sourceDictionary,
       'created_at': createdAt.millisecondsSinceEpoch,
-      'synonyms': synonyms,
     };
   }
   
   /// Create a copy with updated fields
   DictionaryEntry copyWith({
     int? id,
-    String? word,
-    String? language,
-    String? definition,
+    String? writtenRep,
+    String? sourceLanguage,
+    String? targetLanguage,
+    String? sense,
+    String? transList,
+    String? pos,
     String? pronunciation,
-    String? partOfSpeech,
-    String? exampleSentence,
+    String? examples,
     String? sourceDictionary,
     DateTime? createdAt,
-    List<String>? synonyms,
   }) {
     return DictionaryEntry(
       id: id ?? this.id,
-      word: word ?? this.word,
-      language: language ?? this.language,
-      definition: definition ?? this.definition,
+      writtenRep: writtenRep ?? this.writtenRep,
+      sourceLanguage: sourceLanguage ?? this.sourceLanguage,
+      targetLanguage: targetLanguage ?? this.targetLanguage,
+      sense: sense ?? this.sense,
+      transList: transList ?? this.transList,
+      pos: pos ?? this.pos,
       pronunciation: pronunciation ?? this.pronunciation,
-      partOfSpeech: partOfSpeech ?? this.partOfSpeech,
-      exampleSentence: exampleSentence ?? this.exampleSentence,
+      examples: examples ?? this.examples,
       sourceDictionary: sourceDictionary ?? this.sourceDictionary,
       createdAt: createdAt ?? this.createdAt,
-      synonyms: synonyms ?? this.synonyms,
     );
   }
   
@@ -93,37 +95,41 @@ class DictionaryEntry {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is DictionaryEntry &&
-        other.word == word &&
-        other.language == language &&
-        other.definition == definition &&
+        other.writtenRep == writtenRep &&
+        other.sourceLanguage == sourceLanguage &&
+        other.targetLanguage == targetLanguage &&
+        other.transList == transList &&
         other.sourceDictionary == sourceDictionary;
   }
   
   @override
   int get hashCode {
-    return word.hashCode ^ 
-           language.hashCode ^ 
-           definition.hashCode ^ 
+    return writtenRep.hashCode ^ 
+           sourceLanguage.hashCode ^ 
+           targetLanguage.hashCode ^
+           transList.hashCode ^
            sourceDictionary.hashCode;
   }
   
   @override
   String toString() {
-    return 'DictionaryEntry(word: $word, language: $language, definition: $definition, source: $sourceDictionary)';
+    return 'DictionaryEntry(writtenRep: $writtenRep, ${sourceLanguage}→${targetLanguage}, transList: $transList, source: $sourceDictionary)';
   }
 }
 
 /// Represents the result of a dictionary lookup
 class DictionaryLookupResult {
   final String query;
-  final String language;
+  final String sourceLanguage;  // Modern: explicit source language
+  final String targetLanguage;  // Modern: explicit target language
   final List<DictionaryEntry> entries;
   final int latencyMs;
   final bool fromCache;
   
   const DictionaryLookupResult({
     required this.query,
-    required this.language,
+    required this.sourceLanguage,
+    required this.targetLanguage,
     required this.entries,
     required this.latencyMs,
     this.fromCache = false,
@@ -139,7 +145,8 @@ class DictionaryLookupResult {
   Map<String, dynamic> toJson() {
     return {
       'query': query,
-      'language': language,
+      'sourceLanguage': sourceLanguage,
+      'targetLanguage': targetLanguage,
       'entries': entries.map((e) => e.toMap()).toList(),
       'latencyMs': latencyMs,
       'fromCache': fromCache,
@@ -150,7 +157,8 @@ class DictionaryLookupResult {
   factory DictionaryLookupResult.fromJson(Map<String, dynamic> json) {
     return DictionaryLookupResult(
       query: json['query'] as String,
-      language: json['language'] as String,
+      sourceLanguage: json['sourceLanguage'] as String,
+      targetLanguage: json['targetLanguage'] as String,
       entries: (json['entries'] as List<dynamic>)
           .map((e) => DictionaryEntry.fromMap(e as Map<String, dynamic>))
           .toList(),

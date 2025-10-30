@@ -91,11 +91,42 @@ class DriftDictionaryService {
         return reverseResults.map((row) => _convertToModelEntry(row)).toList();
       }
       
-      // No exact match found - let's debug why common words aren't found
-      final commonWords = ['the', 'and', 'a', 'to', 'of', 'in', 'you', 'that', 'have', 'it', 'for', 'not', 'on', 'with', 'he', 'as', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'located', 'under', 'states'];
-      if (commonWords.contains(word.toLowerCase())) {
-        print('DriftDictionary: DEBUG - Common word "$word" not found in database with 333,458 entries! Running full exploration...');
-        await exploreDictionary();
+      // Quick debug: Show first few entries and language pairs
+      print('DriftDictionary: DEBUG - Word "${word.toLowerCase()}" not found. Quick database check...');
+      
+      // Check language pairs quickly
+      final pairs = await _database.customSelect('''
+        SELECT source_language, target_language, COUNT(*) as count 
+        FROM dictionary_entries 
+        GROUP BY source_language, target_language
+        ORDER BY count DESC LIMIT 5
+      ''').get();
+      
+      print('DriftDictionary: Language pairs in database:');
+      for (final row in pairs) {
+        print('  ${row.data['source_language']}->${row.data['target_language']}: ${row.data['count']} entries');
+      }
+      
+      // Show first few entries that should contain the word we're looking for
+      final samples = await (_database.select(_database.dictionaryEntries)
+        ..where((e) => e.sourceLanguage.equals('en') & e.targetLanguage.equals('es'))
+        ..limit(10)).get();
+      print('DriftDictionary: First 10 en->es entries:');
+      for (int i = 0; i < samples.length; i++) {
+        final entry = samples[i];
+        print('  ${i+1}. "${entry.writtenRep}" -> "${entry.transList}"');
+      }
+      
+      // Try to find entries that start with the same letter as the word we're looking for
+      final similarStart = await (_database.select(_database.dictionaryEntries)
+        ..where((e) => e.writtenRep.like('${word.toLowerCase()[0]}%') & 
+                       e.sourceLanguage.equals('en') & 
+                       e.targetLanguage.equals('es'))
+        ..limit(5)).get();
+      print('DriftDictionary: Entries starting with "${word.toLowerCase()[0]}":');
+      for (int i = 0; i < similarStart.length; i++) {
+        final entry = similarStart[i];
+        print('  ${i+1}. "${entry.writtenRep}" -> "${entry.transList}"');
       }
       
       // No exact match found - return empty to fall back to ML Kit
@@ -149,21 +180,16 @@ class DriftDictionaryService {
   /// Add a single dictionary entry
   Future<int> addEntry(model.DictionaryEntry entry) async {
     try {
-      // Parse language pair (e.g., "en-es" -> source: "en", target: "es")
-      final languageParts = (entry.language ?? 'unknown-unknown').split('-');
-      final sourceLanguage = languageParts.isNotEmpty ? languageParts[0] : 'unknown';
-      final targetLanguage = languageParts.length > 1 ? languageParts[1] : 'unknown';
-      
       final companion = DictionaryEntriesCompanion.insert(
-        writtenRep: entry.word, // Use Wiktionary writtenRep field
-        sense: Value(entry.definition), // Use Wiktionary sense field
-        transList: entry.definition, // For now, use definition as translation (TODO: support pipe-separated)
-        pos: Value(entry.partOfSpeech), // Use Wiktionary pos field
-        sourceLanguage: sourceLanguage,
-        targetLanguage: targetLanguage,
+        writtenRep: entry.writtenRep, // Use modern Wiktionary writtenRep field
+        sense: Value(entry.sense), // Use modern Wiktionary sense field
+        transList: entry.transList, // Use modern Wiktionary trans_list field
+        pos: Value(entry.pos), // Use modern Wiktionary pos field
+        sourceLanguage: entry.sourceLanguage,
+        targetLanguage: entry.targetLanguage,
         frequency: const Value(1000), // Default frequency
         pronunciation: Value(entry.pronunciation),
-        examples: Value(entry.exampleSentence),
+        examples: Value(entry.examples),
         source: Value(entry.sourceDictionary),
       );
       
@@ -201,12 +227,14 @@ class DriftDictionaryService {
     
     final dictionaryEntries = entries.map((starDictEntry) {
       return model.DictionaryEntry(
-        word: starDictEntry.word,
-        language: languageCode, // e.g., "fr-en" for French-English Wiktionary
-        definition: starDictEntry.definition,
+        writtenRep: starDictEntry.word,
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
+        sense: starDictEntry.definition,
+        transList: starDictEntry.definition, // For StarDict, definition serves as translation
+        pos: starDictEntry.partOfSpeech,
         pronunciation: starDictEntry.pronunciation,
-        partOfSpeech: starDictEntry.partOfSpeech,
-        exampleSentence: starDictEntry.exampleSentence,
+        examples: starDictEntry.exampleSentence,
         sourceDictionary: dictionaryName,
         createdAt: DateTime.now(),
       );
@@ -557,16 +585,16 @@ class DriftDictionaryService {
     
     return model.DictionaryEntry(
       id: row.id,
-      word: row.writtenRep, // Use Wiktionary writtenRep field
-      language: '${row.sourceLanguage}-${row.targetLanguage}', // Construct language pair
-      definition: primaryTranslation, // Primary translation from transList
+      writtenRep: row.writtenRep, // Use modern Wiktionary writtenRep field
+      sourceLanguage: row.sourceLanguage,
+      targetLanguage: row.targetLanguage,
+      sense: row.sense,
+      transList: row.transList ?? primaryTranslation, // Use modern transList field
+      pos: row.pos, // Use modern pos field
       pronunciation: row.pronunciation,
-      partOfSpeech: row.pos, // Use Wiktionary pos field
-      exampleSentence: row.examples,
+      examples: row.examples,
       sourceDictionary: row.source ?? 'Unknown',
       createdAt: row.createdAt,
-      // Add synonyms from pipe-separated list
-      synonyms: synonyms,
     );
   }
   
@@ -585,16 +613,16 @@ class DriftDictionaryService {
     
     return model.DictionaryEntry(
       id: data['id'] as int?,
-      word: data['written_rep'] as String, // Use Wiktionary writtenRep field
-      language: '${data['source_language']}-${data['target_language']}', // Construct language pair
-      definition: primaryTranslation, // Primary translation from transList
+      writtenRep: data['written_rep'] as String, // Use modern Wiktionary writtenRep field
+      sourceLanguage: data['source_language'] as String,
+      targetLanguage: data['target_language'] as String,
+      sense: data['sense'] as String?,
+      transList: data['trans_list'] as String, // Use modern transList field
+      pos: data['pos'] as String?, // Use modern pos field
       pronunciation: data['pronunciation'] as String?,
-      partOfSpeech: data['pos'] as String?, // Use Wiktionary pos field
-      exampleSentence: data['examples'] as String?,
+      examples: data['examples'] as String?,
       sourceDictionary: data['source'] as String? ?? 'Unknown',
       createdAt: DateTime.tryParse(data['created_at'] as String? ?? '') ?? DateTime.now(),
-      // Add synonyms from pipe-separated list
-      synonyms: synonyms,
     );
   }
 }

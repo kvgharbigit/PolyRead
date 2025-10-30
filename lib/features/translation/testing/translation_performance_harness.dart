@@ -6,7 +6,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:polyread/features/translation/services/translation_service.dart';
-import 'package:polyread/features/translation/services/dictionary_service.dart';
 import 'package:polyread/features/translation/services/translation_cache_service.dart';
 import 'package:polyread/features/translation/models/translation_models.dart';
 

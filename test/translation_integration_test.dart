@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:polyread/features/translation/services/translation_service.dart';
-import 'package:polyread/features/translation/services/dictionary_service.dart';
 import 'package:polyread/features/translation/services/translation_cache_service.dart';
 import 'package:polyread/features/translation/models/translation_request.dart';
 import 'package:polyread/features/translation/models/dictionary_entry.dart';

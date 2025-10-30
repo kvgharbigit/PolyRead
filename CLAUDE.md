@@ -9,7 +9,7 @@ PolyRead is a Flutter-based language learning application that enables users to 
 - **Data Source**: Vuizur Wiktionary-Dictionaries for comprehensive vocabulary coverage
 - **Performance**: Sub-millisecond lookups with 5 database indexes + FTS5 search
 - **Quality**: Complete vocabulary with all common words, idioms, and technical terms
-- **Architecture**: Modern Drift/Wiktionary schema with legacy compatibility
+- **Architecture**: Unified modern Wiktionary schema (written_rep, sense, trans_list)
 
 ## 🏗️ System Architecture
 
@@ -42,7 +42,7 @@ PolyRead is a Flutter-based language learning application that enables users to 
 - **Portuguese-English**: Ready for generation (~1M+ entries)
 
 ### 🔧 Tools & Generation
-- **Builder Script**: `tools/vuizur-dict-builder.sh` for automated generation
+- **Builder Script**: `tools/vuizur-dict-builder.sh` generates modern Wiktionary format
 - **Data Source**: Vuizur Wiktionary-Dictionaries repository
 - **Output**: Production-ready `.sqlite.zip` packages
 

@@ -4,7 +4,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../models/translation_request.dart';
 import '../models/dictionary_entry.dart';
-import '../services/translation_service.dart';
+import '../models/translation_response.dart' as response_model;
 
 class TranslationCacheService {
   static const String _tableName = 'translation_cache';
@@ -55,7 +55,7 @@ class TranslationCacheService {
   }
   
   /// Get cached translation if available
-  Future<TranslationResponse?> getCachedTranslation(
+  Future<response_model.TranslationResponse?> getCachedTranslation(
     TranslationRequest request,
   ) async {
     try {
@@ -81,7 +81,7 @@ class TranslationCacheService {
         whereArgs: [row['id']],
       );
       
-      // Convert back to TranslationResponse
+      // Convert back to response_model.TranslationResponse
       return _responseFromCacheRow(request, row);
     } catch (e) {
       // If cache lookup fails, just return null
@@ -92,7 +92,7 @@ class TranslationCacheService {
   /// Cache a translation result
   Future<void> cacheTranslation(
     TranslationRequest request,
-    TranslationResponse response,
+    response_model.TranslationResponse response,
   ) async {
     if (!response.success || response.fromCache) {
       return; // Don't cache failures or already cached results
@@ -223,16 +223,16 @@ class TranslationCacheService {
     }
   }
   
-  TranslationResponse _responseFromCacheRow(
+  response_model.TranslationResponse _responseFromCacheRow(
     TranslationRequest request,
     Map<String, dynamic> row,
   ) {
-    final sourceType = TranslationSource.values.firstWhere(
+    final sourceType = response_model.TranslationSource.values.firstWhere(
       (source) => source.name == row['source_type'],
-      orElse: () => TranslationSource.none,
+      orElse: () => response_model.TranslationSource.none,
     );
     
-    return TranslationResponse(
+    return response_model.TranslationResponse(
       request: request,
       translatedText: row['translated_text'] as String?,
       dictionaryEntries: _decodeDictionaryEntries(row['dictionary_entries'] as String?)?.cast<DictionaryEntry>(),

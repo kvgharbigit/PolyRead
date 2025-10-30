@@ -2,14 +2,14 @@
 // Supports two-level structure: meanings → synonyms
 
 class BidirectionalDictionaryEntry {
-  final String lemma;
+  final String writtenRep;      // Modern: headword/lemma (Wiktionary standard)
   final List<MeaningGroup> meanings;
   final String direction; // 'forward' or 'reverse'
   final String sourceLanguage;
   final String targetLanguage;
 
   const BidirectionalDictionaryEntry({
-    required this.lemma,
+    required this.writtenRep,
     required this.meanings,
     required this.direction,
     required this.sourceLanguage,
@@ -17,15 +17,15 @@ class BidirectionalDictionaryEntry {
   });
 
   factory BidirectionalDictionaryEntry.fromDatabase({
-    required String lemma,
-    required String definition,
+    required String writtenRep,
+    required String transList,
     required String direction,
     required String sourceLanguage,
     required String targetLanguage,
   }) {
-    final meanings = _parseDefinition(definition);
+    final meanings = _parseTransList(transList);
     return BidirectionalDictionaryEntry(
-      lemma: lemma,
+      writtenRep: writtenRep,
       meanings: meanings,
       direction: direction,
       sourceLanguage: sourceLanguage,
@@ -34,20 +34,20 @@ class BidirectionalDictionaryEntry {
   }
 
   factory BidirectionalDictionaryEntry.fromAppDatabase({
-    required String lemma,
-    required String definition,
+    required String writtenRep,
+    required String transList,
     required String sourceLanguage,
     required String targetLanguage,
     String? pos,
     String? sense,
   }) {
-    final meanings = _parseDefinition(definition);
+    final meanings = _parseTransList(transList);
     
     // Determine direction based on language pair
     final direction = 'forward'; // App database doesn't have direction field, assume forward
     
     return BidirectionalDictionaryEntry(
-      lemma: lemma,
+      writtenRep: writtenRep,
       meanings: meanings,
       direction: direction,
       sourceLanguage: sourceLanguage,
@@ -55,24 +55,24 @@ class BidirectionalDictionaryEntry {
     );
   }
 
-  static List<MeaningGroup> _parseDefinition(String definition) {
+  static List<MeaningGroup> _parseTransList(String transList) {
     List<MeaningGroup> meanings = [];
     
     // Handle different formats
-    if (definition.contains('|')) {
+    if (transList.contains('|')) {
       // Pipe-separated format: "context1: syn1, syn2 | context2: syn1, syn2"
-      meanings = _parsePipeFormat(definition);
-    } else if (definition.contains(';')) {
+      meanings = _parsePipeFormat(transList);
+    } else if (transList.contains(';')) {
       // Legacy format: "syn1; syn2; syn3"
       meanings = [MeaningGroup(
         context: 'general',
-        synonyms: definition.split(';').map((s) => s.trim()).where((s) => s.isNotEmpty).toList(),
+        synonyms: transList.split(';').map((s) => s.trim()).where((s) => s.isNotEmpty).toList(),
       )];
     } else {
       // Single meaning
       meanings = [MeaningGroup(
         context: 'general',
-        synonyms: [definition.trim()],
+        synonyms: [transList.trim()],
       )];
     }
     
@@ -148,7 +148,7 @@ class BidirectionalDictionaryEntry {
   /// Check if this entry matches a search query
   bool matches(String query) {
     query = query.toLowerCase().trim();
-    return lemma.toLowerCase().contains(query) ||
+    return writtenRep.toLowerCase().contains(query) ||
            allSynonyms.any((syn) => syn.toLowerCase().contains(query));
   }
 }
