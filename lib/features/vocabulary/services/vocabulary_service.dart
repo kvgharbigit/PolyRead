@@ -193,7 +193,7 @@ class VocabularyService {
   }) async {
     try {
       await _database.transaction((txn) async {
-        // Get current item
+        // Get current item with null safety
         final itemResults = await txn.query(
           _tableName,
           where: 'id = ?',
@@ -201,10 +201,15 @@ class VocabularyService {
         );
         
         if (itemResults.isEmpty) {
-          throw VocabularyException('Vocabulary item not found');
+          throw VocabularyException('Vocabulary item not found for ID: $vocabularyId');
         }
         
         final currentItem = VocabularyItem.fromMap(itemResults.first);
+        
+        // Validate result data before processing
+        if (result.quality != null && (result.quality! < 0 || result.quality! > 5)) {
+          throw VocabularyException('Invalid quality score: ${result.quality}');
+        }
         
         // Calculate new SRS data
         final newSrsData = currentItem.srsData.updateFromReview(result);
@@ -215,23 +220,34 @@ class VocabularyService {
           srsData: newSrsData,
         );
         
-        await txn.update(
+        final updateResult = await txn.update(
           _tableName,
           updatedItem.toMap(),
           where: 'id = ?',
           whereArgs: [vocabularyId],
         );
         
-        // Record review in history
-        await txn.insert(_reviewsTableName, {
-          'vocabulary_id': vocabularyId,
-          'review_date': result.timestamp.millisecondsSinceEpoch,
-          'correct': result.correct ? 1 : 0,
-          'quality': result.quality,
-          'response_time_ms': result.responseTime?.inMilliseconds,
-        });
+        if (updateResult == 0) {
+          throw VocabularyException('Failed to update vocabulary item: no rows affected');
+        }
+        
+        // Record review in history with error handling
+        try {
+          await txn.insert(_reviewsTableName, {
+            'vocabulary_id': vocabularyId,
+            'review_date': result.timestamp.millisecondsSinceEpoch,
+            'correct': result.correct ? 1 : 0,
+            'quality': result.quality,
+            'response_time_ms': result.responseTime?.inMilliseconds,
+          });
+        } catch (reviewError) {
+          throw VocabularyException('Failed to record review history: $reviewError');
+        }
       });
     } catch (e) {
+      if (e is VocabularyException) {
+        rethrow;
+      }
       throw VocabularyException('Failed to record review: $e');
     }
   }
@@ -301,7 +317,7 @@ class VocabularyService {
   /// Get vocabulary statistics
   Future<VocabularyStats> getVocabularyStats() async {
     try {
-      // Total counts by status
+      // Total counts by status with null safety
       final statusCounts = await _database.rawQuery('''
         SELECT status, COUNT(*) as count 
         FROM $_tableName 
@@ -310,14 +326,19 @@ class VocabularyService {
       
       final statusMap = <VocabularyStatus, int>{};
       for (final row in statusCounts) {
+        final statusName = row['status'] as String?;
+        if (statusName == null) continue;
+        
         final status = VocabularyStatus.values.firstWhere(
-          (s) => s.name == row['status'],
+          (s) => s.name == statusName,
           orElse: () => VocabularyStatus.learning,
         );
-        statusMap[status] = row['count'] as int;
+        
+        final count = row['count'] as int? ?? 0;
+        statusMap[status] = count;
       }
       
-      // Items due for review
+      // Items due for review with null safety
       final now = DateTime.now().millisecondsSinceEpoch;
       final dueResults = await _database.rawQuery('''
         SELECT COUNT(*) as due_count 
@@ -325,9 +346,11 @@ class VocabularyService {
         WHERE srs_next_review <= ? AND status = ?
       ''', [now, VocabularyStatus.learning.name]);
       
-      final dueCount = dueResults.first['due_count'] as int;
+      final dueCount = dueResults.isNotEmpty 
+          ? (dueResults.first['due_count'] as int? ?? 0)
+          : 0;
       
-      // Language pairs
+      // Language pairs with null safety
       final languageResults = await _database.rawQuery('''
         SELECT source_language, target_language, COUNT(*) as count 
         FROM $_tableName 
@@ -336,11 +359,15 @@ class VocabularyService {
       
       final languagePairs = <String, int>{};
       for (final row in languageResults) {
-        final pair = '${row['source_language']} → ${row['target_language']}';
-        languagePairs[pair] = row['count'] as int;
+        final sourceLanguage = row['source_language'] as String? ?? 'unknown';
+        final targetLanguage = row['target_language'] as String? ?? 'unknown';
+        final count = row['count'] as int? ?? 0;
+        
+        final pair = '$sourceLanguage → $targetLanguage';
+        languagePairs[pair] = count;
       }
       
-      // Recent activity (last 7 days)
+      // Recent activity (last 7 days) with null safety
       final weekAgo = DateTime.now().subtract(const Duration(days: 7)).millisecondsSinceEpoch;
       final recentResults = await _database.rawQuery('''
         SELECT COUNT(*) as recent_reviews 
@@ -348,7 +375,9 @@ class VocabularyService {
         WHERE review_date >= ?
       ''', [weekAgo]);
       
-      final recentReviews = recentResults.first['recent_reviews'] as int;
+      final recentReviews = recentResults.isNotEmpty 
+          ? (recentResults.first['recent_reviews'] as int? ?? 0)
+          : 0;
       
       return VocabularyStats(
         totalItems: statusMap.values.fold(0, (sum, count) => sum + count),

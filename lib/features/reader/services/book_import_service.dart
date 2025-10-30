@@ -232,7 +232,7 @@ class BookImportService {
       final metadata = BookMetadata(
         title: fileName,
         author: null,
-        language: 'unknown', // TODO: Implement language detection
+        language: _detectLanguageFromFilename(fileName),
         totalPages: pageCount,
         totalChapters: null,
       );
@@ -409,6 +409,41 @@ class BookImportService {
         details: e.toString(),
       );
     }
+  }
+  
+  /// Simple language detection based on filename patterns and keywords
+  String _detectLanguageFromFilename(String filename) {
+    final lowerFilename = filename.toLowerCase();
+    
+    // Common language patterns in filenames
+    final languagePatterns = {
+      'spanish': 'es',
+      'español': 'es',
+      'france': 'fr',
+      'french': 'fr',
+      'français': 'fr',
+      'german': 'de',
+      'deutsch': 'de',
+      'italian': 'it',
+      'italiano': 'it',
+      'portuguese': 'pt',
+      'português': 'pt',
+      'chinese': 'zh',
+      'japanese': 'ja',
+      'korean': 'ko',
+      'russian': 'ru',
+      'русский': 'ru',
+    };
+    
+    // Check for language keywords in filename
+    for (final entry in languagePatterns.entries) {
+      if (lowerFilename.contains(entry.key)) {
+        return entry.value;
+      }
+    }
+    
+    // Default to English if no pattern detected
+    return 'en';
   }
 }
 

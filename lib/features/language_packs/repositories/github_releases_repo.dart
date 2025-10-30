@@ -26,6 +26,8 @@ class GitHubReleasesRepository {
     };
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 60);
+    _dio.options.followRedirects = true;
+    _dio.options.maxRedirects = 5;
   }
   
   /// Get all available language pack releases from registry
@@ -160,16 +162,21 @@ class GitHubReleasesRepository {
     CancelToken? cancelToken,
   }) async {
     try {
-      await _dio.download(
+      // Use a separate Dio instance for file downloads to avoid baseUrl issues
+      final downloadDio = Dio();
+      downloadDio.options.followRedirects = true;
+      downloadDio.options.maxRedirects = 5;
+      downloadDio.options.connectTimeout = const Duration(seconds: 30);
+      downloadDio.options.receiveTimeout = const Duration(minutes: 30);
+      
+      await downloadDio.download(
         downloadUrl,
         destinationPath,
         onReceiveProgress: onProgress,
         cancelToken: cancelToken,
         options: Options(
-          receiveTimeout: const Duration(minutes: 30), // Longer timeout for large files
           headers: {
-            // Remove authorization for direct download URLs
-            'Authorization': null,
+            'User-Agent': 'PolyRead-LanguagePacks/1.0',
           },
         ),
       );

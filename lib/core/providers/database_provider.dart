@@ -20,6 +20,8 @@ final databaseProvider = Provider<AppDatabase>((ref) {
 final booksProvider = Provider((ref) => ref.watch(databaseProvider).books);
 final readingProgressProvider = Provider((ref) => ref.watch(databaseProvider).readingProgress);
 final vocabularyItemsProvider = Provider((ref) => ref.watch(databaseProvider).vocabularyItems);
-final dictionaryEntriesProvider = Provider((ref) => ref.watch(databaseProvider).dictionaryEntries);
+final wordGroupsProvider = Provider((ref) => ref.watch(databaseProvider).wordGroups);
+final meaningsProvider = Provider((ref) => ref.watch(databaseProvider).meanings);
+final targetReverseLookupProvider = Provider((ref) => ref.watch(databaseProvider).targetReverseLookup);
 final languagePacksProvider = Provider((ref) => ref.watch(databaseProvider).languagePacks);
 final userSettingsProvider = Provider((ref) => ref.watch(databaseProvider).userSettings);

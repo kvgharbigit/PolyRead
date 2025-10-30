@@ -326,7 +326,7 @@ class _ReviewSessionState extends State<ReviewSession>
             child: _buildStatItem(
               'Accuracy',
               '${stats.accuracyPercentage.toStringAsFixed(1)}%',
-              Icons.target,
+              Icons.track_changes,
             ),
           ),
           Expanded(
@@ -527,7 +527,7 @@ class _ReviewSessionState extends State<ReviewSession>
                   child: _buildStatItem(
                     'Accuracy',
                     '${stats.accuracyPercentage.toStringAsFixed(1)}%',
-                    Icons.target,
+                    Icons.track_changes,
                   ),
                 ),
                 Expanded(

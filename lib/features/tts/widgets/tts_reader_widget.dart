@@ -2,6 +2,7 @@
 // Integrates text-to-speech with highlighting in the reading interface
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:polyread/features/tts/services/tts_service.dart';
 import 'package:polyread/features/reader/widgets/enhanced_interactive_text.dart';

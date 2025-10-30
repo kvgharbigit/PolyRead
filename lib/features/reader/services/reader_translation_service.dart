@@ -7,13 +7,14 @@ import 'package:polyread/features/translation/models/translation_request.dart';
 import 'package:polyread/features/translation/models/translation_response.dart' as response_model;
 import 'package:polyread/features/translation/services/translation_service.dart';
 import 'package:polyread/features/translation/services/translation_cache_service.dart';
-import 'package:polyread/features/vocabulary/services/vocabulary_service.dart';
-import 'package:polyread/features/vocabulary/models/vocabulary_item.dart';
+import 'package:polyread/features/vocabulary/services/drift_vocabulary_service.dart';
+import 'package:polyread/features/vocabulary/models/vocabulary_item.dart' as vocab_model;
 import 'package:polyread/core/database/app_database.dart';
+import 'package:polyread/core/utils/constants.dart';
 
 class ReaderTranslationService extends ChangeNotifier {
   final TranslationService _translationService;
-  final VocabularyService _vocabularyService;
+  final DriftVocabularyService? _vocabularyService;
   final AppDatabase _database;
   
   // Current translation state
@@ -28,10 +29,13 @@ class ReaderTranslationService extends ChangeNotifier {
   Offset? _selectionPosition;
   String? _selectionContext;
   int? _currentBookId;
+  String? _currentBookTitle;
+  String? _currentReaderPosition;
+  BuildContext? _context;
 
   ReaderTranslationService({
     required TranslationService translationService,
-    required VocabularyService vocabularyService,
+    required DriftVocabularyService? vocabularyService,
     required AppDatabase database,
   }) : _translationService = translationService,
        _vocabularyService = vocabularyService,
@@ -42,6 +46,7 @@ class ReaderTranslationService extends ChangeNotifier {
   bool get isTranslating => _isTranslating;
   String? get error => _error;
   String? get selectedText => _selectedText;
+  String? get selectedContext => _selectionContext;
   Offset? get selectionPosition => _selectionPosition;
   bool get hasSelection => _selectedText != null && _selectedText!.isNotEmpty;
   bool get needsModelDownload => _needsModelDownload;
@@ -53,9 +58,23 @@ class ReaderTranslationService extends ChangeNotifier {
   }
 
   /// Set the current book being read
-  void setCurrentBook(int bookId) {
+  void setCurrentBook(int bookId, {String? bookTitle}) {
     _currentBookId = bookId;
+    _currentBookTitle = bookTitle;
     notifyListeners();
+  }
+  
+  /// Update current reader position for vocabulary context
+  void updateReaderPosition(String position) {
+    _currentReaderPosition = position;
+  }
+
+  /// Set build context for dialog prompts and UI updates
+  void setContext(BuildContext? context) {
+    if (_context != context) {
+      _context = context;
+      // Don't notify listeners for context changes to avoid rebuild loops
+    }
   }
 
   /// Handle text selection from reader engines
@@ -129,7 +148,7 @@ class ReaderTranslationService extends ChangeNotifier {
       notifyListeners();
 
     } catch (e) {
-      _error = e.toString();
+      _error = AppConstants.translationErrorMessage;
       _isTranslating = false;
       notifyListeners();
     }
@@ -145,45 +164,52 @@ class ReaderTranslationService extends ChangeNotifier {
     }
 
     try {
-      final vocabularyItem = VocabularyItem(
-        id: 0, // Will be auto-generated
-        bookId: _currentBookId!,
-        sourceText: _selectedText!,
-        translation: customTranslation ?? _currentTranslation!.translatedText,
+      final vocabularyItem = vocab_model.VocabularyItem(
+        id: null, // Will be auto-generated
+        word: _selectedText!,
         sourceLanguage: _currentTranslation!.request.sourceLanguage,
         targetLanguage: _currentTranslation!.request.targetLanguage,
-        context: _selectionContext,
-        bookPosition: null, // TODO: Add current reader position
+        translation: customTranslation ?? _currentTranslation!.translatedText,
         definition: customDefinition ?? _extractDefinition(),
-        difficulty: DifficultyLevel.learning,
-        reviewCount: 0,
-        nextReview: DateTime.now().add(const Duration(hours: 4)),
-        lastReviewed: null,
+        context: _selectionContext,
+        bookTitle: _currentBookTitle,
+        bookLocation: _currentReaderPosition,
         createdAt: DateTime.now(),
-        isFavorite: false,
+        lastReviewed: DateTime.now(),
+        srsData: vocab_model.SRSData.initial(),
+        tags: const [],
+        status: vocab_model.VocabularyStatus.learning,
       );
 
-      await _vocabularyService.addVocabularyItem(vocabularyItem);
+      await _vocabularyService?.addVocabularyItem(vocabularyItem);
       
       // Clear selection after adding to vocabulary
       clearSelection();
       
     } catch (e) {
-      _error = 'Failed to add to vocabulary: $e';
+      _error = AppConstants.vocabularyErrorMessage;
       notifyListeners();
     }
   }
 
-  /// Extract definition from dictionary result
+  /// Extract definition from cycling dictionary result
   String? _extractDefinition() {
-    final dictionaryResult = _currentTranslation?.dictionaryResult;
-    if (dictionaryResult?.entries.isNotEmpty == true) {
-      final entry = dictionaryResult!.entries.first;
-      // Extract primary translation from modern transList field
-      final translations = entry.transList.split(' | ');
-      return translations.isNotEmpty ? translations.first.trim() : entry.sense;
+    final cyclingResult = _currentTranslation?.cyclingDictionaryResult;
+    if (cyclingResult != null) {
+      // Try to extract from cycling dictionary result
+      try {
+        if (cyclingResult.sourceMeanings?.hasResults == true) {
+          final meanings = cyclingResult.sourceMeanings?.meanings;
+          if (meanings != null && meanings.isNotEmpty) {
+            return meanings.first.displayTranslation;
+          }
+        }
+      } catch (e) {
+        // Fallback to translated text
+        return _currentTranslation?.translatedText;
+      }
     }
-    return null;
+    return _currentTranslation?.translatedText;
   }
 
   /// Clear current selection and translation
@@ -209,19 +235,31 @@ class ReaderTranslationService extends ChangeNotifier {
     }
 
     try {
-      // TODO: Implement actual model download logic
-      // For now, just retry the translation
-      _needsModelDownload = false;
-      _missingModelProvider = null;
-      notifyListeners();
+      // Check if translation service supports model download
+      if (_translationService.hasModelDownload(_missingModelProvider!)) {
+        // Attempt to download the missing model
+        await _translationService.downloadModel(
+          _missingModelProvider!,
+          sourceLanguage,
+          targetLanguage,
+        );
+        
+        _needsModelDownload = false;
+        _missingModelProvider = null;
+        notifyListeners();
 
-      // Retry translation
-      await translateSelection(
-        sourceLanguage: sourceLanguage,
-        targetLanguage: targetLanguage,
-      );
+        // Retry translation after download
+        await translateSelection(
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+        );
+      } else {
+        // Provider doesn't support auto-download, show error
+        _error = 'Model download not supported for $_missingModelProvider. Please install manually.';
+        notifyListeners();
+      }
     } catch (e) {
-      _error = 'Failed to download models: $e';
+      _error = AppConstants.modelDownloadErrorMessage;
       notifyListeners();
     }
   }
@@ -236,15 +274,17 @@ class ReaderTranslationService extends ChangeNotifier {
     suggestions.add(_currentTranslation!.translatedText);
     
     // Dictionary alternatives
-    final dictionaryResult = _currentTranslation!.dictionaryResult;
-    if (dictionaryResult?.entries.isNotEmpty == true) {
-      for (final entry in dictionaryResult!.entries) {
-        // Parse translations from modern transList field (pipe-separated)
-        final translations = entry.transList.split(' | ')
-            .where((t) => t.trim().isNotEmpty)
-            .map((t) => t.trim())
-            .toList();
-        suggestions.addAll(translations);
+    final cyclingResult = _currentTranslation!.cyclingDictionaryResult;
+    if (cyclingResult?.sourceMeanings?.hasResults == true) {
+      final meanings = cyclingResult!.sourceMeanings?.meanings;
+      if (meanings != null) {
+        for (final meaning in meanings) {
+          // Add cycling dictionary meanings
+          final translation = meaning.displayTranslation.trim();
+          if (translation.isNotEmpty && !suggestions.contains(translation)) {
+            suggestions.add(translation);
+          }
+        }
       }
     }
     
@@ -258,9 +298,9 @@ class ReaderTranslationService extends ChangeNotifier {
 
     return {
       'source': _currentTranslation!.source.name,
-      'confidence': _currentTranslation!.confidence,
+      'confidence': 1.0, // Placeholder for confidence
       'responseTime': _currentTranslation!.responseTime?.inMilliseconds,
-      'hasDictionary': _currentTranslation!.dictionaryResult != null,
+      'hasDictionary': _currentTranslation!.cyclingDictionaryResult != null,
       'hasML': _currentTranslation!.mlKitResult != null,
       'hasServer': _currentTranslation!.serverResult != null,
     };
@@ -268,7 +308,16 @@ class ReaderTranslationService extends ChangeNotifier {
 
   @override
   void dispose() {
-    clearSelection();
+    // Clear state without notifying listeners during disposal
+    _selectedText = null;
+    _selectionPosition = null;
+    _selectionContext = null;
+    _currentTranslation = null;
+    _error = null;
+    _isTranslating = false;
+    _needsModelDownload = false;
+    _missingModelProvider = null;
+    _context = null;
     super.dispose();
   }
 }

@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-// import 'package:flutter/services.dart' show TextSelection; // Provided by material.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:polyread/features/reader/engines/reader_interface.dart';
 import 'package:polyread/features/reader/engines/pdf_reader_engine.dart';
@@ -11,7 +10,6 @@ import 'package:polyread/features/reader/engines/epub_reader_engine.dart';
 import 'package:polyread/features/reader/engines/html_reader_engine.dart';
 import 'package:polyread/features/reader/engines/txt_reader_engine.dart';
 import 'package:polyread/features/reader/services/reading_progress_service.dart';
-// import 'package:polyread/features/reader/widgets/interactive_text.dart'; // Not currently used
 import 'package:polyread/features/reader/widgets/table_of_contents_dialog.dart';
 import 'package:polyread/features/reader/widgets/reader_settings_dialog.dart';
 import 'package:polyread/features/reader/models/reader_settings.dart';
@@ -19,10 +17,8 @@ import 'package:polyread/features/reader/services/reader_settings_service.dart';
 import 'package:polyread/features/reader/services/auto_scroll_service.dart';
 import 'package:polyread/features/reader/widgets/bookmarks_dialog.dart';
 import 'package:polyread/features/reader/services/bookmark_service.dart';
-import 'package:polyread/features/translation/widgets/translation_popup.dart';
-import 'package:polyread/features/translation/services/drift_translation_service.dart';
-// import 'package:polyread/features/translation/services/dictionary_service.dart'; // Not currently used
-// import 'package:polyread/features/translation/services/translation_cache_service.dart'; // Not currently used
+import 'package:polyread/features/translation/widgets/cycling_translation_popup.dart';
+import 'package:polyread/features/reader/providers/reader_translation_provider.dart';
 import 'package:polyread/features/vocabulary/services/drift_vocabulary_service.dart';
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/core/providers/database_provider.dart';
@@ -46,7 +42,7 @@ class BookReaderWidget extends ConsumerStatefulWidget {
 class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   ReaderEngine? _readerEngine;
   ReadingProgressService? _progressService;
-  DriftTranslationService? _translationService;
+  dynamic _translationService;
   // DriftVocabularyService? _vocabularyService;
   BookmarkService? _bookmarkService;
   ReaderSettingsService? _settingsService;
@@ -83,7 +79,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   void dispose() {
     _progressTimer?.cancel();
     _readerEngine?.dispose();
-    _translationService?.dispose();
+    // Don't dispose translation service here - it's managed by Riverpod
     _settingsService?.dispose();
     _autoScrollService?.dispose();
     super.dispose();
@@ -117,12 +113,15 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       // Initialize auto-scroll service
       _autoScrollService = AutoScrollService();
       
-      // Initialize translation service with Drift integration
-      _translationService = DriftTranslationService(database: database);
+      // Initialize reader translation service with book context
+      _translationService = ref.read(readerTranslationServiceProvider);
       await _translationService!.initialize();
       
-      // Set context for dialog prompts (will be updated in build method)
-      _translationService!.setContext(context);
+      // Set current book context for vocabulary
+      _translationService!.setCurrentBook(
+        widget.book.id,
+        bookTitle: widget.book.title,
+      );
       
       // Initialize vocabulary service
       // _vocabularyService = DriftVocabularyService(database);
@@ -170,10 +169,11 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   }
   
   void _startProgressTracking() {
-    // Save progress every 30 seconds
-    _progressTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _saveProgress();
-    });
+    // Save progress periodically 
+    _progressTimer = Timer.periodic(
+      Duration(seconds: AppConstants.progressSaveIntervalSeconds), 
+      (timer) => _saveProgress(),
+    );
   }
   
   Future<void> _saveProgress() async {
@@ -183,9 +183,14 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
         ? DateTime.now().difference(_sessionStartTime!).inMilliseconds
         : 0;
     
+    final currentPosition = _readerEngine!.currentPosition;
+    
+    // Update translation service with current position for vocabulary context
+    _translationService?.updateReaderPosition(currentPosition.toString());
+    
     await _progressService!.saveProgress(
       bookId: widget.book.id,
-      position: _readerEngine!.currentPosition,
+      position: currentPosition,
       progressPercentage: _readerEngine!.progress,
       readingTimeMs: sessionTime,
       wordsRead: _sessionWordsRead,
@@ -200,6 +205,25 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     void handleTextSelection(String text, Offset position, TextSelection selection) async {
       print('BookReader: handleTextSelection called with "$text"');
       
+      // Validate that we have actual meaningful text
+      final trimmedText = text.trim();
+      if (trimmedText.isEmpty || trimmedText.length < 1) {
+        print('BookReader: No meaningful text selected, ignoring tap');
+        return;
+      }
+      
+      // Check if text contains only whitespace or special characters
+      if (!RegExp(r'[a-zA-Z]').hasMatch(trimmedText)) {
+        print('BookReader: Text contains no letters, ignoring tap: "$trimmedText"');
+        return;
+      }
+      
+      // Check if text is too long (likely accidental selection)
+      if (trimmedText.length > 50) {
+        print('BookReader: Text too long, likely accidental selection: ${trimmedText.length} chars');
+        return;
+      }
+      
       if (_translationService == null) {
         print('BookReader: Translation service is null!');
         return;
@@ -211,7 +235,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       final context = _extractContext(text, selection);
       
       setState(() {
-        _selectedText = text;
+        _selectedText = trimmedText; // Use trimmed text
         _tapPosition = position;
         _selectedContext = context;
         _selectedTextSelection = selection;
@@ -220,7 +244,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       
       print('BookReader: Translation popup shown, starting translation...');
       
-      // Note: Translation will be performed by the TranslationPopup widget
+      // Note: Translation will be performed by the CyclingTranslationPopup widget
       // No need to call translation service here as it would duplicate the call
       
       _sessionTranslations++;
@@ -357,8 +381,12 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   
   @override
   Widget build(BuildContext context) {
-    // Update translation service context for dialog prompts
-    _translationService?.setContext(context);
+    // Update translation service context for dialog prompts (only if context changed)
+    if (_translationService != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _translationService?.setContext(context);
+      });
+    }
     
     if (_isLoading) {
       return const Scaffold(
@@ -489,16 +517,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     
     return Stack(
       children: [
-        // Main reader content wrapped with tap detection
-        GestureDetector(
-          onTap: () {
-            // Close translation popup when tapping outside
-            if (_showTranslationPopup) {
-              _closeTranslationPopup();
-            }
-          },
-          child: _buildReaderContent(),
-        ),
+        // Main reader content
+        _buildReaderContent(),
         
         // Reading progress indicator
         Positioned(
@@ -518,16 +538,30 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
           ),
         ),
         
-        // Translation popup overlay
+        // Translation popup overlay with tap-outside-to-dismiss
         if (_showTranslationPopup && _selectedText != null)
-          TranslationPopup(
-            selectedText: _selectedText!,
-            sourceLanguage: _sourceLanguage,
-            targetLanguage: _homeLanguage,
-            position: _tapPosition,
-            onClose: _closeTranslationPopup,
-            translationService: _translationService,
-            context: _selectedContext,
+          Stack(
+            children: [
+              // Full-screen transparent overlay for dismissal
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _closeTranslationPopup,
+                  behavior: HitTestBehavior.translucent,
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+              // Actual popup positioned normally
+              CyclingTranslationPopup(
+                key: ValueKey('translation_$_selectedText'),
+                selectedText: _selectedText!,
+                sourceLanguage: _sourceLanguage,
+                targetLanguage: _homeLanguage,
+                position: _tapPosition,
+                onClose: _closeTranslationPopup,
+                translationService: _translationService,
+                context: _selectedContext,
+              ),
+            ],
           ),
       ],
     );

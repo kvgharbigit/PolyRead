@@ -2,6 +2,7 @@
 // Renders HTML files with interactive text selection and translation
 
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -428,28 +429,40 @@ window.addEventListener('load', _updateProgress);
 
   // Simple JSON parser for basic cases
   Map<String, dynamic> _parseSimpleJson(String json) {
-    // This is a simplified parser - in production, use dart:convert
-    final map = <String, dynamic>{};
-    
-    // Remove braces and split by commas
-    final content = json.replaceAll(RegExp(r'[{}]'), '');
-    final pairs = content.split(',');
-    
-    for (final pair in pairs) {
-      final parts = pair.split(':');
-      if (parts.length == 2) {
-        final key = parts[0].trim().replaceAll('"', '');
-        var value = parts[1].trim().replaceAll('"', '');
+    try {
+      // Try proper JSON parsing first
+      return Map<String, dynamic>.from(jsonDecode(json));
+    } catch (e) {
+      print('JSON parse error, falling back to simple parser: $e');
+      
+      // Fallback to simplified parser
+      final map = <String, dynamic>{};
+      
+      try {
+        // Remove braces and split by commas
+        final content = json.replaceAll(RegExp(r'[{}]'), '');
+        final pairs = content.split(',');
         
-        // Try to parse as number
-        if (double.tryParse(value) != null) {
-          map[key] = double.parse(value);
-        } else {
-          map[key] = value;
+        for (final pair in pairs) {
+          final parts = pair.split(':');
+          if (parts.length == 2) {
+            final key = parts[0].trim().replaceAll('"', '');
+            var value = parts[1].trim().replaceAll('"', '');
+            
+            // Try to parse as number
+            if (double.tryParse(value) != null) {
+              map[key] = double.parse(value);
+            } else {
+              map[key] = value;
+            }
+          }
         }
+      } catch (fallbackError) {
+        print('Fallback JSON parser also failed: $fallbackError');
+        return <String, dynamic>{};
       }
+      
+      return map;
     }
-    
-    return map;
   }
 }

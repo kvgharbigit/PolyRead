@@ -37,8 +37,10 @@ class TtsService extends ChangeNotifier {
   
   // Timers and state management
   Timer? _progressTimer;
+  Timer? _jumpToWordTimer;
   DateTime? _speechStartTime;
   int _estimatedDurationMs = 0;
+  bool _isDisposed = false;
 
   // Getters
   TtsState get ttsState => _ttsState;
@@ -222,14 +224,27 @@ class TtsService extends ChangeNotifier {
   void _startProgressTracking() {
     _stopProgressTracking(); // Ensure no duplicate timers
     
-    _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      _updateProgress();
-    });
+    if (!_isDisposed) {
+      _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+        if (_isDisposed) {
+          timer.cancel();
+          return;
+        }
+        _updateProgress();
+      });
+    }
   }
 
   void _stopProgressTracking() {
     _progressTimer?.cancel();
     _progressTimer = null;
+  }
+  
+  void _stopAllTimers() {
+    _progressTimer?.cancel();
+    _progressTimer = null;
+    _jumpToWordTimer?.cancel();
+    _jumpToWordTimer = null;
   }
 
   void _updateProgress() {
@@ -267,12 +282,19 @@ class TtsService extends ChangeNotifier {
       // Stop current speech and resume from the selected word
       stop();
       
-      Future.delayed(const Duration(milliseconds: 100), () {
-        final remainingWords = _words.skip(wordIndex).toList();
-        final remainingText = remainingWords.join(' ');
-        _currentWordIndex = wordIndex - 1; // Will be incremented when speech starts
-        speak(remainingText);
-      });
+      // Cancel any existing timer to prevent memory leaks
+      _jumpToWordTimer?.cancel();
+      
+      if (!_isDisposed) {
+        _jumpToWordTimer = Timer(const Duration(milliseconds: 100), () {
+          if (_isDisposed) return;
+          
+          final remainingWords = _words.skip(wordIndex).toList();
+          final remainingText = remainingWords.join(' ');
+          _currentWordIndex = wordIndex - 1; // Will be incremented when speech starts
+          speak(remainingText);
+        });
+      }
     }
   }
 
@@ -300,8 +322,16 @@ class TtsService extends ChangeNotifier {
 
   @override
   void dispose() {
-    _stopProgressTracking();
+    _isDisposed = true;
+    _stopAllTimers();
     _flutterTts.stop();
+    
+    // Clear callbacks to prevent memory leaks
+    onWordHighlight = null;
+    onSpeechComplete = null;
+    onSpeechStart = null;
+    onProgressUpdate = null;
+    
     super.dispose();
   }
 }

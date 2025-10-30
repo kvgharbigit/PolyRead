@@ -1,26 +1,24 @@
 // Centralized Translation Service - Coordinates between dictionary and ML providers
-// Implements fallback strategy: Dictionary → ML Kit → Google Translate
+// Strategy: Dictionary (single words) → ML Kit → Google Translate
 
 import '../providers/translation_provider.dart';
 import '../providers/ml_kit_provider.dart';
 import '../providers/server_provider.dart';
-import '../services/drift_dictionary_service.dart';
-import '../services/translation_cache_service.dart';
-import '../models/dictionary_entry.dart';
+import '../services/cycling_dictionary_service.dart';
 import '../models/translation_request.dart';
 import '../models/translation_response.dart' as response_model;
 
 class TranslationService {
-  final DriftDictionaryService _dictionaryService;
-  final TranslationCacheService _cacheService;
+  final CyclingDictionaryService _dictionaryService;
+  final dynamic _cacheService;
   final List<TranslationProvider> _providers;
   
   late final MlKitTranslationProvider _mlKitProvider;
   late final ServerTranslationProvider _serverProvider;
   
   TranslationService({
-    required DriftDictionaryService dictionaryService,
-    required TranslationCacheService cacheService,
+    required CyclingDictionaryService dictionaryService,
+    required dynamic cacheService,
   }) : _dictionaryService = dictionaryService,
        _cacheService = cacheService,
        _providers = [] {
@@ -31,20 +29,31 @@ class TranslationService {
   
   /// Initialize all translation providers
   Future<void> initialize() async {
-    // DriftDictionaryService doesn't need initialization - database is already set up
-    await _cacheService.initialize();
+    try {
+      await _cacheService.initialize();
+    } catch (e) {
+      print('Failed to initialize cache service: $e');
+      // Continue without cache if it fails
+    }
     
-    for (final provider in _providers) {
+    // Initialize providers in parallel for better performance
+    final initFutures = _providers.map((provider) async {
       try {
         await provider.initialize();
+        return true;
       } catch (e) {
         // Log error but continue with other providers
         print('Failed to initialize provider ${provider.providerId}: $e');
+        return false;
       }
-    }
+    });
+    
+    await Future.wait(initFutures);
   }
   
   /// Main translation method with fallback strategy
+  /// Single words: CyclingDictionary → ML Kit → Google Translate
+  /// Sentences: ML Kit → Google Translate (skip dictionary)
   Future<response_model.TranslationResponse> translateText({
     required String text,
     required String sourceLanguage,
@@ -60,29 +69,39 @@ class TranslationService {
     
     // Check cache first if enabled
     if (useCache) {
-      final cachedResult = await _cacheService.getCachedTranslation(request);
-      if (cachedResult != null) {
-        return response_model.TranslationResponse.fromCached(cachedResult);
+      try {
+        final cachedResult = await _cacheService.getCachedTranslation(request);
+        if (cachedResult != null) {
+          return response_model.TranslationResponse.fromCached(cachedResult);
+        }
+      } catch (e) {
+        print('Cache lookup failed: $e');
+        // Continue without cache
       }
     }
     
-    // Step 1: Dictionary lookup (for single words)
+    // Step 1: Cycling Dictionary lookup (for single words)
     if (_isSingleWord(text)) {
-      final dictionaryResult = await _tryDictionaryLookup(
+      final dictionaryResult = await _tryCyclingDictionaryLookup(
         text, 
         sourceLanguage,
         targetLanguage,
       );
       
       if (dictionaryResult.hasResults) {
-        final response = response_model.TranslationResponse.fromDictionary(
+        final response = response_model.TranslationResponse.fromCyclingDictionary(
           request: request,
           dictionaryResult: dictionaryResult,
         );
         
         // Cache dictionary results
         if (useCache) {
-          await _cacheService.cacheTranslation(request, response);
+          try {
+            await _cacheService.cacheTranslation(request, response);
+          } catch (e) {
+            print('Failed to cache dictionary result: $e');
+            // Don't fail translation due to cache errors
+          }
         }
         
         return response;
@@ -126,7 +145,12 @@ class TranslationService {
             
             // Cache ML Kit results
             if (useCache) {
-              await _cacheService.cacheTranslation(request, response);
+              try {
+                await _cacheService.cacheTranslation(request, response);
+              } catch (e) {
+                print('Failed to cache ML Kit result: $e');
+                // Don't fail translation due to cache errors
+              }
             }
             
             return response;
@@ -141,7 +165,7 @@ class TranslationService {
       }
     }
     
-    // Step 3: Google Translate (online fallback)
+    // Step 2: Google Translate (online fallback)
     if (await _serverProvider.isAvailable) {
       final serverSupported = await _serverProvider.supportsLanguagePair(
         sourceLanguage: sourceLanguage,
@@ -171,7 +195,12 @@ class TranslationService {
           
           // Cache server results
           if (useCache) {
-            await _cacheService.cacheTranslation(request, response);
+            try {
+              await _cacheService.cacheTranslation(request, response);
+            } catch (e) {
+              print('Failed to cache server result: $e');
+              // Don't fail translation due to cache errors
+            }
           }
           
           return response;
@@ -190,18 +219,28 @@ class TranslationService {
   Future<List<ProviderStatus>> getProviderStatus() async {
     final statuses = <ProviderStatus>[];
     
-    // Dictionary status
-    final dictionaryStats = await _dictionaryService.getStats();
-    statuses.add(ProviderStatus(
-      providerId: 'dictionary',
-      providerName: 'Dictionary Lookup',
-      isAvailable: dictionaryStats.totalEntries > 0,
-      isOfflineCapable: true,
-      additionalInfo: '${dictionaryStats.totalEntries} entries',
-    ));
+    // Cycling Dictionary status
+    try {
+      final stats = await _dictionaryService.getStats('es', 'en'); // Default to es-en for status
+      statuses.add(ProviderStatus(
+        providerId: 'cycling_dictionary',
+        providerName: 'Cycling Dictionary',
+        isAvailable: stats['totalWordGroups']! > 0,
+        isOfflineCapable: true,
+        additionalInfo: '${stats['totalWordGroups']} word groups, ${stats['totalMeanings']} meanings',
+      ));
+    } catch (e) {
+      statuses.add(ProviderStatus(
+        providerId: 'cycling_dictionary',
+        providerName: 'Cycling Dictionary',
+        isAvailable: false,
+        isOfflineCapable: true,
+        additionalInfo: 'Error: $e',
+      ));
+    }
     
-    // ML providers status
-    for (final provider in _providers) {
+    // ML providers status - check in parallel for better performance
+    final providerFutures = _providers.map((provider) async {
       final isAvailable = await provider.isAvailable;
       String? additionalInfo;
       
@@ -212,14 +251,17 @@ class TranslationService {
         additionalInfo = isAvailable ? 'Online' : 'Offline';
       }
       
-      statuses.add(ProviderStatus(
+      return ProviderStatus(
         providerId: provider.providerId,
         providerName: provider.providerName,
         isAvailable: isAvailable,
         isOfflineCapable: provider.isOfflineCapable,
         additionalInfo: additionalInfo,
-      ));
-    }
+      );
+    });
+    
+    final providerStatuses = await Future.wait(providerFutures);
+    statuses.addAll(providerStatuses);
     
     return statuses;
   }
@@ -241,13 +283,19 @@ class TranslationService {
   Future<Map<String, List<LanguagePair>>> getSupportedLanguagePairs() async {
     final allPairs = <String, List<LanguagePair>>{};
     
-    for (final provider in _providers) {
+    // Fetch language pairs in parallel for better performance
+    final futures = _providers.map((provider) async {
       try {
         final pairs = await provider.getSupportedLanguagePairs();
-        allPairs[provider.providerId] = pairs;
+        return MapEntry(provider.providerId, pairs);
       } catch (e) {
-        allPairs[provider.providerId] = [];
+        return MapEntry(provider.providerId, <LanguagePair>[]);
       }
+    });
+    
+    final results = await Future.wait(futures);
+    for (final entry in results) {
+      allPairs[entry.key] = entry.value;
     }
     
     return allPairs;
@@ -265,13 +313,26 @@ class TranslationService {
   
   /// Clean up resources
   Future<void> dispose() async {
-    for (final provider in _providers) {
-      await provider.dispose();
+    // Dispose providers in parallel for faster cleanup
+    final disposeFutures = _providers.map((provider) async {
+      try {
+        await provider.dispose();
+      } catch (e) {
+        print('Error disposing provider ${provider.providerId}: $e');
+      }
+    });
+    
+    await Future.wait(disposeFutures);
+    
+    try {
+      await _cacheService.dispose();
+    } catch (e) {
+      print('Error disposing cache service: $e');
     }
-    await _cacheService.dispose();
   }
   
-  Future<DictionaryLookupResult> _tryDictionaryLookup(
+  /// Try cycling dictionary lookup for single words
+  Future<CyclingDictionaryLookupResult> _tryCyclingDictionaryLookup(
     String word, 
     String sourceLanguage,
     String targetLanguage,
@@ -279,30 +340,65 @@ class TranslationService {
     final stopwatch = Stopwatch()..start();
     
     try {
-      final entries = await _dictionaryService.lookupWord(
-        word: word,
-        sourceLanguage: sourceLanguage,
-        targetLanguage: targetLanguage, // Use proper target language for bidirectional lookup
-        limit: 5,
+      // Check if required language pack is available
+      final packId = '$sourceLanguage-$targetLanguage';
+      final isPackAvailable = await _isDictionaryPackAvailable(packId);
+      
+      if (!isPackAvailable) {
+        stopwatch.stop();
+        return CyclingDictionaryLookupResult(
+          query: word,
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+          latencyMs: stopwatch.elapsedMilliseconds,
+          error: 'Language pack not installed: $packId',
+          missingLanguagePack: packId,
+        );
+      }
+      
+      // Try source → target lookup first
+      final sourceMeanings = await _dictionaryService.lookupSourceMeanings(
+        word,
+        sourceLanguage,
+        targetLanguage,
+      );
+      
+      if (sourceMeanings.hasResults) {
+        stopwatch.stop();
+        return CyclingDictionaryLookupResult(
+          query: word,
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+          sourceMeanings: sourceMeanings,
+          latencyMs: stopwatch.elapsedMilliseconds,
+        );
+      }
+      
+      // Try target → source reverse lookup
+      final reverseTranslations = await _dictionaryService.lookupTargetTranslations(
+        word,
+        sourceLanguage,
+        targetLanguage,
       );
       
       stopwatch.stop();
       
-      return DictionaryLookupResult(
+      return CyclingDictionaryLookupResult(
         query: word,
         sourceLanguage: sourceLanguage,
         targetLanguage: targetLanguage,
-        entries: entries,
+        reverseTranslations: reverseTranslations,
         latencyMs: stopwatch.elapsedMilliseconds,
       );
+      
     } catch (e) {
       stopwatch.stop();
-      return DictionaryLookupResult(
+      return CyclingDictionaryLookupResult(
         query: word,
         sourceLanguage: sourceLanguage,
         targetLanguage: targetLanguage,
-        entries: [],
         latencyMs: stopwatch.elapsedMilliseconds,
+        error: e.toString(),
       );
     }
   }
@@ -312,8 +408,53 @@ class TranslationService {
     return !trimmed.contains(' ') && 
            !trimmed.contains('\n') && 
            !trimmed.contains('\t') &&
-           trimmed.length > 0 &&
+           trimmed.isNotEmpty &&
            trimmed.length < 50; // Reasonable word length limit
+  }
+  
+  /// Check if a dictionary language pack is available
+  Future<bool> _isDictionaryPackAvailable(String packId) async {
+    try {
+      // Quick check: try to get stats for this language pair
+      final langParts = packId.split('-');
+      if (langParts.length != 2) return false;
+      
+      final stats = await _dictionaryService.getStats(langParts[0], langParts[1]);
+      return stats['totalWordGroups']! > 0;
+    } catch (e) {
+      // Any error means the pack is not available
+      return false;
+    }
+  }
+  
+  /// Check if a provider supports model download
+  bool hasModelDownload(String providerId) {
+    try {
+      final provider = _providers.firstWhere((p) => p.providerId == providerId);
+      return provider is MlKitTranslationProvider;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// Download models for a specific provider and language pair
+  Future<void> downloadModel(String providerId, String sourceLanguage, String targetLanguage) async {
+    try {
+      final provider = _providers.firstWhere((p) => p.providerId == providerId);
+      
+      if (provider is MlKitTranslationProvider) {
+        // Attempt to trigger model download by trying a translation
+        await provider.translateText(
+          text: 'test',
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+        );
+      } else {
+        throw Exception('Provider $providerId does not support model downloads');
+      }
+    } catch (e) {
+      throw Exception('Failed to download model for $providerId: $e');
+    }
   }
 }
 
@@ -333,7 +474,33 @@ class ProviderStatus {
   });
 }
 
-// Import needed models
+// Result classes
+class CyclingDictionaryLookupResult {
+  final String query;
+  final String sourceLanguage;
+  final String targetLanguage;
+  final dynamic sourceMeanings; // MeaningLookupResult
+  final dynamic reverseTranslations; // ReverseLookupResult
+  final int latencyMs;
+  final String? error;
+  final String? missingLanguagePack;
+  
+  const CyclingDictionaryLookupResult({
+    required this.query,
+    required this.sourceLanguage,
+    required this.targetLanguage,
+    this.sourceMeanings,
+    this.reverseTranslations,
+    required this.latencyMs,
+    this.error,
+    this.missingLanguagePack,
+  });
+  
+  bool get hasResults => 
+    (sourceMeanings?.hasResults ?? false) || 
+    (reverseTranslations?.hasResults ?? false);
+}
+
 class CacheStats {
   final int totalEntries;
   final int totalSize;

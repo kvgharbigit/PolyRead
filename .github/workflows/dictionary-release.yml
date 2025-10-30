@@ -1,0 +1,238 @@
+name: Build and Release Generalized Dictionary Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      language_pairs:
+        description: 'Language pairs to build (space-separated, e.g., "es-en fr-en de-en")'
+        required: true
+        default: 'es-en'
+      release_tag:
+        description: 'Release tag (e.g., v2.1.0)'
+        required: true
+        default: 'v2.1.0'
+      
+  push:
+    tags:
+      - 'v*'
+    paths:
+      - 'tools/vuizur-meaning-dict-builder.sh'
+      - '.github/workflows/dictionary-release.yml'
+
+jobs:
+  build-dictionaries:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        language_pair: ${{ fromJson(format('["{0}"]', github.event.inputs.language_pairs || 'es-en fr-en de-en')) }}
+      fail-fast: false
+      
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y sqlite3 curl bc zip
+
+    - name: Make builder script executable
+      run: chmod +x tools/vuizur-meaning-dict-builder.sh
+
+    - name: Build dictionary package
+      working-directory: tools
+      run: |
+        echo "🔧 Building dictionary for language pair: ${{ matrix.language_pair }}"
+        ./vuizur-meaning-dict-builder.sh ${{ matrix.language_pair }}
+        
+        # Verify the build
+        if [ ! -f "dist/${{ matrix.language_pair }}.sqlite" ]; then
+          echo "❌ Dictionary build failed - no output file"
+          exit 1
+        fi
+        
+        if [ ! -f "dist/${{ matrix.language_pair }}.sqlite.zip" ]; then
+          echo "❌ Dictionary packaging failed - no zip file"
+          exit 1
+        fi
+        
+        # Get file sizes for verification
+        UNCOMPRESSED_SIZE=$(stat -c%s "dist/${{ matrix.language_pair }}.sqlite")
+        COMPRESSED_SIZE=$(stat -c%s "dist/${{ matrix.language_pair }}.sqlite.zip")
+        
+        echo "✅ Dictionary build completed:"
+        echo "   Uncompressed: $(echo "scale=1; $UNCOMPRESSED_SIZE/1024/1024" | bc)MB"
+        echo "   Compressed: $(echo "scale=1; $COMPRESSED_SIZE/1024/1024" | bc)MB"
+
+    - name: Test dictionary functionality
+      working-directory: tools
+      run: |
+        echo "🧪 Testing dictionary functionality..."
+        
+        # Test basic schema
+        sqlite3 "dist/${{ matrix.language_pair }}.sqlite" "SELECT COUNT(*) FROM word_groups;" > /dev/null
+        sqlite3 "dist/${{ matrix.language_pair }}.sqlite" "SELECT COUNT(*) FROM meanings;" > /dev/null
+        sqlite3 "dist/${{ matrix.language_pair }}.sqlite" "SELECT COUNT(*) FROM target_reverse_lookup;" > /dev/null
+        
+        # Get basic stats
+        WORD_GROUPS=$(sqlite3 "dist/${{ matrix.language_pair }}.sqlite" "SELECT COUNT(*) FROM word_groups;")
+        MEANINGS=$(sqlite3 "dist/${{ matrix.language_pair }}.sqlite" "SELECT COUNT(*) FROM meanings;")
+        TARGET_WORDS=$(sqlite3 "dist/${{ matrix.language_pair }}.sqlite" "SELECT COUNT(DISTINCT target_word) FROM target_reverse_lookup;")
+        
+        echo "📊 Dictionary Statistics:"
+        echo "   Word Groups: $WORD_GROUPS"
+        echo "   Meanings: $MEANINGS"
+        echo "   Target Words: $TARGET_WORDS"
+        
+        # Verify minimum thresholds
+        if [ "$WORD_GROUPS" -lt 1000 ]; then
+          echo "❌ Dictionary too small: only $WORD_GROUPS word groups"
+          exit 1
+        fi
+        
+        echo "✅ Dictionary tests passed"
+
+    - name: Upload dictionary artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: dictionary-${{ matrix.language_pair }}
+        path: |
+          tools/dist/${{ matrix.language_pair }}.sqlite
+          tools/dist/${{ matrix.language_pair }}.sqlite.zip
+        retention-days: 30
+
+  create-release:
+    needs: build-dictionaries
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download all dictionary artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+
+    - name: Prepare release assets
+      run: |
+        mkdir -p release-assets
+        
+        # Copy all dictionary files to release directory
+        find artifacts/ -name "*.sqlite" -exec cp {} release-assets/ \;
+        find artifacts/ -name "*.sqlite.zip" -exec cp {} release-assets/ \;
+        
+        # Create manifest file
+        cat > release-assets/MANIFEST.md << 'EOF'
+        # PolyRead Dictionary Packages
+        
+        ## Features
+        - **One-Level Meaning Cycling** (both directions)
+        - **Source → Target**: Cycle through meanings with part-of-speech
+        - **Target → Source**: Cycle through different source words  
+        - **No proper nouns** or conjugation pollution
+        - **Quality-ranked** translations
+        - **Part-of-speech** preserved for UI formatting
+        - **Generalized schema** supports any language pair
+        
+        ## Usage
+        1. Download the `.sqlite.zip` file for your language pair
+        2. Extract to your PolyRead app data directory
+        3. The app will automatically detect and load the dictionary
+        
+        ## Language Pairs
+        EOF
+        
+        # Add language pair info to manifest
+        for file in release-assets/*.sqlite; do
+          if [ -f "$file" ]; then
+            pair=$(basename "$file" .sqlite)
+            size=$(stat -c%s "$file")
+            size_mb=$(echo "scale=1; $size/1024/1024" | bc)
+            echo "- **$pair**: ${size_mb}MB uncompressed" >> release-assets/MANIFEST.md
+          fi
+        done
+        
+        # List all files being released
+        echo ""
+        echo "📦 Release Assets:"
+        ls -lah release-assets/
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
+        name: PolyRead Dictionary Release ${{ github.event.inputs.release_tag || github.ref_name }}
+        body: |
+          # PolyRead Generalized Dictionary System
+          
+          This release contains meaning-based dictionary packages with one-level cycling support.
+          
+          ## What's New
+          - ✅ **Generalized Schema**: Supports any language pair (es-en, fr-en, de-en, etc.)
+          - ✅ **One-Level Cycling**: Tap to cycle through meanings, long-press to expand
+          - ✅ **Bidirectional Support**: Both source→target and target→source lookups
+          - ✅ **Quality Ranking**: Best translations prioritized
+          - ✅ **Part-of-Speech Tags**: Preserved for UI formatting
+          - ✅ **No Pollution**: Proper nouns and conjugations filtered out
+          
+          ## Installation
+          1. Download the `.sqlite.zip` file for your language pair
+          2. Extract to your app's dictionary directory
+          3. Restart PolyRead to detect the new dictionary
+          
+          ## Technical Details
+          - **Schema Version**: 6 (Generalized meaning-based)
+          - **Database Format**: SQLite with FTS5 search
+          - **Compression**: ~75% size reduction with ZIP
+          - **Performance**: Sub-millisecond lookups with indexes
+          
+          See MANIFEST.md for detailed package information.
+        files: |
+          release-assets/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  validate-release:
+    needs: create-release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Validate release assets
+      run: |
+        echo "🔍 Validating release assets..."
+        
+        # Get release info
+        RELEASE_TAG="${{ github.event.inputs.release_tag || github.ref_name }}"
+        
+        # Wait a moment for release to be available
+        sleep 10
+        
+        # Check if release exists and has assets
+        gh release view "$RELEASE_TAG" --json assets --jq '.assets | length' > asset_count.txt
+        ASSET_COUNT=$(cat asset_count.txt)
+        
+        echo "📊 Release validation:"
+        echo "   Tag: $RELEASE_TAG"
+        echo "   Assets: $ASSET_COUNT"
+        
+        if [ "$ASSET_COUNT" -lt 2 ]; then
+          echo "❌ Release validation failed: insufficient assets"
+          exit 1
+        fi
+        
+        echo "✅ Release validation passed"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

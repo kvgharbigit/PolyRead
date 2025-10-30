@@ -35,7 +35,7 @@ class BookCard extends StatelessWidget {
             
             // Book info
             Container(
-              height: 66, // Fixed height to prevent overflow
+              height: 74, // Fixed height to prevent overflow (increased to accommodate content)
               padding: const EdgeInsets.all(AppConstants.smallPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

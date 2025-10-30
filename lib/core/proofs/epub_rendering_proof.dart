@@ -1,7 +1,6 @@
 // Phase 0 Validation: EPUB Rendering Proof
 // Placeholder implementation until epubx package is added
 
-import 'package:flutter/foundation.dart';
 
 class EpubRenderingProof {
   /// Test EPUB rendering capabilities with various book types

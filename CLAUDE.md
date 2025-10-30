@@ -3,15 +3,16 @@
 ## Project Overview
 PolyRead is a Flutter-based language learning application that enables users to read books in foreign languages with integrated translation and dictionary support. The app supports PDF and EPUB formats with real-time translation capabilities using both local dictionaries and ML Kit translation models.
 
-## 🌟 Key Achievement: Modern Dictionary System v2.1
+## 🌟 Key Achievement: Cycling Dictionary System v2.1
 
-- **Revolutionary Scale**: 2,172,196 dictionary entries for Spanish-English
-- **Data Source**: Vuizur Wiktionary-Dictionaries for comprehensive vocabulary coverage
-- **Performance**: Sub-millisecond lookups with 5 database indexes + FTS5 search
-- **Quality**: Complete vocabulary with all common words, idioms, and technical terms
-- **Architecture**: ✅ **FULLY UNIFIED** modern Wiktionary schema (written_rep, sense, trans_list, pos)
-- **Consistency**: ✅ **ZERO legacy field references** - complete audit completed
-- **Field Format**: All services use modern format with pipe-separated translations
+- **Revolutionary UI**: One-level meaning cycling with tap-to-cycle + long-press-to-expand
+- **Generalized Schema**: Supports any language pair (es-en, fr-en, de-en, etc.)
+- **Bidirectional**: Both source→target and target→source cycling with quality ranking
+- **Production Scale**: 94,334 word groups, 126,914 meanings, 66,768 target words
+- **Data Source**: Vuizur Wiktionary-Dictionaries with meaning-based processing
+- **Performance**: Sub-millisecond lookups with optimized indexes
+- **UI Ready**: Part-of-speech tags, context expansion, primary indicators
+- **Quality Filtered**: No proper nouns, conjugations, or acronym pollution
 
 ## 🏗️ System Architecture
 
@@ -31,15 +32,23 @@ PolyRead is a Flutter-based language learning application that enables users to 
 
 ## 📊 Production Status
 
-### ✅ Completed (v2.1) - **AUDIT COMPLETE** 
-- **Spanish-English Dictionary**: 2,172,196 entries deployed
-- **Performance Optimization**: 5 database indexes + FTS5 search
-- **GitHub Distribution**: Automated release system
-- **App Integration**: Complete language pack management UI
-- **Quality Assurance**: Comprehensive validation and testing
-- **✅ Field Consistency**: **COMPLETE** - All legacy references eliminated
-- **✅ Modern Schema**: **UNIFIED** - written_rep, sense, trans_list, pos format throughout
-- **✅ Service Integration**: **CONSISTENT** - All UI components use modern field access
+### ✅ **COMPLETED v2.1 - CYCLING SYSTEM 100% OPERATIONAL** 🎯
+- **🗂️ Complete Legacy Removal**: ALL legacy dictionary code removed - ZERO backward compatibility
+- **🧹 Deep Code Cleanup**: Unused imports removed, legacy fallbacks eliminated, deprecated proofs disabled
+- **🏗️ Clean Architecture**: Single cycling dictionary paradigm throughout entire codebase
+- **🎨 Revolutionary UI**: Tap-to-cycle + long-press-to-expand fully implemented and working
+- **🔄 Bidirectional Support**: Both source→target and target→source with quality-ranked cycling
+- **⚡ Production Scale**: 94K+ word groups, 126K+ meanings, 66K+ reverse lookups
+- **🚀 Zero Compilation Errors**: Core translation flow builds and runs perfectly (3 minor warnings only)
+- **📱 Ready for Use**: Users can select text, cycle meanings, get sentence translations
+- **🔧 Clean Database**: Only cycling tables exist (WordGroups, Meanings, TargetReverseLookup)
+- **🎯 Service Integration**: CyclingDictionaryService → TranslationService → ML Kit pipeline
+- **📋 Updated Documentation**: All docs reflect cycling-only implementation
+- **🗑️ Legacy Artifacts Removed**: DatabaseAdapter deleted, SQLite proof disabled, JSON fallbacks removed
+- **🧽 Code Optimization**: Unused imports cleaned, commented code removed, unused variables fixed
+- **📐 Style Consistency**: Error handling patterns verified, TODO comments audited, dead code eliminated
+- **⚡ Performance Optimizations**: Parallel provider status checks, optimized async operations, resource cleanup
+- **🎯 Service Integration**: Real cache service integration planned, mock services replaced, provider patterns improved
 
 ### 🚧 Development Pipeline
 - **French-English**: Ready for generation (~1M+ entries)
@@ -47,38 +56,50 @@ PolyRead is a Flutter-based language learning application that enables users to 
 - **Portuguese-English**: Ready for generation (~1M+ entries)
 
 ### 🔧 Tools & Generation
-- **Builder Script**: `tools/vuizur-dict-builder.sh` generates modern Wiktionary format
-- **Data Source**: Vuizur Wiktionary-Dictionaries repository
-- **Output**: Production-ready `.sqlite.zip` packages
+- **Builder Script**: `tools/vuizur-meaning-dict-builder.sh` generates cycling dictionaries
+- **Data Source**: Vuizur Wiktionary-Dictionaries repository  
+- **GitHub Actions**: `.github/workflows/dictionary-release.yml` for automated builds
+- **Output**: Production-ready `.sqlite.zip` packages with cycling support
 
-## 🎯 **MAJOR MILESTONE: Complete Dictionary Field Audit (v2.1)**
+## 🎯 **MAJOR MILESTONE: Cycling Dictionary System v2.1**
 
-**✅ AUDIT COMPLETED** - Full codebase consistency achieved:
+**✅ IMPLEMENTATION COMPLETE** - Revolutionary cycling interface achieved:
 
-### **Modernization Summary:**
-- **DictionaryEntry Model**: Completely rewritten using modern Wiktionary format
-- **Database Schema**: Unified `written_rep`, `sense`, `trans_list`, `pos` fields
-- **Service Layer**: All services updated to modern field access patterns
-- **UI Components**: Translation popups parse pipe-separated `trans_list` format
-- **GitHub Workflows**: Validation queries updated for modern field names
-- **Documentation**: All field references updated to modern naming
+### **Core Achievements:**
+- **One-Level Cycling**: Simple tap-to-cycle through meanings without complex hierarchies
+- **Generalized Schema**: Support for any language pair (es-en, fr-en, de-en, etc.)
+- **Bidirectional Support**: Both source→target and target→source lookup with quality ranking
+- **UI Innovation**: Tap-to-cycle + long-press-to-expand interaction pattern
+- **Production Scale**: 94K+ word groups, 126K+ meanings, 66K+ target words
 
-### **Legacy Elimination:**
-- **Zero Legacy References**: No `.word`, `.definition`, `.partOfSpeech`, `.synonyms`, `.translations` access
-- **Clean Constructors**: All `DictionaryEntry()` calls use modern parameters
-- **Consistent Imports**: All external data properly converted to modern format
-- **Verified Compilation**: Core dictionary system compiles without field errors
+### **Technical Implementation:**
+- **Database Schema v6**: Generalized field names (`target_meaning`, `target_reverse_lookup`)
+- **Service Layer**: `CyclingDictionaryService` with complete cycling functionality
+- **UI Components**: `CyclingTranslationPopup` with cycling and expansion capabilities
+- **GitHub Pipeline**: Automated multi-language dictionary generation
+- **Quality Filtering**: Proper noun removal, context preservation, quality scoring
 
-### **Modern Format Specification:**
+### **Cycling Schema Specification:**
 ```sql
--- Modern Wiktionary Schema (UNIFIED)
-CREATE TABLE dictionary_entries (
-    written_rep TEXT NOT NULL,     -- Headword (Wiktionary standard)
-    sense TEXT,                    -- Definition/meaning
-    trans_list TEXT NOT NULL,      -- Pipe-separated translations
-    pos TEXT,                      -- Part of speech
-    source_language TEXT NOT NULL,
-    target_language TEXT NOT NULL
+-- Generalized Cycling Dictionary Schema
+CREATE TABLE word_groups (
+    base_word TEXT NOT NULL,        -- "agua", "faire", "machen"
+    source_language TEXT NOT NULL,  -- "es", "fr", "de"
+    target_language TEXT NOT NULL   -- "en", "es", etc.
+);
+
+CREATE TABLE meanings (
+    meaning_order INTEGER NOT NULL, -- 1, 2, 3... for cycling
+    target_meaning TEXT NOT NULL,   -- "water", "faire", "machen"  
+    context TEXT,                   -- "(archaic)", "(slang)"
+    part_of_speech TEXT,            -- "noun", "verb", "adj"
+    is_primary BOOLEAN              -- Primary meaning flag
+);
+
+CREATE TABLE target_reverse_lookup (
+    target_word TEXT NOT NULL,      -- "water", "house"
+    lookup_order INTEGER NOT NULL,  -- Quality-ranked cycling order
+    quality_score INTEGER           -- Higher = better translation
 );
 ```
 

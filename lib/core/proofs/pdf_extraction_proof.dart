@@ -1,7 +1,6 @@
 // Phase 0 Validation: PDF Text Extraction Proof
 // Placeholder implementation until pdfx package is added
 
-import 'package:flutter/foundation.dart';
 
 class PdfExtractionProof {
   /// Test PDF text extraction accuracy with different document types

@@ -72,55 +72,41 @@ class VocabularyItems extends Table {
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
 }
 
-// Dictionary entries (compatible with Wiktionary/StarDict format)
-class DictionaryEntries extends Table {
+// Cycling Dictionary Structure for proper cycling support
+// Eliminates conjugation pollution and enables discrete meaning/synonym cycling
+
+class WordGroups extends Table {
   IntColumn get id => integer().autoIncrement()();
-  
-  // Core Wiktionary fields
-  TextColumn get writtenRep => text()(); // The headword/lemma (Wiktionary: written_rep)
-  TextColumn get lexentry => text().nullable()(); // Lexical entry ID (e.g., "cold_ADJ_01")
-  TextColumn get sense => text().nullable()(); // Definition/meaning description
-  TextColumn get transList => text()(); // Pipe-separated translations (e.g., "frío | helado | gélido")
-  TextColumn get pos => text().nullable()(); // Part of speech
-  TextColumn get domain => text().nullable()(); // Semantic domain
-  
-  // Language pair information
-  TextColumn get sourceLanguage => text()(); // Source language code
-  TextColumn get targetLanguage => text()(); // Target language code
-  
-  // Additional metadata
-  TextColumn get pronunciation => text().nullable()(); // IPA or other
-  TextColumn get examples => text().nullable()(); // JSON array of example sentences
-  IntColumn get frequency => integer().withDefault(const Constant(0))(); // Usage frequency
-  TextColumn get source => text().nullable()(); // Dictionary pack source
+  TextColumn get baseWord => text()(); // Canonical form (e.g., "agua")
+  TextColumn get wordForms => text()(); // All forms: "agua|agüita|aguas|agüitas"
+  TextColumn get partOfSpeech => text().nullable()(); // "noun", "verb", "adj"
+  TextColumn get sourceLanguage => text()(); // "es", "en", etc.
+  TextColumn get targetLanguage => text()(); // "en", "es", etc.
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  
-  // Deprecated fields (maintained for data migration only - DO NOT USE in new code)
-  // All new code should use modern Wiktionary fields: writtenRep, sense, transList, pos
-  TextColumn get lemma => text().withDefault(const Constant(''))(); // DEPRECATED: Use writtenRep
-  TextColumn get definition => text().withDefault(const Constant(''))(); // DEPRECATED: Use sense/transList  
-  TextColumn get partOfSpeech => text().nullable()(); // DEPRECATED: Use pos
-  TextColumn get languagePair => text().withDefault(const Constant(''))(); // DEPRECATED: Use sourceLanguage/targetLanguage
 }
 
-// FTS table for dictionary search (compatible with Wiktionary format)
-@UseRowClass(DictionaryFtsData)
-class DictionaryFts extends Table {
-  TextColumn get writtenRep => text()(); // Headword for search
-  TextColumn get sense => text()(); // Definition for search
-  TextColumn get transList => text()(); // Translations for search
-  
-  @override
-  String get tableName => 'dictionary_fts';
+class Meanings extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get wordGroupId => integer().references(WordGroups, #id, onDelete: KeyAction.cascade)();
+  IntColumn get meaningOrder => integer()(); // 1, 2, 3, 4... for cycling
+  TextColumn get targetMeaning => text()(); // "water", "body of water", "rain", "faire", "machen"
+  TextColumn get context => text().nullable()(); // "(archaic)", "(slang)", "(Guatemala)"
+  TextColumn get partOfSpeech => text().nullable()(); // "noun", "verb", "adj" - preserved from original data
+  BoolColumn get isPrimary => boolean().withDefault(const Constant(false))(); // Mark primary meaning
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-class DictionaryFtsData {
-  final String writtenRep;
-  final String sense;
-  final String transList;
-  
-  DictionaryFtsData({required this.writtenRep, required this.sense, required this.transList});
+class TargetReverseLookup extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get targetWord => text()(); // "water", "house", "time", "do" (target language)
+  IntColumn get sourceWordGroupId => integer().references(WordGroups, #id, onDelete: KeyAction.cascade)();
+  IntColumn get sourceMeaningId => integer().references(Meanings, #id, onDelete: KeyAction.cascade)();
+  IntColumn get lookupOrder => integer()(); // 1, 2, 3... for cycling through source words
+  IntColumn get qualityScore => integer().withDefault(const Constant(100))(); // For ranking (higher = better)
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
+
+// Note: FTS search will be implemented at the SQL level within the meaning-based structure
 
 // Language pack metadata
 class LanguagePacks extends Table {
@@ -180,57 +166,36 @@ class UserSettings extends Table {
   Books,
   ReadingProgress,
   VocabularyItems,
-  DictionaryEntries,
-  DictionaryFts,
+  WordGroups,
+  Meanings,
+  TargetReverseLookup,
   LanguagePacks,
   Bookmarks,
   UserSettings,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
+  
+  // Test constructor for integration tests
+  AppDatabase.forTesting(DatabaseConnection connection) : super(connection);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6; // Generalized meaning-based dictionary structure
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (Migrator m) async {
       await m.createAll();
       
-      // Create FTS table for dictionary search (Wiktionary format)
+      // Create FTS table for cycling dictionary search
       await m.database.customStatement('''
-        CREATE VIRTUAL TABLE IF NOT EXISTS dictionary_fts USING fts5(
-          written_rep,
-          sense,
-          trans_list,
-          content='dictionary_entries',
+        CREATE VIRTUAL TABLE IF NOT EXISTS cycling_dictionary_fts USING fts5(
+          base_word,
+          word_forms,
+          target_meaning,
+          content='word_groups',
           content_rowid='id'
         )
-      ''');
-      
-      // Create triggers to keep FTS in sync with dictionary_entries
-      await m.database.customStatement('''
-        CREATE TRIGGER IF NOT EXISTS dictionary_entries_ai AFTER INSERT ON dictionary_entries
-        BEGIN
-          INSERT INTO dictionary_fts(written_rep, sense, trans_list)
-          VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-        END
-      ''');
-      
-      await m.database.customStatement('''
-        CREATE TRIGGER IF NOT EXISTS dictionary_entries_ad AFTER DELETE ON dictionary_entries
-        BEGIN
-          DELETE FROM dictionary_fts WHERE written_rep = old.written_rep AND sense = COALESCE(old.sense, '') AND trans_list = old.trans_list;
-        END
-      ''');
-      
-      await m.database.customStatement('''
-        CREATE TRIGGER IF NOT EXISTS dictionary_entries_au AFTER UPDATE ON dictionary_entries
-        BEGIN
-          DELETE FROM dictionary_fts WHERE written_rep = old.written_rep AND sense = COALESCE(old.sense, '') AND trans_list = old.trans_list;
-          INSERT INTO dictionary_fts(written_rep, sense, trans_list)
-          VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-        END
       ''');
       
       // Create indexes for better performance
@@ -239,108 +204,73 @@ class AppDatabase extends _$AppDatabase {
       await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_reading_progress_book_id ON reading_progress(book_id)');
       await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_vocabulary_book_id ON vocabulary_items(book_id)');
       await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_vocabulary_next_review ON vocabulary_items(next_review)');
-      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_written_rep ON dictionary_entries(written_rep)');
-      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_pos ON dictionary_entries(pos)');
-      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_source_lang ON dictionary_entries(source_language)');
-      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_target_lang ON dictionary_entries(target_language)');
-      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_dictionary_lang_pair ON dictionary_entries(source_language, target_language)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_word_groups_base ON word_groups(base_word)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_word_groups_forms ON word_groups(word_forms)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_word_groups_lang_pair ON word_groups(source_language, target_language)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_meanings_word_group ON meanings(word_group_id)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_meanings_order ON meanings(meaning_order)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_meanings_primary ON meanings(is_primary)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_reverse_lookup_target ON target_reverse_lookup(target_word)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_reverse_lookup_order ON target_reverse_lookup(lookup_order)');
+      await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_reverse_lookup_lang_pair ON target_reverse_lookup(target_word, source_word_group_id)');
       await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_language_packs_active ON language_packs(is_active)');
       await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_bookmarks_book_id ON bookmarks(book_id)');
       await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at)');
       await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_user_settings_key ON user_settings(key)');
     },
     onUpgrade: (Migrator m, int from, int to) async {
-      if (from < 4) {
-        // Fix FTS table issues from previous schema versions
+      if (from < 6) {
+        // Migration to cycling dictionary schema v6
+        print('Migrating database from v$from to v$to (Cycling Dictionary System)');
+        
         try {
-          // Drop existing FTS table and triggers if they exist
+          // Create new cycling dictionary tables
+          await m.createTable($WordGroupsTable(this));
+          await m.createTable($MeaningsTable(this));
+          await m.createTable($TargetReverseLookupTable(this));
+          
+          // Add indexes for new tables
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_word_groups_base ON word_groups(base_word)');
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_word_groups_forms ON word_groups(word_forms)');
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_meanings_word_group ON meanings(word_group_id)');
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_meanings_order ON meanings(meaning_order)');
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_meanings_primary ON meanings(is_primary)');
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_meanings_pos ON meanings(part_of_speech)');
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_reverse_lookup_target ON target_reverse_lookup(target_word)');
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_reverse_lookup_order ON target_reverse_lookup(lookup_order)');
+          await m.database.customStatement('CREATE INDEX IF NOT EXISTS idx_reverse_lookup_quality ON target_reverse_lookup(quality_score DESC)');
+          
+          print('✅ Created cycling dictionary tables and indexes');
+          
+          // Drop legacy dictionary table completely (cycling dictionaries use new schema)
+          try {
+            await m.database.customStatement('DROP TABLE IF EXISTS dictionary_entries');
+            await m.database.customStatement('DROP TABLE IF EXISTS dictionary_fts');
+            await m.database.customStatement('DROP TRIGGER IF EXISTS dictionary_entries_ai');
+            await m.database.customStatement('DROP TRIGGER IF EXISTS dictionary_entries_ad');
+            await m.database.customStatement('DROP TRIGGER IF EXISTS dictionary_entries_au');
+            print('✅ Removed legacy dictionary tables for clean cycling dictionary migration');
+          } catch (e) {
+            print('Note: No legacy dictionary tables to remove: $e');
+          }
+          
+        } catch (e) {
+          print('Error during cycling dictionary migration: $e');
+          // Continue with other migrations
+        }
+      }
+      
+      if (from < 4) {
+        // Legacy migration cleanup - remove old dictionary system completely
+        try {
+          await m.database.customStatement('DROP TABLE IF EXISTS dictionary_entries');
+          await m.database.customStatement('DROP TABLE IF EXISTS dictionary_fts');
           await m.database.customStatement('DROP TRIGGER IF EXISTS dictionary_entries_ai');
           await m.database.customStatement('DROP TRIGGER IF EXISTS dictionary_entries_ad');
           await m.database.customStatement('DROP TRIGGER IF EXISTS dictionary_entries_au');
-          await m.database.customStatement('DROP TABLE IF EXISTS dictionary_fts');
-          
-          // Clear existing dictionary data to avoid migration conflicts
-          await m.database.customStatement('DELETE FROM dictionary_entries');
-          
-          // Add new Wiktionary columns if they don't exist
-          try {
-            await m.database.customStatement('ALTER TABLE dictionary_entries ADD COLUMN written_rep TEXT DEFAULT ""');
-          } catch (e) {
-            // Column might already exist
-          }
-          try {
-            await m.database.customStatement('ALTER TABLE dictionary_entries ADD COLUMN sense TEXT');
-          } catch (e) {
-            // Column might already exist
-          }
-          try {
-            await m.database.customStatement('ALTER TABLE dictionary_entries ADD COLUMN trans_list TEXT DEFAULT ""');
-          } catch (e) {
-            // Column might already exist
-          }
-          try {
-            await m.database.customStatement('ALTER TABLE dictionary_entries ADD COLUMN pos TEXT');
-          } catch (e) {
-            // Column might already exist
-          }
-          try {
-            await m.database.customStatement('ALTER TABLE dictionary_entries ADD COLUMN source_language TEXT DEFAULT "unknown"');
-          } catch (e) {
-            // Column might already exist
-          }
-          try {
-            await m.database.customStatement('ALTER TABLE dictionary_entries ADD COLUMN target_language TEXT DEFAULT "unknown"');
-          } catch (e) {
-            // Column might already exist
-          }
-          
-          // Recreate FTS table with Wiktionary-compatible schema
-          await m.database.customStatement('''
-            CREATE VIRTUAL TABLE dictionary_fts USING fts5(
-              written_rep,
-              sense,
-              trans_list,
-              content='dictionary_entries',
-              content_rowid='id'
-            )
-          ''');
-          
-          // Recreate triggers with Wiktionary-compatible field names
-          await m.database.customStatement('''
-            CREATE TRIGGER dictionary_entries_ai AFTER INSERT ON dictionary_entries
-            BEGIN
-              INSERT INTO dictionary_fts(written_rep, sense, trans_list)
-              VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-              
-              -- Update legacy compatibility fields
-              UPDATE dictionary_entries SET 
-                lemma = new.written_rep,
-                definition = COALESCE(new.sense, ''),
-                part_of_speech = new.pos,
-                language_pair = new.source_language || '-' || new.target_language
-              WHERE id = new.id;
-            END
-          ''');
-          
-          await m.database.customStatement('''
-            CREATE TRIGGER dictionary_entries_ad AFTER DELETE ON dictionary_entries
-            BEGIN
-              DELETE FROM dictionary_fts WHERE written_rep = old.written_rep AND sense = COALESCE(old.sense, '') AND trans_list = old.trans_list;
-            END
-          ''');
-          
-          await m.database.customStatement('''
-            CREATE TRIGGER dictionary_entries_au AFTER UPDATE ON dictionary_entries
-            BEGIN
-              DELETE FROM dictionary_fts WHERE written_rep = old.written_rep AND sense = COALESCE(old.sense, '') AND trans_list = old.trans_list;
-              INSERT INTO dictionary_fts(written_rep, sense, trans_list)
-              VALUES (new.written_rep, COALESCE(new.sense, ''), new.trans_list);
-            END
-          ''');
-          
-          print('Fixed FTS table schema during migration');
+          print('✅ Cleaned up legacy dictionary system');
         } catch (e) {
-          print('Error fixing FTS table during migration: $e');
+          print('Note: Legacy dictionary cleanup: $e');
         }
         
         // Add bookmarks table in schema version 2

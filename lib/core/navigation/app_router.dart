@@ -76,8 +76,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '${AppRoutes.reader}/:bookId',
         name: 'reader',
         builder: (context, state) {
-          final bookId = state.pathParameters['bookId']!;
-          return ReaderScreen(bookId: int.parse(bookId));
+          final bookIdStr = state.pathParameters['bookId'];
+          if (bookIdStr == null) {
+            return const ErrorScreen(message: 'Invalid book ID');
+          }
+          
+          final bookId = int.tryParse(bookIdStr);
+          if (bookId == null) {
+            return ErrorScreen(message: 'Invalid book ID: $bookIdStr');
+          }
+          
+          return ReaderScreen(bookId: bookId);
         },
       ),
     ],
@@ -189,6 +198,46 @@ class MainBottomNavigationBar extends ConsumerWidget {
           label: 'Settings',
         ),
       ],
+    );
+  }
+}
+
+// Error screen for navigation issues
+class ErrorScreen extends StatelessWidget {
+  final String message;
+  
+  const ErrorScreen({super.key, required this.message});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Error'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(
+              'Navigation Error',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => context.go(AppRoutes.library),
+              child: const Text('Go to Library'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

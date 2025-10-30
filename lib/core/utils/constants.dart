@@ -38,12 +38,13 @@ class AppConstants {
   
   // Database
   static const String databaseName = 'polyread.db';
-  static const int databaseVersion = 1;
+  static const int databaseVersion = 6;
   
   // Reading Settings
   static const double minFontSize = 12.0;
   static const double maxFontSize = 24.0;
   static const double defaultFontSize = 16.0;
+  static const int progressSaveIntervalSeconds = 30;
   
   // Translation
   static const int maxTranslationLength = 500;
@@ -69,6 +70,14 @@ class AppConstants {
   static const String genericErrorMessage = 'An unexpected error occurred. Please try again.';
   static const String networkErrorMessage = 'Network connection error. Please check your internet connection.';
   static const String fileErrorMessage = 'File access error. Please check file permissions.';
+  
+  // User-friendly error messages
+  static const String bookImportErrorMessage = 'Could not import this book. Please make sure it\'s a valid PDF or EPUB file.';
+  static const String translationErrorMessage = 'Translation is temporarily unavailable. Please try again in a moment.';
+  static const String dictionaryErrorMessage = 'Dictionary lookup failed. The word might not be in our database yet.';
+  static const String modelDownloadErrorMessage = 'Could not download translation models. Please check your internet connection.';
+  static const String vocabularyErrorMessage = 'Could not save to vocabulary. Please try again.';
+  static const String readingProgressErrorMessage = 'Could not save reading progress. Your place in the book may not be remembered.';
   
   // URLs and Repository Configuration
   static const String githubOwner = 'kvgharbigit';

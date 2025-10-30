@@ -9,7 +9,7 @@ import 'package:polyread/features/reader/engines/epub_reader_engine.dart';
 import 'package:polyread/features/reader/engines/html_reader_engine.dart';
 import 'package:polyread/features/reader/engines/txt_reader_engine.dart';
 import 'package:polyread/features/reader/providers/reader_translation_provider.dart';
-import 'package:polyread/features/translation/widgets/enhanced_translation_popup.dart';
+import 'package:polyread/features/translation/widgets/cycling_translation_popup.dart';
 import 'package:polyread/core/providers/settings_provider.dart';
 
 class EnhancedReaderWidget extends ConsumerStatefulWidget {
@@ -109,6 +109,25 @@ class _EnhancedReaderWidgetState extends ConsumerState<EnhancedReaderWidget> {
   void _handleTextSelection(String selectedText, Offset position) {
     print('EnhancedReader: _handleTextSelection called with: $selectedText at $position');
     
+    // Validate that we have actual meaningful text
+    final trimmedText = selectedText.trim();
+    if (trimmedText.isEmpty || trimmedText.length < 1) {
+      print('EnhancedReader: No meaningful text selected, ignoring tap');
+      return;
+    }
+    
+    // Check if text contains only whitespace or special characters
+    if (!RegExp(r'[a-zA-Z]').hasMatch(trimmedText)) {
+      print('EnhancedReader: Text contains no letters, ignoring tap: "$trimmedText"');
+      return;
+    }
+    
+    // Check if text is too long (likely accidental selection)
+    if (trimmedText.length > 50) {
+      print('EnhancedReader: Text too long, likely accidental selection: ${trimmedText.length} chars');
+      return;
+    }
+    
     final translationService = ref.read(readerTranslationServiceProvider);
     final settings = ref.read(settingsProvider);
 
@@ -119,13 +138,13 @@ class _EnhancedReaderWidgetState extends ConsumerState<EnhancedReaderWidget> {
 
     print('EnhancedReader: Calling translationService.handleTextSelection');
     
-    // Handle text selection with translation
+    // Handle text selection with translation (use trimmed text)
     translationService.handleTextSelection(
-      selectedText: selectedText,
+      selectedText: trimmedText,
       position: position,
       sourceLanguage: settings.defaultSourceLanguage,
       targetLanguage: settings.defaultTargetLanguage,
-      context: _getSelectionContext(selectedText),
+      context: _getSelectionContext(trimmedText),
     );
   }
 
@@ -284,17 +303,29 @@ class _EnhancedReaderWidgetState extends ConsumerState<EnhancedReaderWidget> {
               return _buildModelDownloadPrompt(context, ref, translationService);
             }
 
-            // Show normal translation popup
-            return EnhancedTranslationPopup(
-              selectedText: translationService.selectedText!,
-              sourceLanguage: ref.read(settingsProvider).defaultSourceLanguage,
-              targetLanguage: ref.read(settingsProvider).defaultTargetLanguage, // This will become homeLanguage
-              position: translationService.selectionPosition!,
-              onClose: () => translationService.clearSelection(),
-              onAddToVocabulary: (word) => translationService.addToVocabulary(),
-              translationService: ref.read(translationServiceProvider),
-              enableSynonymCycling: true,
-              enableMorphemeAnalysis: true,
+            // Show normal translation popup with tap-outside-to-dismiss
+            return Stack(
+              children: [
+                // Full-screen transparent overlay for dismissal
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: () => translationService.clearSelection(),
+                    behavior: HitTestBehavior.translucent,
+                    child: Container(color: Colors.transparent),
+                  ),
+                ),
+                // Actual popup positioned normally
+                CyclingTranslationPopup(
+                  key: ValueKey('translation_${translationService.selectedText}'),
+                  selectedText: translationService.selectedText!,
+                  sourceLanguage: ref.read(settingsProvider).defaultSourceLanguage,
+                  targetLanguage: ref.read(settingsProvider).defaultTargetLanguage, // This will become homeLanguage
+                  position: translationService.selectionPosition,
+                  onClose: () => translationService.clearSelection(),
+                  translationService: ref.read(translationServiceProvider),
+                  context: translationService.selectedContext,
+                ),
+              ],
             );
           },
         ),

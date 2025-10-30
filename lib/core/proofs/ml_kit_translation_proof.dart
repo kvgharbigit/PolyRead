@@ -1,7 +1,6 @@
 // Phase 0 Validation: ML Kit Translation Proof
 // Tests google_ml_kit package for translation performance and accuracy
 
-import 'package:flutter/foundation.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 
 class MlKitTranslationProof {

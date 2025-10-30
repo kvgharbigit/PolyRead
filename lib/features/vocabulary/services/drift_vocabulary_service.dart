@@ -3,7 +3,7 @@
 
 import 'package:drift/drift.dart';
 import 'package:polyread/core/database/app_database.dart';
-import '../models/vocabulary_item.dart';
+import '../models/vocabulary_item.dart' as vocab_model;
 import '../models/vocabulary_item_model.dart';
 
 class DriftVocabularyService {
@@ -11,8 +11,30 @@ class DriftVocabularyService {
   
   DriftVocabularyService(this._database);
   
-  /// Add a word to vocabulary from translation
-  Future<int> addVocabularyItem({
+  /// Add a vocabulary item model to the database
+  Future<int> addVocabularyItem(vocab_model.VocabularyItem item) async {
+    try {
+      final companion = VocabularyItemsCompanion.insert(
+        bookId: 1, // Default book ID - will be properly set when reader integration is complete
+        sourceText: item.word,
+        translation: item.translation,
+        sourceLanguage: item.sourceLanguage,
+        targetLanguage: item.targetLanguage,
+        context: Value(item.context),
+        bookPosition: Value(item.bookLocation),
+        difficulty: Value(2.5), // Default difficulty
+        reviewCount: Value(0),
+      );
+      
+      return await _database.into(_database.vocabularyItems).insert(companion);
+    } catch (e) {
+      print('Error adding vocabulary item: $e');
+      rethrow;
+    }
+  }
+  
+  /// Add a word to vocabulary with manual parameters
+  Future<int> addVocabularyItemManual({
     required String sourceText,
     required String translation,
     required String sourceLanguage,

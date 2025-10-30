@@ -3,7 +3,6 @@
 
 import 'package:sqflite/sqflite.dart';
 import '../models/translation_request.dart';
-import '../models/dictionary_entry.dart';
 import '../models/translation_response.dart' as response_model;
 
 class TranslationCacheService {
@@ -94,7 +93,7 @@ class TranslationCacheService {
     TranslationRequest request,
     response_model.TranslationResponse response,
   ) async {
-    if (!response.success || response.fromCache) {
+    if (response.error != null || response.source == response_model.TranslationSource.cache) {
       return; // Don't cache failures or already cached results
     }
     
@@ -107,11 +106,11 @@ class TranslationCacheService {
           'source_language': request.sourceLanguage,
           'target_language': request.targetLanguage,
           'translated_text': response.translatedText,
-          'dictionary_entries': _encodeDictionaryEntries(response.dictionaryEntries),
+          'dictionary_entries': '', // Legacy field - no longer used in cycling system
           'provider_id': response.providerId ?? 'unknown',
           'source_type': response.source.name,
-          'latency_ms': response.latencyMs,
-          'success': response.success ? 1 : 0,
+          'latency_ms': response.responseTime?.inMilliseconds ?? 0,
+          'success': response.error == null ? 1 : 0,
           'error_message': response.error,
           'created_at': DateTime.now().millisecondsSinceEpoch,
           'last_accessed': DateTime.now().millisecondsSinceEpoch,
@@ -129,7 +128,7 @@ class TranslationCacheService {
   }
   
   /// Get cache statistics
-  Future<CacheStats> getStats() async {
+  Future<Map<String, dynamic>> getStats() async {
     try {
       final countResult = await _database.rawQuery('''
         SELECT COUNT(*) as total_entries FROM $_tableName
@@ -153,14 +152,19 @@ class TranslationCacheService {
       final oldest = ageResult.first['oldest'] as int?;
       final newest = ageResult.first['newest'] as int?;
       
-      return CacheStats(
-        totalEntries: totalEntries,
-        totalSize: totalSize,
-        oldestEntry: oldest != null ? DateTime.fromMillisecondsSinceEpoch(oldest) : null,
-        newestEntry: newest != null ? DateTime.fromMillisecondsSinceEpoch(newest) : null,
-      );
+      return {
+        'totalEntries': totalEntries,
+        'totalSize': totalSize,
+        'oldestEntry': oldest != null ? DateTime.fromMillisecondsSinceEpoch(oldest) : null,
+        'newestEntry': newest != null ? DateTime.fromMillisecondsSinceEpoch(newest) : null,
+      };
     } catch (e) {
-      return const CacheStats(totalEntries: 0, totalSize: 0);
+      return {
+        'totalEntries': 0,
+        'totalSize': 0,
+        'oldestEntry': null,
+        'newestEntry': null,
+      };
     }
   }
   
@@ -229,41 +233,18 @@ class TranslationCacheService {
   ) {
     final sourceType = response_model.TranslationSource.values.firstWhere(
       (source) => source.name == row['source_type'],
-      orElse: () => response_model.TranslationSource.none,
+      orElse: () => response_model.TranslationSource.cache,
     );
     
     return response_model.TranslationResponse(
       request: request,
-      translatedText: row['translated_text'] as String?,
-      dictionaryEntries: _decodeDictionaryEntries(row['dictionary_entries'] as String?)?.cast<DictionaryEntry>(),
-      providerId: row['provider_id'] as String?,
-      latencyMs: row['latency_ms'] as int,
-      success: (row['success'] as int) == 1,
-      error: row['error_message'] as String?,
+      translatedText: row['translated_text'] as String? ?? '',
       source: sourceType,
-      fromCache: true,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
+      providerId: row['provider_id'] as String?,
+      error: row['error_message'] as String?,
     );
   }
   
-  String? _encodeDictionaryEntries(List<dynamic>? entries) {
-    if (entries == null || entries.isEmpty) return null;
-    
-    try {
-      // Simple JSON encoding - in real implementation might use proper JSON serialization
-      return entries.toString();
-    } catch (e) {
-      return null;
-    }
-  }
-  
-  List<dynamic>? _decodeDictionaryEntries(String? encoded) {
-    if (encoded == null || encoded.isEmpty) return null;
-    
-    try {
-      // Simple decoding - in real implementation would use proper JSON deserialization
-      return [];
-    } catch (e) {
-      return null;
-    }
-  }
+  // Dictionary entries encoding removed - cache now stores simple translation results
 }

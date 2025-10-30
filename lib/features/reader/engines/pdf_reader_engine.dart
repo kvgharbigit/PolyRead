@@ -58,20 +58,24 @@ class PdfReaderEngine implements ReaderEngine {
   
   @override
   Future<void> goToPosition(ReaderPosition position) async {
-    if (position.pageNumber != null && _controller != null) {
-      await _controller!.animateToPage(
-        position.pageNumber!,
+    final controller = _controller;
+    final pageNumber = position.pageNumber;
+    
+    if (pageNumber != null && controller != null) {
+      await controller.animateToPage(
+        pageNumber,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
-      _currentPage = position.pageNumber!;
+      _currentPage = pageNumber;
     }
   }
   
   @override
   Future<bool> goToNext() async {
-    if (_controller != null && _currentPage < totalPages) {
-      await _controller!.nextPage(
+    final controller = _controller;
+    if (controller != null && _currentPage < totalPages) {
+      await controller.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );

@@ -13,6 +13,13 @@ class SettingsService {
   static const String _keyMaxStorageMB = 'max_storage_mb';
   static const String _keyShowOnboarding = 'show_onboarding';
   
+  // Cycling Dictionary Settings
+  static const String _keyCyclingEnabled = 'cycling_enabled';
+  static const String _keyCyclingSpeed = 'cycling_speed';
+  static const String _keyAutoExpansion = 'auto_expansion';
+  static const String _keyShowPartOfSpeech = 'show_part_of_speech';
+  static const String _keyShowQualityIndicators = 'show_quality_indicators';
+  
   late final SharedPreferences _prefs;
   
   Future<void> initialize() async {
@@ -68,6 +75,33 @@ class SettingsService {
   Future<void> setShowOnboarding(bool show) async {
     await _prefs.setBool(_keyShowOnboarding, show);
   }
+
+  // Cycling Dictionary Settings
+  bool get cyclingEnabled => _prefs.getBool(_keyCyclingEnabled) ?? true;
+  int get cyclingSpeed => _prefs.getInt(_keyCyclingSpeed) ?? 2000;
+  bool get autoExpansion => _prefs.getBool(_keyAutoExpansion) ?? false;
+  bool get showPartOfSpeech => _prefs.getBool(_keyShowPartOfSpeech) ?? true;
+  bool get showQualityIndicators => _prefs.getBool(_keyShowQualityIndicators) ?? true;
+
+  Future<void> setCyclingEnabled(bool enabled) async {
+    await _prefs.setBool(_keyCyclingEnabled, enabled);
+  }
+
+  Future<void> setCyclingSpeed(int milliseconds) async {
+    await _prefs.setInt(_keyCyclingSpeed, milliseconds);
+  }
+
+  Future<void> setAutoExpansion(bool enabled) async {
+    await _prefs.setBool(_keyAutoExpansion, enabled);
+  }
+
+  Future<void> setShowPartOfSpeech(bool enabled) async {
+    await _prefs.setBool(_keyShowPartOfSpeech, enabled);
+  }
+
+  Future<void> setShowQualityIndicators(bool enabled) async {
+    await _prefs.setBool(_keyShowQualityIndicators, enabled);
+  }
   
   // Utility methods
   Future<void> resetToDefaults() async {
@@ -83,6 +117,11 @@ class SettingsService {
       'translationProvider': translationProvider,
       'autoDownloadModels': autoDownloadModels,
       'maxStorageMB': maxStorageMB,
+      'cyclingEnabled': cyclingEnabled,
+      'cyclingSpeed': cyclingSpeed,
+      'autoExpansion': autoExpansion,
+      'showPartOfSpeech': showPartOfSpeech,
+      'showQualityIndicators': showQualityIndicators,
     };
   }
   
@@ -107,6 +146,21 @@ class SettingsService {
     }
     if (settings['maxStorageMB'] != null) {
       await setMaxStorageMB(settings['maxStorageMB']);
+    }
+    if (settings['cyclingEnabled'] != null) {
+      await setCyclingEnabled(settings['cyclingEnabled']);
+    }
+    if (settings['cyclingSpeed'] != null) {
+      await setCyclingSpeed(settings['cyclingSpeed']);
+    }
+    if (settings['autoExpansion'] != null) {
+      await setAutoExpansion(settings['autoExpansion']);
+    }
+    if (settings['showPartOfSpeech'] != null) {
+      await setShowPartOfSpeech(settings['showPartOfSpeech']);
+    }
+    if (settings['showQualityIndicators'] != null) {
+      await setShowQualityIndicators(settings['showQualityIndicators']);
     }
   }
 }

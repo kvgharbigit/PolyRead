@@ -2,7 +2,6 @@
 // Represents the result of a translation request with multiple sources
 
 import 'package:polyread/features/translation/models/translation_request.dart';
-import 'package:polyread/features/translation/models/dictionary_entry.dart';
 
 /// ML Kit translation result
 class MlKitResult {
@@ -71,7 +70,7 @@ class ServerResult {
 }
 
 enum TranslationSource {
-  dictionary,
+  cyclingDictionary,
   mlKit,
   server,
   cache,
@@ -84,7 +83,7 @@ class TranslationResponse {
   final String translatedText;
   final TranslationSource source;
   final DateTime timestamp;
-  final DictionaryLookupResult? dictionaryResult;
+  final dynamic cyclingDictionaryResult;
   final MlKitResult? mlKitResult;
   final ServerResult? serverResult;
   final Duration? responseTime;
@@ -96,7 +95,7 @@ class TranslationResponse {
     required this.translatedText,
     required this.source,
     required this.timestamp,
-    this.dictionaryResult,
+    this.cyclingDictionaryResult,
     this.mlKitResult,
     this.serverResult,
     this.responseTime,
@@ -104,23 +103,32 @@ class TranslationResponse {
     this.providerId,
   });
 
-  /// Create response from dictionary lookup
-  factory TranslationResponse.fromDictionary({
+  /// Create response from cycling dictionary lookup
+  factory TranslationResponse.fromCyclingDictionary({
     required TranslationRequest request,
-    required DictionaryLookupResult dictionaryResult,
+    required dynamic dictionaryResult,
   }) {
-    final primaryTranslation = dictionaryResult.entries.isNotEmpty
-        ? (dictionaryResult.entries.first.transList.split(' | ').first.trim().isNotEmpty 
-           ? dictionaryResult.entries.first.transList.split(' | ').first.trim()
-           : dictionaryResult.entries.first.sense ?? request.text)
-        : request.text;
+    // Extract primary translation from cycling dictionary result
+    String primaryTranslation = request.text;
+    
+    if (dictionaryResult.sourceMeanings?.hasResults == true) {
+      final meanings = dictionaryResult.sourceMeanings.meanings;
+      if (meanings.isNotEmpty) {
+        primaryTranslation = meanings.first.displayTranslation;
+      }
+    } else if (dictionaryResult.reverseTranslations?.hasResults == true) {
+      final translations = dictionaryResult.reverseTranslations.translations;
+      if (translations.isNotEmpty) {
+        primaryTranslation = translations.first.displayTranslation;
+      }
+    }
 
     return TranslationResponse(
       request: request,
       translatedText: primaryTranslation,
-      source: TranslationSource.dictionary,
+      source: TranslationSource.cyclingDictionary,
       timestamp: DateTime.now(),
-      dictionaryResult: dictionaryResult,
+      cyclingDictionaryResult: dictionaryResult,
     );
   }
 
@@ -209,7 +217,7 @@ class TranslationResponse {
     String? translatedText,
     TranslationSource? source,
     DateTime? timestamp,
-    DictionaryLookupResult? dictionaryResult,
+    dynamic dictionaryResult,
     MlKitResult? mlKitResult,
     ServerResult? serverResult,
     Duration? responseTime,
@@ -221,7 +229,7 @@ class TranslationResponse {
       translatedText: translatedText ?? this.translatedText,
       source: source ?? this.source,
       timestamp: timestamp ?? this.timestamp,
-      dictionaryResult: dictionaryResult ?? this.dictionaryResult,
+      cyclingDictionaryResult: dictionaryResult ?? this.cyclingDictionaryResult,
       mlKitResult: mlKitResult ?? this.mlKitResult,
       serverResult: serverResult ?? this.serverResult,
       responseTime: responseTime ?? this.responseTime,
@@ -237,7 +245,7 @@ class TranslationResponse {
       'translatedText': translatedText,
       'source': source.name,
       'timestamp': timestamp.toIso8601String(),
-      'dictionaryResult': dictionaryResult?.toJson(),
+      'cyclingDictionaryResult': cyclingDictionaryResult?.toJson(),
       'mlKitResult': mlKitResult?.toJson(),
       'serverResult': serverResult?.toJson(),
       'responseTime': responseTime?.inMilliseconds,
@@ -256,8 +264,8 @@ class TranslationResponse {
         orElse: () => TranslationSource.server,
       ),
       timestamp: DateTime.parse(json['timestamp'] as String),
-      dictionaryResult: json['dictionaryResult'] != null
-          ? DictionaryLookupResult.fromJson(json['dictionaryResult'] as Map<String, dynamic>)
+      cyclingDictionaryResult: json['cyclingDictionaryResult'] != null
+          ? json['cyclingDictionaryResult'] // Keep as dynamic for cycling dictionary result
           : null,
       mlKitResult: json['mlKitResult'] != null
           ? MlKitResult.fromJson(json['mlKitResult'] as Map<String, dynamic>)

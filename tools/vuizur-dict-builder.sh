@@ -56,6 +56,7 @@ python3 -c "
 import sqlite3
 import csv
 import sys
+import re
 
 # Create database
 conn = sqlite3.connect('$PAIR.db')
@@ -134,20 +135,8 @@ with open('dict.tsv', 'r', encoding='utf-8') as f:
                     ''', (headword, definition, definition, source_lang, target_lang))
                     count += 1
                     
-                    # Create reverse entry (target language -> source language)  
-                    # Extract simple translation from HTML definition for reverse lookup
-                    import re
-                    simple_def = re.sub(r'<[^>]+>', '', definition)  # Remove HTML tags
-                    simple_def = re.sub(r'\([^)]*\)', '', simple_def)  # Remove parenthetical info
-                    simple_def = simple_def.strip()
-                    
-                    if len(simple_def) > 0:  # Only create reverse if we have clean text
-                        cursor.execute('''
-                            INSERT INTO dictionary_entries 
-                            (written_rep, sense, trans_list, source_language, target_language) 
-                            VALUES (?, ?, ?, ?, ?)
-                        ''', (simple_def, headword, headword, target_lang, source_lang))
-                        count += 1
+                    # Note: Reverse entries removed for search-based bidirectional lookup
+                    # English→Spanish translation will be handled via FTS5 search on Spanish definitions
             
             if count % 10000 == 0:
                 print(f'Processed {count} entries...')

@@ -156,9 +156,21 @@ class _InteractiveTextSelectionState extends State<InteractiveTextSelection> {
   }
   
   Offset _calculateWordPosition(TextToken word, int wordIndex) {
-    // Simplified position calculation
-    // TODO: Implement proper text measurement and positioning
-    return Offset(wordIndex * 50.0, 0); // Placeholder calculation
+    // Get the render box for the text widget
+    final renderBox = _textKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) {
+      return Offset(wordIndex * 50.0, 0); // Fallback calculation
+    }
+    
+    // Estimate position based on character position and average character width
+    final textStyle = widget.textStyle ?? const TextStyle();
+    final fontSize = textStyle.fontSize ?? 14.0;
+    final avgCharWidth = fontSize * 0.6; // Approximate character width
+    
+    final estimatedX = word.startIndex * avgCharWidth;
+    final estimatedY = fontSize * 1.2; // Line height approximation
+    
+    return Offset(estimatedX, estimatedY);
   }
   
   String _extractSentence(String text, int position) {

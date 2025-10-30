@@ -43,19 +43,19 @@ class DriftLanguagePackService {
         return PackValidationResult(packId, false, 'Pack marked as not installed');
       }
       
-      // Check dictionary entries exist (most important validation)
+      // Check cycling dictionary entries exist (most important validation)
       try {
-        final entryCount = await (_database.selectOnly(_database.dictionaryEntries)
-          ..addColumns([_database.dictionaryEntries.id.count()])
-          ..where(_database.dictionaryEntries.sourceLanguage.equals(pack.sourceLanguage ?? '') &
-                  _database.dictionaryEntries.targetLanguage.equals(pack.targetLanguage ?? ''))
+        final entryCount = await (_database.selectOnly(_database.wordGroups)
+          ..addColumns([_database.wordGroups.id.count()])
+          ..where(_database.wordGroups.sourceLanguage.equals(pack.sourceLanguage ?? '') &
+                  _database.wordGroups.targetLanguage.equals(pack.targetLanguage ?? ''))
         ).getSingle();
         
-        final count = entryCount.read(_database.dictionaryEntries.id.count()) ?? 0;
-        print('DriftLanguagePackService: Pack $packId has $count dictionary entries');
+        final count = entryCount.read(_database.wordGroups.id.count()) ?? 0;
+        print('DriftLanguagePackService: Pack $packId has $count word groups');
         
-        if (count < 1000) { // Reasonable minimum for any language pack
-          return PackValidationResult(packId, false, 'Dictionary data missing or incomplete ($count entries)');
+        if (count < 100) { // Reasonable minimum for any cycling dictionary pack
+          return PackValidationResult(packId, false, 'Cycling dictionary data missing or incomplete ($count word groups)');
         }
       } catch (e) {
         print('DriftLanguagePackService: Error checking dictionary entries for $packId: $e');

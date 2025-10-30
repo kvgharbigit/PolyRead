@@ -26,10 +26,7 @@ final combinedLanguagePackServiceProvider = Provider<CombinedLanguagePackService
   final database = ref.watch(databaseProvider);
   final repository = ref.watch(githubReleasesRepositoryProvider);
   
-  return CombinedLanguagePackService(
-    database: database,
-    repository: repository,
-  );
+  return CombinedLanguagePackService(database, repository);
 });
 
 /// Download Progress Stream Provider
@@ -175,20 +172,32 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
     await _loadLanguagePacks();
   }
   
+  // Mutex to prevent concurrent state updates
+  bool _isUpdating = false;
+  
   /// Update only the installed packs list (lightweight refresh after installation)
   Future<void> _updateInstalledPacksOnly() async {
+    // Prevent concurrent updates that could cause race conditions
+    if (_isUpdating) {
+      print('LanguagePacksProvider: Update already in progress, skipping...');
+      return;
+    }
+    
+    _isUpdating = true;
     try {
       print('LanguagePacksProvider: Starting _updateInstalledPacksOnly...');
       
       // Small delay to ensure database transaction is committed
       await Future.delayed(const Duration(milliseconds: 100));
       
+      // Take snapshot of current state to avoid race conditions
+      final currentAvailablePacks = List<LanguagePackInfo>.from(state.availablePacks);
       final installedPackIds = <String>[];
       
       // Update the installed status for existing available packs
       final updatedAvailablePacks = <LanguagePackInfo>[];
       
-      for (final pack in state.availablePacks) {
+      for (final pack in currentAvailablePacks) {
         final parts = pack.id.split('-');
         final sourceLanguage = parts.isNotEmpty ? parts[0] : 'en';
         final targetLanguage = parts.length > 1 ? parts[1] : 'es';
@@ -218,12 +227,14 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
         ));
       }
       
-      // Update state with new installed status
-      state = state.copyWith(
-        availablePacks: updatedAvailablePacks,
-        installedPackIds: installedPackIds,
-        error: null,
-      );
+      // Atomic state update to prevent race conditions
+      if (mounted) {
+        state = state.copyWith(
+          availablePacks: updatedAvailablePacks,
+          installedPackIds: installedPackIds,
+          error: null,
+        );
+      }
       
       print('LanguagePacksProvider: Updated installed packs: $installedPackIds');
       print('LanguagePacksProvider: _updateInstalledPacksOnly completed successfully');
@@ -232,6 +243,8 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
       print('LanguagePacksProvider: Error updating installed packs: $e');
       print('LanguagePacksProvider: Error stack trace: ${StackTrace.current}');
       // Don't set error state since this is a minor refresh operation
+    } finally {
+      _isUpdating = false;
     }
   }
   
@@ -259,24 +272,30 @@ class LanguagePacksNotifier extends StateNotifier<LanguagePacksState> {
       );
       
       // Clear any previous error state since installation succeeded
-      state = state.copyWith(error: null);
+      if (mounted) {
+        state = state.copyWith(error: null);
+      }
       
       // Simple state update - prevent infinite rebuilds
       print('LanguagePacksProvider: Installation completed, updating state...');
       
-      // Add the pack ID directly to installed list
-      final currentIds = state.installedPackIds.toList();
-      if (!currentIds.contains(packId)) {
-        currentIds.add(packId);
-        state = state.copyWith(
-          installedPackIds: currentIds,
-          error: null,
-        );
-        print('LanguagePacksProvider: Added $packId to installed packs: $currentIds');
+      // Add the pack ID directly to installed list with race condition protection
+      if (mounted && !_isUpdating) {
+        final currentIds = List<String>.from(state.installedPackIds);
+        if (!currentIds.contains(packId)) {
+          currentIds.add(packId);
+          state = state.copyWith(
+            installedPackIds: currentIds,
+            error: null,
+          );
+          print('LanguagePacksProvider: Added $packId to installed packs: $currentIds');
+        }
       }
       
     } catch (e) {
-      state = state.copyWith(error: 'Failed to download $packId: $e');
+      if (mounted) {
+        state = state.copyWith(error: 'Failed to download $packId: $e');
+      }
       rethrow; // Re-throw to propagate to UI
     }
   }

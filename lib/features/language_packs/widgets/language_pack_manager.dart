@@ -36,6 +36,9 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
   
   // Animation
   late AnimationController _animationController;
+  
+  // Timer to prevent memory leaks from auto-cleanup timers
+  Timer? _cleanupTimer;
 
   @override
   void initState() {
@@ -54,6 +57,7 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     _tabController.dispose();
     _animationController.dispose();
     _progressSubscription?.cancel();
+    _cleanupTimer?.cancel(); // Prevent memory leaks from timers
     super.dispose();
   }
 
@@ -70,8 +74,9 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
           // Show completion message
           if (progress.status == DownloadStatus.completed) {
             _showSuccess('${progress.packId} installed successfully!');
-            // Auto-cleanup after success
-            Timer(const Duration(seconds: 2), () {
+            // Auto-cleanup after success with proper timer management
+            _cleanupTimer?.cancel(); // Cancel any existing timer
+            _cleanupTimer = Timer(const Duration(seconds: 2), () {
               if (mounted) {
                 setState(() => _activeProgress.remove(progress.packId));
                 ref.read(languagePacksProvider.notifier).refresh();
@@ -234,7 +239,7 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     // Check states
     final isInstalled = languagePacksState.installedPackIds.contains(packId);
     final progress = _activeProgress[packId] ?? 
-        combinedService.activeDownloads.where((d) => d.packId == packId).firstOrNull;
+        combinedService.activeDownloads[packId];
     final isDownloading = progress?.status == DownloadStatus.downloading || 
                          progress?.status == DownloadStatus.pending;
     final isFailed = progress?.status == DownloadStatus.failed;

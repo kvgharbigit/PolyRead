@@ -44,8 +44,9 @@ class EpubReaderEngine implements ReaderEngine {
       }
       
       // Set first chapter as current
-      if (_book?.Chapters?.isNotEmpty == true) {
-        _currentChapter = _book!.Chapters!.first.Title ?? '';
+      final chapters = _book?.Chapters;
+      if (chapters != null && chapters.isNotEmpty) {
+        _currentChapter = chapters.first.Title ?? '';
         _currentChapterIndex = 0;
         
         if (_useWebView) {
@@ -77,13 +78,20 @@ class EpubReaderEngine implements ReaderEngine {
   Future<void> _loadCurrentChapterInWebView() async {
     if (_webViewController == null || _book?.Chapters?.isEmpty == true) return;
 
-    final currentChapter = _book!.Chapters![_currentChapterIndex];
+    final chapters = _book?.Chapters;
+    final webViewController = _webViewController;
+    
+    if (chapters == null || _currentChapterIndex >= chapters.length || webViewController == null) {
+      throw Exception('Invalid EPUB state: missing chapters or webview controller');
+    }
+    
+    final currentChapter = chapters[_currentChapterIndex];
     final htmlContent = currentChapter.HtmlContent ?? '';
     
     // Create full HTML document with text selection JavaScript
     final fullHtml = _createChapterHtml(htmlContent);
     
-    await _webViewController!.loadHtmlString(fullHtml);
+    await webViewController.loadHtmlString(fullHtml);
   }
 
   String _createChapterHtml(String chapterContent) {
