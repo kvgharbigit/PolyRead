@@ -1077,22 +1077,41 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     print('🎯 Highlighting best match: "$bestMatch" in sentence: "$sentenceText"');
     
-    // Split sentence into words and find the best match to bold
-    final words = sentenceText.split(RegExp(r'(\s+)')); // Preserve whitespace
+    // Split sentence into words and spaces separately to preserve formatting
+    final pattern = RegExp(r'(\S+)'); // Match non-whitespace sequences
+    final matches = pattern.allMatches(sentenceText);
     final spans = <TextSpan>[];
     
+    int lastEnd = 0;
     bool hasHighlighted = false;
-    for (final word in words) {
-      final cleanWord = word.replaceAll(RegExp(r'''[.,!?;:'"]'''), '').toLowerCase();
-      final normalizedBestMatch = _normalizeWord(bestMatch);
+    final normalizedBestMatch = _normalizeWord(bestMatch);
+    
+    for (final match in matches) {
+      // Add any whitespace before this word
+      if (match.start > lastEnd) {
+        final whitespace = sentenceText.substring(lastEnd, match.start);
+        spans.add(TextSpan(
+          text: whitespace,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+            height: 1.4,
+            fontSize: 14,
+          ),
+        ));
+      }
+      
+      final word = match.group(0)!;
+      final cleanWord = word.replaceAll(RegExp(r'''[.,!?;:'"]'''), '');
       final normalizedWord = _normalizeWord(cleanWord);
       
       // Check if this word matches our best match (and we haven't highlighted yet)
-      if (!hasHighlighted && (normalizedWord == normalizedBestMatch || 
-          normalizedWord.contains(normalizedBestMatch) || 
-          normalizedBestMatch.contains(normalizedWord))) {
+      if (!hasHighlighted && cleanWord.isNotEmpty && 
+          (normalizedWord == normalizedBestMatch || 
+           (normalizedWord.length > 2 && normalizedBestMatch.length > 2 && 
+            (normalizedWord.contains(normalizedBestMatch) || 
+             normalizedBestMatch.contains(normalizedWord))))) {
         
-        print('🎯 Found match to highlight: "$word" matches "$bestMatch"');
+        print('🎯 Found match to highlight: "$word" (normalized: "$normalizedWord") matches "$bestMatch" (normalized: "$normalizedBestMatch")');
         
         // Bold this word
         spans.add(TextSpan(
@@ -1116,6 +1135,21 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
           ),
         ));
       }
+      
+      lastEnd = match.end;
+    }
+    
+    // Add any remaining whitespace at the end
+    if (lastEnd < sentenceText.length) {
+      final remainingText = sentenceText.substring(lastEnd);
+      spans.add(TextSpan(
+        text: remainingText,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurface,
+          height: 1.4,
+          fontSize: 14,
+        ),
+      ));
     }
     
     return RichText(
@@ -1149,17 +1183,35 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     final normalizedCandidate = _normalizeWord(bestCandidate);
     
-    // Find the best matching word in the sentence
+    // Find the best matching word in the sentence - prioritize exact matches
+    String? bestSentenceMatch = null;
+    double bestScore = 0.0;
+    
     for (final sentenceWord in sentenceWords) {
       final normalizedSentenceWord = _normalizeWord(sentenceWord);
+      double score = 0.0;
       
-      if (normalizedSentenceWord == normalizedCandidate ||
-          normalizedSentenceWord.contains(normalizedCandidate) ||
-          normalizedCandidate.contains(normalizedSentenceWord)) {
-        
-        print('🎯 Found best match: "$sentenceWord" for candidate "$bestCandidate"');
-        return sentenceWord;
+      if (normalizedSentenceWord == normalizedCandidate) {
+        // Exact match - highest priority
+        score = 1.0;
+      } else if (normalizedSentenceWord.length > 2 && normalizedCandidate.length > 2) {
+        // Only consider substring matches for longer words
+        if (normalizedSentenceWord.contains(normalizedCandidate)) {
+          score = normalizedCandidate.length / normalizedSentenceWord.length;
+        } else if (normalizedCandidate.contains(normalizedSentenceWord)) {
+          score = normalizedSentenceWord.length / normalizedCandidate.length;
+        }
       }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestSentenceMatch = sentenceWord;
+      }
+    }
+    
+    if (bestSentenceMatch != null && bestScore > 0.5) {
+      print('🎯 Found best match: "$bestSentenceMatch" (score: ${bestScore.toStringAsFixed(3)}) for candidate "$bestCandidate"');
+      return bestSentenceMatch;
     }
     
     print('🎯 No match found for candidate "$bestCandidate"');
