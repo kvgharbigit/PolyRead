@@ -9,6 +9,7 @@ import 'package:polyread/features/reader/engines/pdf_reader_engine.dart';
 import 'package:polyread/features/reader/engines/epub_reader_engine.dart';
 import 'package:polyread/features/reader/engines/html_reader_engine.dart';
 import 'package:polyread/features/reader/engines/txt_reader_engine.dart';
+import 'package:polyread/features/reader/models/text_selection_type.dart';
 import 'package:polyread/features/reader/services/reading_progress_service.dart';
 import 'package:polyread/features/reader/widgets/table_of_contents_dialog.dart';
 import 'package:polyread/features/reader/widgets/reader_settings_dialog.dart';
@@ -261,17 +262,65 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       _sessionTranslations++;
     }
     
+    // Set up the sentence selection handler for translation
+    void handleSentenceSelection(TextSelectionData selectionData) async {
+      print('BookReader: handleSentenceSelection called with sentence: "${selectionData.text}"');
+      
+      // Validate sentence content
+      final trimmedText = selectionData.text.trim();
+      if (trimmedText.isEmpty || trimmedText.length < 3) {
+        print('BookReader: Sentence too short, ignoring selection');
+        return;
+      }
+      
+      // Check if sentence is too long (likely accidental selection)
+      if (trimmedText.length > 1000) {
+        print('BookReader: Sentence too long, likely accidental selection: ${trimmedText.length} chars');
+        return;
+      }
+      
+      if (_translationService == null) {
+        print('BookReader: Translation service is null!');
+        return;
+      }
+      
+      print('BookReader: Processing sentence translation...');
+      
+      // For sentence translation, extract enhanced context
+      final enhancedContext = _extractSentenceContext(trimmedText);
+      
+      setState(() {
+        _selectedText = trimmedText;
+        _tapPosition = selectionData.position;
+        _selectedContext = enhancedContext; // Use enhanced context with surrounding sentences
+        _selectedTextSelection = TextSelection(baseOffset: 0, extentOffset: trimmedText.length);
+        _showTranslationPopup = true;
+      });
+      
+      print('BookReader: Sentence translation popup shown');
+      
+      _sessionTranslations++;
+    }
+    
     // Connect handler to specific engine types
     if (_readerEngine is HtmlReaderEngine) {
       (_readerEngine as HtmlReaderEngine).setTextSelectionHandler(handleTextSelection);
     } else if (_readerEngine is TxtReaderEngine) {
       (_readerEngine as TxtReaderEngine).setTextSelectionHandler(handleTextSelection);
     } else if (_readerEngine is EpubReaderEngine) {
-      // Set up callback for EPUB engine
+      // Set up callback for EPUB engine to handle word vs sentence selection
       print('BookReader: Setting EPUB text selection callback');
-      (_readerEngine as EpubReaderEngine).setTextSelectionCallback((text, position) {
-        print('BookReader: EPUB callback triggered with text: "$text"');
-        handleTextSelection(text, position, TextSelection(baseOffset: 0, extentOffset: text.length));
+      (_readerEngine as EpubReaderEngine).setTextSelectionCallback((selectionData) {
+        print('BookReader: EPUB callback triggered with ${selectionData.type.name}: "${selectionData.text}"');
+        
+        // Route to appropriate handler based on selection type
+        if (selectionData.isSentence) {
+          handleSentenceSelection(selectionData);
+        } else {
+          // Handle as traditional word selection
+          handleTextSelection(selectionData.text, selectionData.position, 
+            TextSelection(baseOffset: 0, extentOffset: selectionData.text.length));
+        }
       });
     } else if (_readerEngine is PdfReaderEngine) {
       // Set up callback for PDF engine  
@@ -294,6 +343,92 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       print('BookReader: Failed to extract context: $e');
       return null;
     }
+  }
+  
+  String? _extractSentenceContext(String sentence) {
+    // For sentence translations, extract surrounding sentences for better context
+    if (_readerEngine == null) return sentence;
+    
+    try {
+      // Get the full chapter or section content for context extraction
+      String? fullContent;
+      
+      if (_readerEngine is EpubReaderEngine) {
+        final epubEngine = _readerEngine as EpubReaderEngine;
+        final chapters = epubEngine.chapters;
+        if (chapters != null && chapters.isNotEmpty) {
+          // Get current chapter content
+          final currentChapter = chapters[epubEngine.currentChapterIndex];
+          fullContent = currentChapter.HtmlContent;
+        }
+      } else {
+        // For other engines, use the existing context extraction
+        fullContent = _readerEngine!.extractContextAroundWord(sentence, contextWords: 50);
+      }
+      
+      if (fullContent == null) return sentence;
+      
+      // Clean HTML tags and normalize text
+      final cleanText = fullContent
+          .replaceAll(RegExp(r'<[^>]*>'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      
+      // Find the sentence in the clean text
+      final sentenceIndex = cleanText.toLowerCase().indexOf(sentence.toLowerCase());
+      if (sentenceIndex == -1) return sentence;
+      
+      // Extract surrounding sentences (approximately 2 sentences before and after)
+      return _extractSurroundingSentences(cleanText, sentenceIndex, sentence.length);
+      
+    } catch (e) {
+      print('BookReader: Failed to extract sentence context: $e');
+      return sentence;
+    }
+  }
+  
+  String _extractSurroundingSentences(String text, int targetIndex, int targetLength) {
+    // Define sentence boundary patterns (multilingual)
+    final sentenceBoundaries = RegExp(r'[.!?।。？！]+[\s]*');
+    
+    // Find sentences before the target
+    final textBefore = text.substring(0, targetIndex);
+    final beforeMatches = sentenceBoundaries.allMatches(textBefore).toList();
+    
+    // Start from 2 sentences before if available
+    int contextStart = 0;
+    if (beforeMatches.length >= 2) {
+      contextStart = beforeMatches[beforeMatches.length - 2].end;
+    } else if (beforeMatches.isNotEmpty) {
+      contextStart = beforeMatches.last.end;
+    }
+    
+    // Find sentences after the target
+    final textAfter = text.substring(targetIndex + targetLength);
+    final afterMatches = sentenceBoundaries.allMatches(textAfter).toList();
+    
+    // End after 2 sentences if available
+    int contextEnd = text.length;
+    if (afterMatches.length >= 2) {
+      contextEnd = targetIndex + targetLength + afterMatches[1].end;
+    } else if (afterMatches.isNotEmpty) {
+      contextEnd = targetIndex + targetLength + afterMatches.first.end;
+    }
+    
+    // Extract the context and clean it up
+    final context = text.substring(contextStart, contextEnd).trim();
+    
+    // Ensure context doesn't exceed reasonable length
+    if (context.length > 1500) {
+      // Truncate to reasonable size while preserving sentence boundaries
+      final truncated = context.substring(0, 1500);
+      final lastSentence = sentenceBoundaries.allMatches(truncated).lastOrNull;
+      if (lastSentence != null) {
+        return truncated.substring(0, lastSentence.end).trim();
+      }
+    }
+    
+    return context;
   }
   
   void _closeTranslationPopup() {

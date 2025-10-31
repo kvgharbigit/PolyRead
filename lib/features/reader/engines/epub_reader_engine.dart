@@ -8,6 +8,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:epub_view/epub_view.dart';
 import 'package:epubx/epubx.dart' as epubx;
 import 'package:polyread/features/reader/engines/reader_interface.dart';
+import 'package:polyread/features/reader/models/text_selection_type.dart';
 import 'package:polyread/core/services/error_service.dart';
 
 class EpubReaderEngine implements ReaderEngine {
@@ -19,8 +20,8 @@ class EpubReaderEngine implements ReaderEngine {
   String? _selectedText;
   int _currentChapterIndex = 0;
   
-  /// Callback for text selection events
-  Function(String text, Offset position)? onTextSelectionCallback;
+  /// Callback for typed text selection events (word vs sentence)
+  Function(TextSelectionData selectionData)? onTextSelectionCallback;
   
   @override
   Future<void> initialize(String filePath) async {
@@ -127,8 +128,19 @@ class EpubReaderEngine implements ReaderEngine {
 $chapterContent
 
 <script>
+// Dual-mode text selection: word-level tap + sentence-level long press
+let longPressTimer = null;
+let longPressTriggered = false;
+const LONG_PRESS_DURATION = 800; // milliseconds
+
 // Word-level tap detection for precise text selection
 function handleWordTap(event) {
+    // Prevent processing if long press was triggered
+    if (longPressTriggered) {
+        longPressTriggered = false;
+        return;
+    }
+    
     const range = document.caretRangeFromPoint(event.clientX, event.clientY);
     if (range) {
         const textNode = range.startContainer;
@@ -165,8 +177,88 @@ function handleWordTap(event) {
     }
 }
 
-// Add event listener
+// Sentence-level detection for long press
+function handleSentenceLongPress(event) {
+    const range = document.caretRangeFromPoint(event.clientX, event.clientY);
+    if (range) {
+        const textNode = range.startContainer;
+        if (textNode.nodeType === Node.TEXT_NODE) {
+            const sentence = extractSentenceFromPosition(textNode, range.startOffset);
+            
+            if (sentence && sentence.length > 0 && sentence.length < 500) {
+                console.log('Debug: Extracted sentence:', sentence);
+                
+                // Send sentence selection to Flutter
+                if (window.TextSelection) {
+                    window.TextSelection.postMessage(JSON.stringify({
+                        type: 'sentenceLongPress',
+                        text: sentence.trim(),
+                        position: { x: event.clientX, y: event.clientY }
+                    }));
+                }
+            }
+        }
+    }
+}
+
+// Extract full sentence from text node and position
+function extractSentenceFromPosition(textNode, offset) {
+    const text = textNode.textContent;
+    let sentenceStart = offset;
+    let sentenceEnd = offset;
+    
+    // Define sentence boundary patterns (multilingual)
+    const sentenceStarters = /[.!?।。？！]/; // Latin, Devanagari, CJK
+    const sentenceEnders = /[.!?।。？！]/;
+    
+    // Find sentence start (go backwards until sentence boundary or start of text)
+    while (sentenceStart > 0) {
+        const char = text[sentenceStart - 1];
+        if (sentenceStarters.test(char)) {
+            // Found sentence boundary, move past it
+            break;
+        }
+        sentenceStart--;
+    }
+    
+    // Find sentence end (go forwards until sentence boundary or end of text)
+    while (sentenceEnd < text.length) {
+        const char = text[sentenceEnd];
+        if (sentenceEnders.test(char)) {
+            // Include the sentence boundary character
+            sentenceEnd++;
+            break;
+        }
+        sentenceEnd++;
+    }
+    
+    const sentence = text.substring(sentenceStart, sentenceEnd).trim();
+    
+    // Clean up sentence: remove leading/trailing punctuation, excessive whitespace
+    return sentence.trim().replace(/\\\\s+/g, " ");
+}
+
+// Mouse down handler for long press detection
+function handleMouseDown(event) {
+    longPressTriggered = false;
+    clearTimeout(longPressTimer);
+    
+    longPressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        handleSentenceLongPress(event);
+    }, LONG_PRESS_DURATION);
+}
+
+// Mouse up handler to cancel long press
+function handleMouseUp(event) {
+    clearTimeout(longPressTimer);
+}
+
+// Add event listeners for dual-mode selection
 document.addEventListener('click', handleWordTap);
+document.addEventListener('mousedown', handleMouseDown);
+document.addEventListener('mouseup', handleMouseUp);
+document.addEventListener('mouseleave', handleMouseUp); // Cancel if mouse leaves area
 </script>
 
 </body>
@@ -177,8 +269,9 @@ document.addEventListener('click', handleWordTap);
   void _handleWebViewTextSelection(String message) {
     try {
       final data = jsonDecode(message) as Map<String, dynamic>;
+      final selectionType = data['type'] as String;
       
-      if (data['type'] == 'wordTap') {
+      if (selectionType == 'wordTap') {
         final word = data['text'] as String;
         final position = data['position'] as Map<String, dynamic>;
         final offset = Offset(
@@ -189,7 +282,35 @@ document.addEventListener('click', handleWordTap);
         print('EPUB WebView: Exact word tapped: "$word" at $offset');
         
         _selectedText = word;
-        onTextSelected(word, offset);
+        
+        if (onTextSelectionCallback != null) {
+          final selectionData = TextSelectionData(
+            text: word,
+            type: TextSelectionType.word,
+            position: offset,
+          );
+          onTextSelectionCallback!(selectionData);
+        }
+      } else if (selectionType == 'sentenceLongPress') {
+        final sentence = data['text'] as String;
+        final position = data['position'] as Map<String, dynamic>;
+        final offset = Offset(
+          (position['x'] as num).toDouble(),
+          (position['y'] as num).toDouble(),
+        );
+        
+        print('EPUB WebView: Sentence long-pressed: "$sentence" at $offset');
+        
+        _selectedText = sentence;
+        
+        if (onTextSelectionCallback != null) {
+          final selectionData = TextSelectionData(
+            text: sentence,
+            type: TextSelectionType.sentence,
+            position: offset,
+          );
+          onTextSelectionCallback!(selectionData);
+        }
       }
     } catch (e) {
       print('Error handling WebView text selection: $e');
@@ -213,6 +334,9 @@ document.addEventListener('click', handleWordTap);
   
   /// Get chapters for table of contents
   List<epubx.EpubChapter>? get chapters => _book?.Chapters;
+  
+  /// Get current chapter index
+  int get currentChapterIndex => _currentChapterIndex;
   
   @override
   Future<void> goToPosition(ReaderPosition position) async {
@@ -403,20 +527,12 @@ document.addEventListener('click', handleWordTap);
   
   @override
   void onTextSelected(String selectedText, Offset position) {
-    _selectedText = selectedText;
-    print('EPUB: onTextSelected called with: "$selectedText" at $position');
-    print('EPUB: Callback available: ${onTextSelectionCallback != null}');
-    
-    if (onTextSelectionCallback != null) {
-      print('EPUB: Triggering callback!');
-      onTextSelectionCallback!(selectedText, position);
-    } else {
-      print('EPUB: No callback set - this is the problem!');
-    }
+    // This method is no longer used - text selection goes through typed callback
+    print('EPUB: onTextSelected called but using typed callback instead');
   }
   
-  /// Set text selection callback
-  void setTextSelectionCallback(Function(String text, Offset position)? callback) {
+  /// Set text selection callback for word/sentence differentiation
+  void setTextSelectionCallback(Function(TextSelectionData selectionData)? callback) {
     print('EPUB: setTextSelectionCallback called with callback: ${callback != null}');
     onTextSelectionCallback = callback;
     print('EPUB: Callback stored, available: ${onTextSelectionCallback != null}');

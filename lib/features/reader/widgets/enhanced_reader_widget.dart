@@ -8,6 +8,7 @@ import 'package:polyread/features/reader/engines/pdf_reader_engine.dart';
 import 'package:polyread/features/reader/engines/epub_reader_engine.dart';
 import 'package:polyread/features/reader/engines/html_reader_engine.dart';
 import 'package:polyread/features/reader/engines/txt_reader_engine.dart';
+import 'package:polyread/features/reader/models/text_selection_type.dart';
 import 'package:polyread/features/reader/providers/reader_translation_provider.dart';
 import 'package:polyread/features/translation/widgets/cycling_translation_popup.dart';
 import 'package:polyread/core/providers/settings_provider.dart';
@@ -96,7 +97,9 @@ class _EnhancedReaderWidgetState extends ConsumerState<EnhancedReaderWidget> {
       readerEngine.setTextSelectionCallback(_handleTextSelection);
     } else if (readerEngine is EpubReaderEngine) {
       print('EnhancedReader: Setting EPUB callback');
-      readerEngine.setTextSelectionCallback(_handleTextSelection);
+      readerEngine.setTextSelectionCallback((selectionData) {
+        _handleTextSelection(selectionData.text, selectionData.position);
+      });
     } else if (readerEngine is HtmlReaderEngine) {
       print('EnhancedReader: Setting HTML callback');
       readerEngine.setTextSelectionCallback(_handleTextSelection);
