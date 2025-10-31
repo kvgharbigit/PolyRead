@@ -311,35 +311,39 @@ class TxtReaderEngine implements ReaderEngine {
   Color _getBackgroundColor() {
     if (_settings == null) return Colors.white;
     
-    if (_settings!.theme == ReaderTheme.light) {
-      return const Color(0xFFFFFFFF);
-    } else if (_settings!.theme == ReaderTheme.sepia) {
-      return const Color(0xFFFDF6E3);
-    } else if (_settings!.theme == ReaderTheme.dark) {
-      return const Color(0xFF1A1A1A);
+    if (_settings!.theme == ReaderTheme.warmLight) {
+      return const Color(0xFFFDF6E3); // Warm cream background
+    } else if (_settings!.theme == ReaderTheme.trueDark) {
+      return const Color(0xFF000000); // True dark background
+    } else if (_settings!.theme == ReaderTheme.enhancedSepia) {
+      return const Color(0xFFF4ECD8); // Enhanced sepia background
+    } else if (_settings!.theme == ReaderTheme.blueFilter) {
+      return const Color(0xFFFFF8E1); // Blue filter background
     } else if (_settings!.theme == ReaderTheme.custom) {
       final brightness = (_settings!.brightness * 255).round();
       return Color.fromRGBO(brightness, brightness, brightness, 1.0);
     }
-    return Colors.white;
+    return const Color(0xFFFDF6E3); // Default to warm light
   }
 
   /// Get text color based on theme
   Color _getTextColor() {
     if (_settings == null) return Colors.black;
     
-    if (_settings!.theme == ReaderTheme.light) {
-      return const Color(0xFF000000);
-    } else if (_settings!.theme == ReaderTheme.sepia) {
-      return const Color(0xFF5D4E37);
-    } else if (_settings!.theme == ReaderTheme.dark) {
-      return const Color(0xFFFFFFFF);
+    if (_settings!.theme == ReaderTheme.warmLight) {
+      return const Color(0xFF2E2A24); // Warm dark text
+    } else if (_settings!.theme == ReaderTheme.trueDark) {
+      return const Color(0xFFE8E6E3); // Light text on dark
+    } else if (_settings!.theme == ReaderTheme.enhancedSepia) {
+      return const Color(0xFF5D4E37); // Sepia brown text
+    } else if (_settings!.theme == ReaderTheme.blueFilter) {
+      return const Color(0xFF3E2723); // Warm amber text
     } else if (_settings!.theme == ReaderTheme.custom) {
       return _settings!.brightness > 0.5 
           ? const Color(0xFF000000) 
           : const Color(0xFFFFFFFF);
     }
-    return Colors.black;
+    return const Color(0xFF2E2A24); // Default to warm dark
   }
 
   void _handleWordTap(String word, Offset position) {

@@ -1,5 +1,5 @@
-// EPUB Reader Engine
-// EPUB viewing and interaction using epub_view package
+// EPUB Reader Engine - Clean with WebView Text Selection
+// Precise word-level text selection using WebView + JavaScript
 
 import 'dart:io';
 import 'dart:convert';
@@ -18,11 +18,14 @@ class EpubReaderEngine implements ReaderEngine {
   String _currentChapter = '';
   String? _selectedText;
   int _currentChapterIndex = 0;
-  bool _useWebView = true; // Use WebView for better text selection
+  
+  /// Callback for text selection events
+  Function(String text, Offset position)? onTextSelectionCallback;
   
   @override
   Future<void> initialize(String filePath) async {
     try {
+      print('EPUB: Starting initialization for $filePath');
       _filePath = filePath;
       final file = File(filePath);
       
@@ -31,30 +34,27 @@ class EpubReaderEngine implements ReaderEngine {
       }
       
       // Parse EPUB file
+      print('EPUB: Parsing EPUB file...');
       final bytes = await file.readAsBytes();
       _book = await epubx.EpubReader.readBook(bytes);
+      print('EPUB: Book parsed successfully, chapters: ${_book?.Chapters?.length ?? 0}');
       
-      // Initialize controllers
-      if (_useWebView) {
-        await _initializeWebView();
-      } else {
-        _controller = EpubController(
-          document: EpubDocument.openData(bytes),
-        );
-      }
+      // Initialize WebView controller for precise text selection
+      print('EPUB: Initializing WebView...');
+      await _initializeWebView();
       
       // Set first chapter as current
       final chapters = _book?.Chapters;
       if (chapters != null && chapters.isNotEmpty) {
         _currentChapter = chapters.first.Title ?? '';
         _currentChapterIndex = 0;
-        
-        if (_useWebView) {
-          await _loadCurrentChapterInWebView();
-        }
+        print('EPUB: Set initial chapter: $_currentChapter');
+        await _loadCurrentChapterInWebView();
       }
       
+      print('EPUB: Initialization complete');
     } catch (e) {
+      print('EPUB: Initialization error: $e');
       ErrorService.logParsingError(
         'Failed to initialize EPUB reader',
         details: e.toString(),
@@ -63,7 +63,7 @@ class EpubReaderEngine implements ReaderEngine {
       rethrow;
     }
   }
-  
+
   Future<void> _initializeWebView() async {
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -76,25 +76,34 @@ class EpubReaderEngine implements ReaderEngine {
   }
 
   Future<void> _loadCurrentChapterInWebView() async {
-    if (_webViewController == null || _book?.Chapters?.isEmpty == true) return;
+    if (_webViewController == null || _book?.Chapters?.isEmpty == true) {
+      print('EPUB: Cannot load chapter - missing WebView controller or chapters');
+      return;
+    }
 
     final chapters = _book?.Chapters;
-    final webViewController = _webViewController;
-    
-    if (chapters == null || _currentChapterIndex >= chapters.length || webViewController == null) {
-      throw Exception('Invalid EPUB state: missing chapters or webview controller');
+    if (chapters == null || _currentChapterIndex >= chapters.length) {
+      print('EPUB: Invalid chapter index: $_currentChapterIndex');
+      return;
     }
     
     final currentChapter = chapters[_currentChapterIndex];
     final htmlContent = currentChapter.HtmlContent ?? '';
+    print('EPUB: Loading chapter $_currentChapterIndex: "${currentChapter.Title}"');
+    print('EPUB: Chapter content length: ${htmlContent.length} characters');
     
-    // Create full HTML document with text selection JavaScript
-    final fullHtml = _createChapterHtml(htmlContent);
+    // Create HTML with enhanced text selection JavaScript
+    final fullHtml = _createInteractiveHtml(htmlContent);
     
-    await webViewController.loadHtmlString(fullHtml);
+    try {
+      await _webViewController!.loadHtmlString(fullHtml);
+      print('EPUB: Chapter loaded successfully in WebView');
+    } catch (e) {
+      print('EPUB: Error loading chapter in WebView: $e');
+    }
   }
 
-  String _createChapterHtml(String chapterContent) {
+  String _createInteractiveHtml(String chapterContent) {
     return '''
 <!DOCTYPE html>
 <html>
@@ -189,81 +198,70 @@ document.addEventListener('click', handleWordTap);
 
   @override
   Future<void> dispose() async {
+    print('EPUB: Disposing...');
     _controller?.dispose();
     _controller = null;
-    _webViewController = null;
     _book = null;
+    _webViewController = null;
   }
   
   @override
-  int get totalPages {
-    // EPUB doesn't have fixed pages, return chapter count
-    return _book?.Chapters?.length ?? 0;
-  }
+  int get totalPages => _book?.Chapters?.length ?? 0;
   
   @override
   ReaderPosition get currentPosition => ReaderPosition.epub(_currentChapter);
   
+  /// Get chapters for table of contents
+  List<epubx.EpubChapter>? get chapters => _book?.Chapters;
+  
   @override
   Future<void> goToPosition(ReaderPosition position) async {
-    if (position.chapterId != null && _controller != null) {
-      // Find chapter index
+    if (position.chapterId != null) {
       final chapters = _book?.Chapters ?? [];
       final chapterIndex = chapters.indexWhere(
         (ch) => ch.Title == position.chapterId,
       );
       
       if (chapterIndex >= 0) {
-        await _controller!.scrollTo(
-          index: chapterIndex,
-          duration: const Duration(milliseconds: 300),
-        );
+        print('EPUB: Navigating to chapter $chapterIndex: ${position.chapterId}');
         _currentChapter = position.chapterId!;
+        _currentChapterIndex = chapterIndex;
+        await _loadCurrentChapterInWebView();
       }
     }
   }
   
   @override
   Future<bool> goToNext() async {
+    print('EPUB: goToNext called');
     if (_book?.Chapters != null) {
       final chapters = _book!.Chapters!;
       
       if (_currentChapterIndex < chapters.length - 1) {
         _currentChapterIndex++;
         _currentChapter = chapters[_currentChapterIndex].Title ?? '';
-        
-        if (_useWebView) {
-          await _loadCurrentChapterInWebView();
-        } else if (_controller != null) {
-          await _controller!.scrollTo(
-            index: _currentChapterIndex,
-            duration: const Duration(milliseconds: 300),
-          );
-        }
+        print('EPUB: Moving to next chapter $_currentChapterIndex: $_currentChapter');
+        await _loadCurrentChapterInWebView();
         return true;
       }
     }
+    print('EPUB: Already at last chapter');
     return false;
   }
   
   @override
   Future<bool> goToPrevious() async {
+    print('EPUB: goToPrevious called');
     if (_book?.Chapters != null) {
       if (_currentChapterIndex > 0) {
         _currentChapterIndex--;
         _currentChapter = _book!.Chapters![_currentChapterIndex].Title ?? '';
-        
-        if (_useWebView) {
-          await _loadCurrentChapterInWebView();
-        } else if (_controller != null) {
-          await _controller!.scrollTo(
-            index: _currentChapterIndex,
-            duration: const Duration(milliseconds: 300),
-          );
-        }
+        print('EPUB: Moving to previous chapter $_currentChapterIndex: $_currentChapter');
+        await _loadCurrentChapterInWebView();
         return true;
       }
     }
+    print('EPUB: Already at first chapter');
     return false;
   }
   
@@ -271,284 +269,96 @@ document.addEventListener('click', handleWordTap);
   String? getSelectedText() => _selectedText;
   
   @override
-  String? extractContextAroundWord(String word, {int contextWords = 10}) {
-    // For EPUB, we need to extract context from the currently loaded chapter
-    if (_book?.Chapters?.isEmpty == true) return null;
-    
-    final currentChapter = _book!.Chapters![_currentChapterIndex];
-    final htmlContent = currentChapter.HtmlContent ?? '';
-    
-    if (htmlContent.isEmpty) return null;
-    
-    // Simple text extraction from HTML (removes tags)
-    final text = htmlContent.replaceAll(RegExp(r'<[^>]*>'), ' ');
-    final words = text.split(RegExp(r'\s+')).where((w) => w.trim().isNotEmpty).toList();
-    
-    // Find word position
-    final wordIndex = words.indexWhere((w) => w.toLowerCase().contains(word.toLowerCase()));
-    if (wordIndex == -1) return null;
-    
-    // Extract context
-    final startIndex = (wordIndex - contextWords).clamp(0, words.length);
-    final endIndex = (wordIndex + contextWords + 1).clamp(0, words.length);
-    
-    return words.sublist(startIndex, endIndex).join(' ');
-  }
-  
-  @override
   double get progress {
     if (_book?.Chapters?.isEmpty == true) return 0.0;
-    
-    final chapters = _book!.Chapters!;
-    final currentIndex = chapters.indexWhere(
-      (ch) => ch.Title == _currentChapter,
-    );
-    
-    if (currentIndex < 0) return 0.0;
-    return currentIndex / chapters.length;
+    return _currentChapterIndex / (_book?.Chapters?.length ?? 1);
   }
   
   @override
   Widget buildReader(BuildContext context) {
-    if (_useWebView) {
-      if (_webViewController == null) {
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Loading EPUB...'),
-            ],
+    print('EPUB: buildReader called, WebView controller available: ${_webViewController != null}');
+    
+    if (_webViewController == null) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading EPUB...'),
+          ],
+        ),
+      );
+    }
+    
+    final totalChapters = _book?.Chapters?.length ?? 0;
+    
+    return Column(
+      children: [
+        // Navigation bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade300),
+            ),
           ),
-        );
-      }
-      
-      return Column(
-        children: [
-          // Navigation controls
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: _currentChapterIndex > 0 ? () => goToPrevious() : null,
+                icon: const Icon(Icons.arrow_back),
+              ),
+              Expanded(
+                child: Text(
+                  'Chapter ${_currentChapterIndex + 1} of $totalChapters: $_currentChapter',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleSmall,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  onPressed: _currentChapterIndex > 0 ? () => goToPrevious() : null,
-                  icon: const Icon(Icons.arrow_back),
-                ),
-                Expanded(
-                  child: Text(
-                    _currentChapter,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleSmall,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  onPressed: _currentChapterIndex < (totalPages - 1) ? () => goToNext() : null,
-                  icon: const Icon(Icons.arrow_forward),
-                ),
-              ],
-            ),
-          ),
-          // WebView content
-          Expanded(
-            child: WebViewWidget(controller: _webViewController!),
-          ),
-        ],
-      );
-    } else {
-      // Fallback to epub_view
-      if (_controller == null) {
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Loading EPUB...'),
+              IconButton(
+                onPressed: _currentChapterIndex < (totalChapters - 1) ? () => goToNext() : null,
+                icon: const Icon(Icons.arrow_forward),
+              ),
             ],
           ),
-        );
-      }
-      
-      return Stack(
-        children: [
-          EpubView(
-            controller: _controller!,
-            onChapterChanged: (chapter) {
-              if (chapter?.chapter?.Title != null) {
-                _currentChapter = chapter!.chapter!.Title!;
-              }
-            },
-            onDocumentLoaded: (document) {
-              // Document loaded successfully
-            },
-            onDocumentError: (error) {
-              ErrorService.logParsingError(
-                'EPUB document error',
-                details: error.toString(),
-                fileName: _filePath,
-              );
-            },
-          ),
-          // Overlay gesture detector for text selection
-          Positioned.fill(
-            child: GestureDetector(
-              onTapDown: (details) => _handleTap(details),
-              behavior: HitTestBehavior.translucent,
-            ),
-          ),
-        ],
-      );
-    }
-  }
-  
-  /// Handle tap for text selection (fallback for non-WebView mode)
-  Future<void> _handleTap(TapDownDetails details) async {
-    final position = details.localPosition;
-    
-    print('EPUB tap detected at position: $position (fallback mode)'); // Debug
-    
-    // This is only used when WebView mode is disabled
-    // WebView mode handles text selection via JavaScript
-    if (!_useWebView) {
-      final word = await _getWordAtPosition(position);
-      
-      print('EPUB extracted word: $word'); // Debug
-      
-      if (word != null && word.isNotEmpty) {
-        _selectedText = word;
-        print('EPUB calling onTextSelected with: $word'); // Debug
-        onTextSelected(word, position);
-      } else {
-        print('EPUB: No word found at position'); // Debug
-      }
-    }
-  }
-  
-  /// Extract word from current chapter at tap position
-  Future<String?> _getWordAtPosition(Offset position) async {
-    final currentChapter = currentChapterInfo;
-    if (currentChapter == null) return null;
-    
-    // Get chapter text content
-    final htmlContent = currentChapter.HtmlContent ?? '';
-    
-    // More sophisticated text processing to preserve structure
-    String processedText = htmlContent;
-    
-    // Replace paragraph and line breaks with markers to preserve text flow
-    processedText = processedText.replaceAll(RegExp(r'<p[^>]*>'), '\n¶ ');
-    processedText = processedText.replaceAll(RegExp(r'</p>'), ' ¶\n');
-    processedText = processedText.replaceAll(RegExp(r'<br[^>]*>'), '\n');
-    
-    // Remove other HTML tags but preserve the text structure
-    processedText = processedText.replaceAll(RegExp(r'<[^>]*>'), ' ');
-    
-    // Split into lines and then words, preserving line structure
-    final lines = processedText.split('\n').where((line) => line.trim().isNotEmpty).toList();
-    final wordsWithLineInfo = <({String word, int lineIndex, int wordIndex})>[];
-    
-    for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      final lineWords = lines[lineIndex].split(RegExp(r'\s+'))
-          .where((word) => word.isNotEmpty)
-          .map((word) => word.replaceAll(RegExp(r'[^\w]'), ''))
-          .where((word) => word.isNotEmpty)
-          .toList();
-      
-      for (int wordIndex = 0; wordIndex < lineWords.length; wordIndex++) {
-        wordsWithLineInfo.add((
-          word: lineWords[wordIndex], 
-          lineIndex: lineIndex, 
-          wordIndex: wordIndex
-        ));
-      }
-    }
-    
-    if (wordsWithLineInfo.isEmpty) return null;
-    
-    // Estimate text layout based on typical reading dimensions
-    const double estimatedLineHeight = 24.0; // Typical line height
-    const double estimatedCharWidth = 8.0; // Typical character width
-    const double leftMargin = 20.0; // Typical left margin
-    
-    // Find the line that the tap position falls on
-    final tappedLineIndex = ((position.dy - 50) / estimatedLineHeight).floor().clamp(0, lines.length - 1);
-    
-    // Find words on or near the tapped line
-    final candidateWords = wordsWithLineInfo.where((wordInfo) {
-      final lineDiff = (wordInfo.lineIndex - tappedLineIndex).abs();
-      return lineDiff <= 2; // Allow ±2 lines tolerance
-    }).toList();
-    
-    if (candidateWords.isEmpty) {
-      // Fallback to any word if no candidates found
-      final fallbackIndex = ((position.dx + position.dy) / 100).round() % wordsWithLineInfo.length;
-      return wordsWithLineInfo[fallbackIndex].word;
-    }
-    
-    // Estimate horizontal position within the line
-    final estimatedCharPosition = ((position.dx - leftMargin) / estimatedCharWidth).floor();
-    
-    // Find the word closest to the estimated character position
-    String bestWord = candidateWords.first.word;
-    int bestScore = 1000000;
-    
-    for (final wordInfo in candidateWords) {
-      final lineWords = lines[wordInfo.lineIndex].split(RegExp(r'\s+'))
-          .where((word) => word.isNotEmpty).toList();
-      
-      // Calculate approximate character position of this word in the line
-      int charPosition = 0;
-      for (int i = 0; i < wordInfo.wordIndex && i < lineWords.length; i++) {
-        charPosition += lineWords[i].length + 1; // +1 for space
-      }
-      
-      final distance = (charPosition - estimatedCharPosition).abs();
-      if (distance < bestScore) {
-        bestScore = distance;
-        bestWord = wordInfo.word;
-      }
-    }
-    
-    print('EPUB: Tap at (${position.dx.toInt()}, ${position.dy.toInt()}) → line $tappedLineIndex, char ~$estimatedCharPosition → "$bestWord"');
-    
-    return bestWord;
+        ),
+        // WebView content
+        Expanded(
+          child: WebViewWidget(controller: _webViewController!),
+        ),
+      ],
+    );
   }
   
   @override
-  void onTextSelected(String selectedText, Offset position) {
-    _selectedText = selectedText;
-    
-    print('EPUB onTextSelected called with: $selectedText at $position');
-    print('EPUB callback is null: ${onTextSelectionCallback == null}');
-    
-    // Trigger callback for external handling (will be connected to translation service)
-    if (onTextSelectionCallback != null) {
-      print('EPUB triggering callback!');
-      onTextSelectionCallback!(selectedText, position);
-    } else {
-      print('EPUB callback is null, not triggering');
+  String? extractContextAroundWord(String word, {int contextWords = 10}) {
+    if (_book?.Chapters?.isEmpty == true || _currentChapterIndex >= _book!.Chapters!.length) {
+      return null;
     }
-  }
-  
-  /// Callback for text selection events
-  Function(String text, Offset position)? onTextSelectionCallback;
-  
-  /// Set text selection callback
-  void setTextSelectionCallback(Function(String text, Offset position)? callback) {
-    print('EPUB: setTextSelectionCallback called with callback: ${callback != null}');
-    onTextSelectionCallback = callback;
-    print('EPUB: callback stored, is null: ${onTextSelectionCallback == null}');
+    
+    final currentChapter = _book!.Chapters![_currentChapterIndex];
+    final htmlContent = currentChapter.HtmlContent ?? '';
+    
+    // Simple text extraction and context building
+    final plainText = htmlContent
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    
+    final words = plainText.split(' ');
+    final wordIndex = words.indexWhere(
+      (w) => w.toLowerCase().contains(word.toLowerCase()),
+    );
+    
+    if (wordIndex == -1) return null;
+    
+    final startIndex = (wordIndex - contextWords).clamp(0, words.length);
+    final endIndex = (wordIndex + contextWords + 1).clamp(0, words.length);
+    
+    return words.sublist(startIndex, endIndex).join(' ');
   }
   
   @override
@@ -562,7 +372,8 @@ document.addEventListener('click', handleWordTap);
     try {
       final chapters = _book!.Chapters!;
       
-      for (final chapter in chapters) {
+      for (int i = 0; i < chapters.length; i++) {
+        final chapter = chapters[i];
         final content = chapter.HtmlContent?.toLowerCase() ?? '';
         final queryLower = query.toLowerCase();
         
@@ -571,49 +382,43 @@ document.addEventListener('click', handleWordTap);
           final index = content.indexOf(queryLower);
           final start = (index - 50).clamp(0, content.length);
           final end = (index + query.length + 50).clamp(0, content.length);
-          final context = content.substring(start, end);
+          final context = content.substring(start, end)
+              .replaceAll(RegExp(r'<[^>]*>'), ' ')
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim();
           
           results.add(SearchResult(
             text: query,
             position: ReaderPosition.epub(chapter.Title ?? ''),
-            context: context.replaceAll(RegExp(r'<[^>]*>'), ''), // Remove HTML tags
+            context: context,
           ));
         }
       }
     } catch (e) {
-      ErrorService.logParsingError(
-        'EPUB search failed',
-        details: e.toString(),
-        fileName: _filePath,
-      );
+      print('EPUB: Search error: $e');
     }
     
     return results;
   }
   
-  /// Get table of contents for navigation
-  List<epubx.EpubChapter> get chapters => _book?.Chapters ?? [];
-  
-  /// Get current chapter info
-  epubx.EpubChapter? get currentChapterInfo {
-    if (_book?.Chapters?.isEmpty == true) return null;
+  @override
+  void onTextSelected(String selectedText, Offset position) {
+    _selectedText = selectedText;
+    print('EPUB: onTextSelected called with: "$selectedText" at $position');
+    print('EPUB: Callback available: ${onTextSelectionCallback != null}');
     
-    return _book!.Chapters!.firstWhere(
-      (ch) => ch.Title == _currentChapter,
-      orElse: () => _book!.Chapters!.first,
-    );
+    if (onTextSelectionCallback != null) {
+      print('EPUB: Triggering callback!');
+      onTextSelectionCallback!(selectedText, position);
+    } else {
+      print('EPUB: No callback set - this is the problem!');
+    }
   }
-}
-
-/// EPUB chapter info for navigation
-class EpubChapter {
-  final String title;
-  final String? anchor;
-  final int index;
   
-  const EpubChapter({
-    required this.title,
-    this.anchor,
-    required this.index,
-  });
+  /// Set text selection callback
+  void setTextSelectionCallback(Function(String text, Offset position)? callback) {
+    print('EPUB: setTextSelectionCallback called with callback: ${callback != null}');
+    onTextSelectionCallback = callback;
+    print('EPUB: Callback stored, available: ${onTextSelectionCallback != null}');
+  }
 }

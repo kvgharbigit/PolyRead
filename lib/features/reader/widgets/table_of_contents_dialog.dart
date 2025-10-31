@@ -93,7 +93,7 @@ class TableOfContentsDialog extends StatelessWidget {
     final epubEngine = readerEngine as EpubReaderEngine;
     final chapters = epubEngine.chapters;
     
-    if (chapters.isEmpty) {
+    if (chapters == null || chapters.isEmpty) {
       return const Center(child: Text('No chapters available'));
     }
     

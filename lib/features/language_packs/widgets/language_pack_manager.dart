@@ -1,5 +1,5 @@
-// Language Pack Manager - Main UI for browsing and managing language packs
-// Shows available packs, download progress, and storage management
+// Language Pack Manager - Elegant UI for browsing and managing language packs
+// Enhanced with PolyRead design system for premium experience
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -11,6 +11,8 @@ import '../providers/language_packs_provider.dart';
 import '../services/drift_language_pack_service.dart';
 import '../services/language_pack_registry_service.dart' as registry_service;
 import '../../../core/providers/database_provider.dart' as db;
+import '../../../core/themes/polyread_spacing.dart';
+import '../../../core/themes/polyread_typography.dart';
 
 class LanguagePackManager extends ConsumerStatefulWidget {
   const LanguagePackManager({super.key});
@@ -118,21 +120,51 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Language Packs'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.translate), text: 'Language Packs'),
-            Tab(icon: Icon(Icons.storage), text: 'Storage'),
-          ],
-        ),
-      ),
+      appBar: _buildElegantAppBar(context),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: TabBarView(
         controller: _tabController,
         children: [
           _buildLanguagePacksTab(),
           _buildStorageTab(),
+        ],
+      ),
+    );
+  }
+  
+  /// Build elegant app bar with tabs
+  PreferredSizeWidget _buildElegantAppBar(BuildContext context) {
+    return AppBar(
+      title: Text(
+        'Language Packs',
+        style: PolyReadTypography.interfaceTitle.copyWith(
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      foregroundColor: Theme.of(context).colorScheme.onSurface,
+      elevation: 0,
+      centerTitle: true,
+      bottom: TabBar(
+        controller: _tabController,
+        indicatorColor: Theme.of(context).colorScheme.primary,
+        labelColor: Theme.of(context).colorScheme.primary,
+        unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+        labelStyle: PolyReadTypography.interfaceBodyMedium.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelStyle: PolyReadTypography.interfaceBodyMedium.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
+        tabs: const [
+          Tab(
+            icon: Icon(Icons.translate_rounded),
+            text: 'Language Packs',
+          ),
+          Tab(
+            icon: Icon(Icons.storage_rounded),
+            text: 'Storage',
+          ),
         ],
       ),
     );
@@ -145,51 +177,87 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
         await ref.read(languagePacksProvider.notifier).refresh();
       },
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        physics: const BouncingScrollPhysics(),
+        padding: PolyReadSpacing.getResponsivePadding(context),
         children: [
-          _buildHeader(),
-          const SizedBox(height: 16),
+          _buildElegantHeader(),
+          const SizedBox(height: PolyReadSpacing.majorSpacing),
           _buildPacksList(),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.translate, color: Theme.of(context).colorScheme.primary, size: 28),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Language Packs',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Install dictionary + offline translation models',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
+  /// Build elegant header with welcome message and refresh action
+  Widget _buildElegantHeader() {
+    return Container(
+      padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+            Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.2),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+        boxShadow: PolyReadSpacing.subtleShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
             ),
-            IconButton(
-              onPressed: () async {
+            child: Icon(
+              Icons.translate_rounded,
+              size: 32,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: PolyReadSpacing.elementSpacing),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Language Packs',
+                  style: PolyReadTypography.interfaceHeadline.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: PolyReadSpacing.microSpacing),
+                Text(
+                  'Install dictionaries and offline translation models for enhanced reading',
+                  style: PolyReadTypography.interfaceBody.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () async {
                 await ref.read(languagePacksProvider.notifier).refresh();
                 _showSuccess('Refreshed');
               },
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh',
+              borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+              child: Container(
+                padding: const EdgeInsets.all(PolyReadSpacing.smallSpacing),
+                child: Icon(
+                  Icons.refresh_rounded,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -197,41 +265,93 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
   Widget _buildPacksList() {
     // Error state
     if (_lastError != null && _availablePacks == null) {
-      return _buildErrorState();
+      return _buildElegantErrorState();
     }
     
     // Loading state
     if (_availablePacks == null) {
-      return _buildLoadingState();
+      return _buildElegantLoadingState();
     }
     
     // Empty state
     if (_availablePacks!.isEmpty) {
-      return _buildEmptyState();
+      return _buildElegantEmptyState();
     }
     
     // Packs list
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Available Language Packs',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Download dictionaries and offline translation models',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+        // Section header
+        Padding(
+          padding: const EdgeInsets.only(bottom: PolyReadSpacing.elementSpacing),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(PolyReadSpacing.smallSpacing),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                ),
+                child: Icon(
+                  Icons.download_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: PolyReadSpacing.elementSpacing),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Available Language Packs',
+                      style: PolyReadTypography.interfaceSubheadline.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Tap to install • Swipe for options',
+                      style: PolyReadTypography.interfaceCaption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        ..._availablePacks!.map((pack) => _buildPackTile(pack)),
+        
+        // Elegant pack list container
+        Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+            boxShadow: PolyReadSpacing.cardShadow,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+            child: Column(
+              children: _availablePacks!.asMap().entries.map((entry) {
+                final index = entry.key;
+                final pack = entry.value;
+                final isLast = index == _availablePacks!.length - 1;
+                return _buildElegantPackTile(pack, isLast);
+              }).toList(),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildPackTile(registry_service.LanguagePackInfo pack) {
+  /// Build elegant pack tile with enhanced visual design
+  Widget _buildElegantPackTile(registry_service.LanguagePackInfo pack, bool isLast) {
     final packId = '${pack.sourceLanguage}-${pack.targetLanguage}';
     final languagePacksState = ref.watch(languagePacksProvider);
     final combinedService = ref.watch(combinedLanguagePackServiceProvider);
@@ -245,42 +365,96 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     final isFailed = progress?.status == DownloadStatus.failed;
     final isComingSoon = pack.priority == 'coming-soon';
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: _buildPackIcon(isInstalled, isDownloading, isFailed, isComingSoon, progress),
-        title: Text(
-          pack.displayLabel,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),
+    return Container(
+      decoration: BoxDecoration(
+        border: isLast ? null : Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+            width: 1,
+          ),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_getStatusText(isInstalled, isDownloading, isFailed, isComingSoon, progress)),
-            if (isDownloading && progress != null) _buildProgressIndicator(progress),
-          ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isInstalled 
+              ? () => _showElegantPackDetails(pack.sourceLanguage, pack.targetLanguage, pack.displayLabel)
+              : isDownloading || isComingSoon 
+                  ? null 
+                  : () => _installPack(pack.sourceLanguage, pack.targetLanguage),
+          child: Padding(
+            padding: const EdgeInsets.all(PolyReadSpacing.cardPadding),
+            child: Row(
+              children: [
+                _buildElegantPackIcon(isInstalled, isDownloading, isFailed, isComingSoon, progress),
+                const SizedBox(width: PolyReadSpacing.elementSpacing),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pack.displayLabel,
+                        style: PolyReadTypography.interfaceBody.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: PolyReadSpacing.microSpacing),
+                      Text(
+                        _getElegantStatusText(isInstalled, isDownloading, isFailed, isComingSoon, progress),
+                        style: PolyReadTypography.interfaceCaption.copyWith(
+                          color: _getStatusColor(context, isInstalled, isDownloading, isFailed, isComingSoon),
+                        ),
+                      ),
+                      if (isDownloading && progress != null) ...[
+                        const SizedBox(height: PolyReadSpacing.microSpacing),
+                        _buildElegantProgressIndicator(progress),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: PolyReadSpacing.elementSpacing),
+                _buildElegantActionButton(
+                  packId, isInstalled, isDownloading, isFailed, isComingSoon, 
+                  pack.sourceLanguage, pack.targetLanguage
+                ),
+              ],
+            ),
+          ),
         ),
-        trailing: _buildActionButton(
-          packId, isInstalled, isDownloading, isFailed, isComingSoon, 
-          pack.sourceLanguage, pack.targetLanguage
-        ),
-        onTap: isInstalled 
-            ? () => _showPackDetails(pack.sourceLanguage, pack.targetLanguage, pack.displayLabel)
-            : isDownloading || isComingSoon 
-                ? null 
-                : () => _installPack(pack.sourceLanguage, pack.targetLanguage),
       ),
     );
   }
 
-  Widget _buildPackIcon(bool isInstalled, bool isDownloading, bool isFailed, bool isComingSoon, DownloadProgress? progress) {
+  /// Build elegant pack icon with enhanced visual states
+  Widget _buildElegantPackIcon(bool isInstalled, bool isDownloading, bool isFailed, bool isComingSoon, DownloadProgress? progress) {
     if (isDownloading) {
-      return SizedBox(
-        width: 40,
-        height: 40,
-        child: CircularProgressIndicator(
-          value: progress?.progressPercent != null ? progress!.progressPercent / 100 : null,
-          strokeWidth: 3,
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                value: progress?.progressPercent != null ? progress!.progressPercent / 100 : null,
+                strokeWidth: 3,
+                color: Theme.of(context).colorScheme.primary,
+                backgroundColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+              ),
+            ),
+            Icon(
+              Icons.download_rounded,
+              size: 16,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ],
         ),
       );
     }
@@ -290,55 +464,87 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     Color iconColor;
     
     if (isFailed) {
-      backgroundColor = Colors.red.shade100;
-      iconData = Icons.error;
-      iconColor = Colors.red.shade700;
+      backgroundColor = Theme.of(context).colorScheme.errorContainer;
+      iconData = Icons.error_outline_rounded;
+      iconColor = Theme.of(context).colorScheme.error;
     } else if (isInstalled) {
-      backgroundColor = Colors.green.shade100;
-      iconData = Icons.check;
-      iconColor = Colors.green.shade700;
+      backgroundColor = Theme.of(context).colorScheme.primaryContainer;
+      iconData = Icons.check_circle_outline_rounded;
+      iconColor = Theme.of(context).colorScheme.primary;
     } else if (isComingSoon) {
-      backgroundColor = Colors.orange.shade100;
-      iconData = Icons.schedule;
-      iconColor = Colors.orange.shade700;
+      backgroundColor = Theme.of(context).colorScheme.surfaceContainerHighest;
+      iconData = Icons.schedule_rounded;
+      iconColor = Theme.of(context).colorScheme.onSurfaceVariant;
     } else {
       backgroundColor = Theme.of(context).colorScheme.surfaceContainerHighest;
-      iconData = Icons.download;
+      iconData = Icons.download_rounded;
       iconColor = Theme.of(context).colorScheme.onSurfaceVariant;
     }
     
-    return CircleAvatar(
-      backgroundColor: backgroundColor,
-      child: Icon(iconData, color: iconColor),
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+      ),
+      child: Icon(
+        iconData, 
+        color: iconColor,
+        size: 24,
+      ),
     );
   }
 
-  String _getStatusText(bool isInstalled, bool isDownloading, bool isFailed, bool isComingSoon, DownloadProgress? progress) {
+  /// Get elegant status text with enhanced descriptions
+  String _getElegantStatusText(bool isInstalled, bool isDownloading, bool isFailed, bool isComingSoon, DownloadProgress? progress) {
     if (isDownloading) {
       final phase = progress != null ? _getProgressPhase(progress) : "Installing";
-      final percent = progress?.progressPercent?.toStringAsFixed(0) ?? "0";
-      return '$phase • $percent%';
+      final percent = progress != null ? progress.progressPercent.toStringAsFixed(0) : "0";
+      return '$phase • $percent% complete';
     } else if (isFailed) {
-      return 'Installation failed - Tap to retry';
+      return 'Installation failed • Tap to retry';
     } else if (isInstalled) {
-      return 'Installed • Bidirectional support';
+      return '✨ Installed • Bidirectional translation ready';
     } else if (isComingSoon) {
-      return 'Coming soon';
+      return '🚧 Coming soon • Check back later';
     } else {
-      return 'Vuizur dictionary + ML Kit models';
+      return '📚 Vuizur dictionary + offline ML Kit models';
+    }
+  }
+  
+  /// Get color for status text based on state
+  Color _getStatusColor(BuildContext context, bool isInstalled, bool isDownloading, bool isFailed, bool isComingSoon) {
+    if (isFailed) {
+      return Theme.of(context).colorScheme.error;
+    } else if (isInstalled) {
+      return Theme.of(context).colorScheme.primary;
+    } else if (isDownloading) {
+      return Theme.of(context).colorScheme.primary;
+    } else {
+      return Theme.of(context).colorScheme.onSurfaceVariant;
     }
   }
 
-  Widget _buildProgressIndicator(DownloadProgress progress) {
-    return Column(
-      children: [
-        const SizedBox(height: 4),
-        LinearProgressIndicator(
+  /// Build elegant progress indicator with enhanced styling
+  Widget _buildElegantProgressIndicator(DownloadProgress progress) {
+    return Container(
+      height: 6,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: LinearProgressIndicator(
           value: progress.progressPercent / 100,
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-          minHeight: 2,
+          backgroundColor: Colors.transparent,
+          valueColor: AlwaysStoppedAnimation<Color>(
+            Theme.of(context).colorScheme.primary,
+          ),
+          minHeight: 6,
         ),
-      ],
+      ),
     );
   }
 
@@ -384,17 +590,79 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     return "Installing";
   }
 
-  Widget _buildActionButton(String packId, bool isInstalled, bool isDownloading, bool isFailed, 
+  /// Build elegant action button with enhanced styling
+  Widget _buildElegantActionButton(String packId, bool isInstalled, bool isDownloading, bool isFailed, 
                            bool isComingSoon, String sourceCode, String targetCode) {
     if (isDownloading) {
-      return TextButton(
-        onPressed: () => _cancelDownload(packId),
-        child: const Text('Cancel'),
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _cancelDownload(packId),
+          borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: PolyReadSpacing.elementSpacing,
+              vertical: PolyReadSpacing.smallSpacing,
+            ),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              ),
+              borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: PolyReadSpacing.microSpacing),
+                Text(
+                  'Cancel',
+                  style: PolyReadTypography.interfaceCaption.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     } else if (isFailed) {
-      return TextButton(
-        onPressed: () => _installPack(sourceCode, targetCode),
-        child: const Text('Retry'),
+      return Material(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+        child: InkWell(
+          onTap: () => _installPack(sourceCode, targetCode),
+          borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: PolyReadSpacing.elementSpacing,
+              vertical: PolyReadSpacing.smallSpacing,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.refresh_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+                const SizedBox(width: PolyReadSpacing.microSpacing),
+                Text(
+                  'Retry',
+                  style: PolyReadTypography.interfaceCaption.copyWith(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     } else if (isInstalled) {
       return PopupMenuButton<String>(
@@ -408,137 +676,443 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
               break;
           }
         },
+        icon: Container(
+          padding: const EdgeInsets.all(PolyReadSpacing.smallSpacing),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+          ),
+          child: Icon(
+            Icons.more_vert_rounded,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
         itemBuilder: (context) => [
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'reinstall',
-            child: ListTile(
-              leading: Icon(Icons.refresh),
-              title: Text('Reinstall'),
-              dense: true,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.refresh_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: PolyReadSpacing.elementSpacing),
+                Text(
+                  'Reinstall',
+                  style: PolyReadTypography.interfaceBody.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ],
             ),
           ),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'uninstall',
-            child: ListTile(
-              leading: Icon(Icons.delete),
-              title: Text('Uninstall'),
-              dense: true,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.delete_outline_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: PolyReadSpacing.elementSpacing),
+                Text(
+                  'Uninstall',
+                  style: PolyReadTypography.interfaceBody.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       );
     } else if (isComingSoon) {
-      return const TextButton(
-        onPressed: null,
-        child: Text('Coming Soon'),
+      return Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: PolyReadSpacing.elementSpacing,
+          vertical: PolyReadSpacing.smallSpacing,
+        ),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+        ),
+        child: Text(
+          'Soon',
+          style: PolyReadTypography.interfaceCaption.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       );
     } else {
-      return ElevatedButton(
-        onPressed: () => _installPack(sourceCode, targetCode),
-        child: const Text('Install'),
+      return Material(
+        color: Theme.of(context).colorScheme.primary,
+        borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+        child: InkWell(
+          onTap: () => _installPack(sourceCode, targetCode),
+          borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: PolyReadSpacing.elementSpacing,
+              vertical: PolyReadSpacing.smallSpacing,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.download_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
+                const SizedBox(width: PolyReadSpacing.microSpacing),
+                Text(
+                  'Install',
+                  style: PolyReadTypography.interfaceCaption.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
   }
 
   Widget _buildStorageTab() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      physics: const BouncingScrollPhysics(),
+      padding: PolyReadSpacing.getResponsivePadding(context),
       children: [
         const StorageChart(),
-        const SizedBox(height: 16),
-        _buildStorageActions(),
+        const SizedBox(height: PolyReadSpacing.majorSpacing),
+        _buildElegantStorageActions(),
       ],
     );
   }
 
-  Widget _buildStorageActions() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Storage Management',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.verified),
-              title: const Text('Validate All Packs'),
-              subtitle: const Text('Check integrity of installed packs'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _validateAllPacks,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red.shade400),
-            const SizedBox(height: 16),
-            const Text('Failed to load language packs'),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _isRetrying ? null : _loadAvailablePacks,
-              icon: _isRetrying 
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh),
-              label: Text(_isRetrying ? 'Retrying...' : 'Retry'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingState() {
+  /// Build elegant storage management section
+  Widget _buildElegantStorageActions() {
     return Column(
-      children: List.generate(3, (index) => Card(
-        margin: const EdgeInsets.only(bottom: 8),
-        child: ListTile(
-          leading: CircleAvatar(backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest),
-          title: Container(
-            height: 16,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(4),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header
+        Padding(
+          padding: const EdgeInsets.only(bottom: PolyReadSpacing.elementSpacing),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(PolyReadSpacing.smallSpacing),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                ),
+                child: Icon(
+                  Icons.settings_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: PolyReadSpacing.elementSpacing),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Storage Management',
+                      style: PolyReadTypography.interfaceSubheadline.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Maintain and optimize your language packs',
+                      style: PolyReadTypography.interfaceCaption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Elegant actions container
+        Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+            boxShadow: PolyReadSpacing.cardShadow,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
             ),
           ),
-          subtitle: Container(
-            height: 12,
-            width: 200,
-            margin: const EdgeInsets.only(top: 8),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _validateAllPacks,
+                child: Padding(
+                  padding: const EdgeInsets.all(PolyReadSpacing.cardPadding),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(PolyReadSpacing.smallSpacing),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                        ),
+                        child: Icon(
+                          Icons.verified_rounded,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: PolyReadSpacing.elementSpacing),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Validate All Packs',
+                              style: PolyReadTypography.interfaceBody.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: PolyReadSpacing.microSpacing),
+                            Text(
+                              'Check integrity and repair corrupted language packs',
+                              style: PolyReadTypography.interfaceCaption.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build elegant error state with retry option
+  Widget _buildElegantErrorState() {
+    return Container(
+      padding: const EdgeInsets.all(PolyReadSpacing.majorSpacing),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+            ),
+            child: Icon(
+              Icons.cloud_off_rounded,
+              size: 48,
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+          const SizedBox(height: PolyReadSpacing.majorSpacing),
+          Text(
+            'Connection Error',
+            style: PolyReadTypography.interfaceHeadline.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: PolyReadSpacing.elementSpacing),
+          Text(
+            'Failed to load available language packs. Please check your internet connection and try again.',
+            style: PolyReadTypography.interfaceBody.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: PolyReadSpacing.majorSpacing),
+          Material(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+            child: InkWell(
+              onTap: _isRetrying ? null : _loadAvailablePacks,
+              borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: PolyReadSpacing.sectionSpacing,
+                  vertical: PolyReadSpacing.elementSpacing,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_isRetrying)
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      )
+                    else
+                      Icon(
+                        Icons.refresh_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    const SizedBox(width: PolyReadSpacing.smallSpacing),
+                    Text(
+                      _isRetrying ? 'Retrying...' : 'Try Again',
+                      style: PolyReadTypography.interfaceButton.copyWith(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build elegant loading state with shimmer effect
+  Widget _buildElegantLoadingState() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+        boxShadow: PolyReadSpacing.cardShadow,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+        child: Column(
+          children: List.generate(3, (index) {
+            final isLast = index == 2;
+            return Container(
+              decoration: BoxDecoration(
+                border: isLast ? null : Border(
+                  bottom: BorderSide(
+                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.all(PolyReadSpacing.cardPadding),
+              child: Row(
+                children: [
+                  // Leading icon placeholder
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                    ),
+                  ),
+                  const SizedBox(width: PolyReadSpacing.elementSpacing),
+                  // Content placeholder
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          height: 16,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        const SizedBox(height: PolyReadSpacing.microSpacing),
+                        Container(
+                          height: 12,
+                          width: 180,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: PolyReadSpacing.elementSpacing),
+                  // Trailing button placeholder
+                  Container(
+                    width: 60,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  /// Build elegant empty state
+  Widget _buildElegantEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(PolyReadSpacing.majorSpacing),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+            ),
+            child: Icon(
+              Icons.inventory_2_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-        ),
-      )),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(32.0),
-        child: Column(
-          children: [
-            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('No language packs available'),
-            SizedBox(height: 8),
-            Text('Check back later for new language packs.'),
-          ],
-        ),
+          const SizedBox(height: PolyReadSpacing.majorSpacing),
+          Text(
+            'No Language Packs Available',
+            style: PolyReadTypography.interfaceHeadline.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: PolyReadSpacing.elementSpacing),
+          Text(
+            'Language packs are being prepared and will be available soon. Check back later for new translation options.',
+            style: PolyReadTypography.interfaceBody.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -607,28 +1181,199 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     }
   }
 
-  Future<void> _showPackDetails(String sourceCode, String targetCode, String label) async {
-    // Simplified pack details - just show basic info
+  /// Show elegant pack details dialog
+  Future<void> _showElegantPackDetails(String sourceCode, String targetCode, String label) async {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('📊 $label'),
-        content: const Text('Pack details will be loaded here'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PolyReadSpacing.dialogRadius),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.85,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(PolyReadSpacing.dialogRadius),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.2),
+                    ],
+                  ),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                      ),
+                      child: Icon(
+                        Icons.info_outline_rounded,
+                        size: 24,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: PolyReadSpacing.elementSpacing),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            style: PolyReadTypography.interfaceHeadline.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: PolyReadSpacing.microSpacing),
+                          Text(
+                            'Language Pack Details',
+                            style: PolyReadTypography.interfaceCaption.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
+                child: Column(
+                  children: [
+                    _buildDetailRow('Status', '✅ Installed and Ready'),
+                    _buildDetailRow('Features', '🔄 Bidirectional Translation'),
+                    _buildDetailRow('Dictionary', '📚 Vuizur Wiktionary Database'),
+                    _buildDetailRow('Offline Mode', '📱 ML Kit Models Included'),
+                  ],
+                ),
+              ),
+              
+              // Actions
+              Container(
+                padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Material(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                      child: InkWell(
+                        onTap: () => Navigator.pop(context),
+                        borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: PolyReadSpacing.sectionSpacing,
+                            vertical: PolyReadSpacing.elementSpacing,
+                          ),
+                          child: Text(
+                            'Close',
+                            style: PolyReadTypography.interfaceButton.copyWith(
+                              color: Theme.of(context).colorScheme.onPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  /// Build detail row for pack information
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: PolyReadSpacing.elementSpacing),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: PolyReadTypography.interfaceBody.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: PolyReadTypography.interfaceBody.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // Helper methods
+  // Elegant helper methods
   void _showSuccess(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.green),
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline_rounded,
+                color: Theme.of(context).colorScheme.onInverseSurface,
+                size: 20,
+              ),
+              const SizedBox(width: PolyReadSpacing.elementSpacing),
+              Expanded(
+                child: Text(
+                  message,
+                  style: PolyReadTypography.interfaceBody.copyWith(
+                    color: Theme.of(context).colorScheme.onInverseSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.inverseSurface,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+          ),
+          margin: PolyReadSpacing.getResponsivePadding(context),
+        ),
       );
     }
   }
@@ -636,27 +1381,129 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                color: Theme.of(context).colorScheme.onErrorContainer,
+                size: 20,
+              ),
+              const SizedBox(width: PolyReadSpacing.elementSpacing),
+              Expanded(
+                child: Text(
+                  message,
+                  style: PolyReadTypography.interfaceBody.copyWith(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.errorContainer,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+          ),
+          margin: PolyReadSpacing.getResponsivePadding(context),
+        ),
       );
     }
   }
 
+  /// Show elegant confirmation dialog
   Future<bool> _showConfirmDialog(String title, String content) async {
     return await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PolyReadSpacing.dialogRadius),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(PolyReadSpacing.dialogRadius),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.help_outline_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 24,
+                  ),
+                  const SizedBox(width: PolyReadSpacing.elementSpacing),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: PolyReadTypography.interfaceHeadline.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: PolyReadSpacing.majorSpacing),
+              Text(
+                content,
+                style: PolyReadTypography.interfaceBody.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: PolyReadSpacing.majorSpacing),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context, false),
+                      borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: PolyReadSpacing.elementSpacing,
+                          vertical: PolyReadSpacing.smallSpacing,
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: PolyReadTypography.interfaceButton.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: PolyReadSpacing.elementSpacing),
+                  Material(
+                    color: Theme.of(context).colorScheme.primary,
+                    borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context, true),
+                      borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: PolyReadSpacing.sectionSpacing,
+                          vertical: PolyReadSpacing.elementSpacing,
+                        ),
+                        child: Text(
+                          'Confirm',
+                          style: PolyReadTypography.interfaceButton.copyWith(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     ) ?? false;
   }

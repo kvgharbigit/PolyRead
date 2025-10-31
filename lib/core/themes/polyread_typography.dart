@@ -213,7 +213,7 @@ class PolyReadTypography {
   /// Alternative reading fonts for user preference
   static Map<String, TextStyle Function()> readingFontOptions = {
     'Literata': () => readingBody, // Default
-    'Source Serif Pro': () => GoogleFonts.sourceSerifPro(
+    'Source Serif Pro': () => GoogleFonts.sourceSerif4(
       fontSize: 18,
       height: 1.6,
       letterSpacing: 0.2,

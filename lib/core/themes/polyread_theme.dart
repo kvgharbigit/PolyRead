@@ -104,7 +104,7 @@ class PolyReadTheme {
       ),
       
       // Dialog Theme
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -233,62 +233,62 @@ class _PolyReadColors {
   const _PolyReadColors();
 
   // Warm Reading Light Theme
-  static const Color warmCream = Color(0xFFFDF6E3);
-  static const Color warmPaper = Color(0xFFFAF7F0);
-  static const Color warmText = Color(0xFF2E2A24);
-  static const Color warmAccent = Color(0xFF8D6E63); // Warm brown
+  static const Color _warmCream = Color(0xFFFDF6E3);
+  static const Color _warmPaper = Color(0xFFFAF7F0);
+  static const Color _warmText = Color(0xFF2E2A24);
+  static const Color _warmAccent = Color(0xFF8D6E63); // Warm brown
 
   // True Dark Reading Theme
-  static const Color trueDark = Color(0xFF000000);
-  static const Color darkSurface = Color(0xFF1A1A1A);
-  static const Color darkCard = Color(0xFF2A2A2A);
-  static const Color darkText = Color(0xFFE8E6E3);
-  static const Color darkAccent = Color(0xFFBCAAA4); // Muted warm brown
+  static const Color _trueDark = Color(0xFF000000);
+  static const Color _darkSurface = Color(0xFF1A1A1A);
+  static const Color _darkCard = Color(0xFF2A2A2A);
+  static const Color _darkText = Color(0xFFE8E6E3);
+  static const Color _darkAccent = Color(0xFFBCAAA4); // Muted warm brown
 
   // Enhanced Sepia Theme
-  static const Color richSepia = Color(0xFFF4ECD8);
-  static const Color sepiaLight = Color(0xFFFAF5E4);
-  static const Color sepiaText = Color(0xFF5D4E37);
-  static const Color sepiaAccent = Color(0xFF8B4513);
+  static const Color _richSepia = Color(0xFFF4ECD8);
+  static const Color _sepiaLight = Color(0xFFFAF5E4);
+  static const Color _sepiaText = Color(0xFF5D4E37);
+  static const Color _sepiaAccent = Color(0xFF8B4513);
 
   // Blue Light Filter (Evening)
-  static const Color amberWarm = Color(0xFFFFF8E1);
-  static const Color amberLight = Color(0xFFFFFCF2);
-  static const Color amberText = Color(0xFF3E2723);
-  static const Color amberAccent = Color(0xFFFF8F00);
+  static const Color _amberWarm = Color(0xFFFFF8E1);
+  static const Color _amberLight = Color(0xFFFFFCF2);
+  static const Color _amberText = Color(0xFF3E2723);
+  static const Color _amberAccent = Color(0xFFFF8F00);
 
   // Interface Colors (not for reading content)
-  static const Color linkBlue = Color(0xFF1976D2);
-  static const Color successGreen = Color(0xFF388E3C);
-  static const Color warningOrange = Color(0xFFF57C00);
-  static const Color errorRed = Color(0xFFD32F2F);
+  static const Color _linkBlue = Color(0xFF1976D2);
+  static const Color _successGreen = Color(0xFF388E3C);
+  static const Color _warningOrange = Color(0xFFF57C00);
+  static const Color _errorRed = Color(0xFFD32F2F);
 
   // Expose colors through getters
-  Color get warmCream => _PolyReadColors.warmCream;
-  Color get warmPaper => _PolyReadColors.warmPaper;
-  Color get warmText => _PolyReadColors.warmText;
-  Color get warmAccent => _PolyReadColors.warmAccent;
+  Color get warmCream => _warmCream;
+  Color get warmPaper => _warmPaper;
+  Color get warmText => _warmText;
+  Color get warmAccent => _warmAccent;
 
-  Color get trueDark => _PolyReadColors.trueDark;
-  Color get darkSurface => _PolyReadColors.darkSurface;
-  Color get darkCard => _PolyReadColors.darkCard;
-  Color get darkText => _PolyReadColors.darkText;
-  Color get darkAccent => _PolyReadColors.darkAccent;
+  Color get trueDark => _trueDark;
+  Color get darkSurface => _darkSurface;
+  Color get darkCard => _darkCard;
+  Color get darkText => _darkText;
+  Color get darkAccent => _darkAccent;
 
-  Color get richSepia => _PolyReadColors.richSepia;
-  Color get sepiaLight => _PolyReadColors.sepiaLight;
-  Color get sepiaText => _PolyReadColors.sepiaText;
-  Color get sepiaAccent => _PolyReadColors.sepiaAccent;
+  Color get richSepia => _richSepia;
+  Color get sepiaLight => _sepiaLight;
+  Color get sepiaText => _sepiaText;
+  Color get sepiaAccent => _sepiaAccent;
 
-  Color get amberWarm => _PolyReadColors.amberWarm;
-  Color get amberLight => _PolyReadColors.amberLight;
-  Color get amberText => _PolyReadColors.amberText;
-  Color get amberAccent => _PolyReadColors.amberAccent;
+  Color get amberWarm => _amberWarm;
+  Color get amberLight => _amberLight;
+  Color get amberText => _amberText;
+  Color get amberAccent => _amberAccent;
 
-  Color get linkBlue => _PolyReadColors.linkBlue;
-  Color get successGreen => _PolyReadColors.successGreen;
-  Color get warningOrange => _PolyReadColors.warningOrange;
-  Color get errorRed => _PolyReadColors.errorRed;
+  Color get linkBlue => _linkBlue;
+  Color get successGreen => _successGreen;
+  Color get warningOrange => _warningOrange;
+  Color get errorRed => _errorRed;
 }
 
 /// Helper extension for reading theme detection

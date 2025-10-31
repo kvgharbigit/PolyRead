@@ -1,5 +1,5 @@
 // Library Screen
-// Main screen showing imported books with import functionality
+// Elegant book library with PolyRead design system
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +10,8 @@ import 'package:polyread/core/providers/file_service_provider.dart';
 import 'package:polyread/core/services/file_service.dart';
 import 'package:polyread/features/reader/services/book_import_service.dart';
 import 'package:polyread/presentation/library/widgets/book_card.dart';
-import 'package:polyread/core/utils/constants.dart';
+import 'package:polyread/core/themes/polyread_spacing.dart';
+import 'package:polyread/core/themes/polyread_typography.dart';
 import 'package:drift/drift.dart' hide Column;
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -29,16 +30,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final fileService = ref.watch(fileServiceProvider);
     
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Library'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _isImporting ? null : () => _importBooks(),
-            tooltip: 'Import Books',
-          ),
-        ],
-      ),
+      appBar: _buildElegantAppBar(),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: FutureBuilder<List<Book>>(
         future: _getBooks(database, fileService),
         builder: (context, snapshot) {
@@ -47,30 +40,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           }
           
           if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Failed to load library',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => setState(() {}),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
+            return _buildErrorState(snapshot.error.toString());
           }
           
           final books = snapshot.data ?? [];
@@ -82,47 +52,207 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           return _buildBookGrid(books);
         },
       ),
-      floatingActionButton: _isImporting ? null : FloatingActionButton(
-        onPressed: _importBooks,
-        tooltip: 'Import Books',
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _isImporting ? null : _buildElegantFAB(),
     );
   }
   
-  Widget _buildEmptyState() {
-    return Center(
+  /// Build elegant error state
+  Widget _buildErrorState(String error) {
+    return Container(
+      padding: PolyReadSpacing.pagePadding,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.library_books_outlined,
-            size: 100,
-            color: Colors.grey,
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'No books in your library',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Import PDF or EPUB files to start reading',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.grey,
+          Container(
+            padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+            ),
+            child: Icon(
+              Icons.error_outline_rounded,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
             ),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: PolyReadSpacing.sectionSpacing),
+          
+          Text(
+            'Unable to Load Library',
+            style: PolyReadTypography.interfaceTitle.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: PolyReadSpacing.elementSpacing),
+          
+          Text(
+            'Something went wrong while loading your books',
+            style: PolyReadTypography.interfaceBody.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: PolyReadSpacing.smallSpacing),
+          
+          Text(
+            error,
+            style: PolyReadTypography.interfaceCaption.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: PolyReadSpacing.majorSpacing),
+          
           ElevatedButton.icon(
-            onPressed: _isImporting ? null : _importBooks,
-            icon: _isImporting 
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add),
-            label: Text(_isImporting ? 'Importing...' : 'Import Books'),
+            onPressed: () => setState(() {}),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: PolyReadSpacing.sectionSpacing,
+                vertical: PolyReadSpacing.elementSpacing,
+              ),
+            ),
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(
+              'Try Again',
+              style: PolyReadTypography.interfaceButton,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build elegant app bar with PolyRead styling
+  PreferredSizeWidget _buildElegantAppBar() {
+    return AppBar(
+      title: Text(
+        'Library',
+        style: PolyReadTypography.interfaceTitle.copyWith(
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      foregroundColor: Theme.of(context).colorScheme.onSurface,
+      elevation: 0,
+      centerTitle: true,
+      actions: [
+        Container(
+          margin: const EdgeInsets.only(right: PolyReadSpacing.elementSpacing),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _isImporting ? null : _importBooks,
+              borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+              child: Container(
+                padding: const EdgeInsets.all(PolyReadSpacing.smallSpacing),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
+                ),
+                child: Icon(
+                  Icons.add_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  /// Build elegant floating action button
+  Widget _buildElegantFAB() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+        boxShadow: PolyReadSpacing.elevatedShadow,
+      ),
+      child: FloatingActionButton(
+        onPressed: _importBooks,
+        tooltip: 'Import Books',
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        elevation: 0,
+        child: const Icon(Icons.add_rounded),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: PolyReadSpacing.pagePadding,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Elegant empty state illustration
+          Container(
+            padding: const EdgeInsets.all(PolyReadSpacing.majorSpacing),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(PolyReadSpacing.majorSpacing),
+            ),
+            child: Icon(
+              Icons.auto_stories_outlined,
+              size: 80,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: PolyReadSpacing.sectionSpacing),
+          
+          Text(
+            'Your Library Awaits',
+            style: PolyReadTypography.interfaceTitle.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: PolyReadSpacing.elementSpacing),
+          
+          Text(
+            'Import PDF, EPUB, HTML, or TXT files\nto begin your reading journey',
+            style: PolyReadTypography.interfaceBody.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: PolyReadSpacing.majorSpacing),
+          
+          // Elegant import button
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+              boxShadow: PolyReadSpacing.subtleShadow,
+            ),
+            child: ElevatedButton.icon(
+              onPressed: _isImporting ? null : _importBooks,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: PolyReadSpacing.sectionSpacing,
+                  vertical: PolyReadSpacing.elementSpacing,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                ),
+              ),
+              icon: _isImporting 
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
+                    )
+                  : const Icon(Icons.add_rounded),
+              label: Text(
+                _isImporting ? 'Importing...' : 'Import Books',
+                style: PolyReadTypography.interfaceButton,
+              ),
+            ),
           ),
         ],
       ),
@@ -130,24 +260,100 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
   
   Widget _buildBookGrid(List<Book> books) {
-    return Padding(
-      padding: const EdgeInsets.all(AppConstants.defaultPadding),
-      child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: AppConstants.defaultPadding,
-          mainAxisSpacing: AppConstants.defaultPadding,
-        ),
-        itemCount: books.length,
-        itemBuilder: (context, index) {
-          final book = books[index];
-          return BookCard(
-            book: book,
-            onTap: () => _openBook(book),
-            onDelete: () => _deleteBook(book),
-          );
-        },
+    return Container(
+      padding: PolyReadSpacing.getResponsivePadding(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Library header with book count
+          Padding(
+            padding: const EdgeInsets.only(bottom: PolyReadSpacing.sectionSpacing),
+            child: Row(
+              children: [
+                Text(
+                  'My Books',
+                  style: PolyReadTypography.interfaceHeadline.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(width: PolyReadSpacing.elementSpacing),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: PolyReadSpacing.elementSpacing,
+                    vertical: PolyReadSpacing.microSpacing,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+                  ),
+                  child: Text(
+                    '${books.length}',
+                    style: PolyReadTypography.interfaceCaption.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Responsive book grid
+          Expanded(
+            child: _buildResponsiveGrid(books),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildResponsiveGrid(List<Book> books) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calculate responsive grid
+        int crossAxisCount;
+        double childAspectRatio;
+        
+        if (constraints.maxWidth > PolyReadSpacing.desktopBreakpoint) {
+          crossAxisCount = 5;
+          childAspectRatio = 0.7;
+        } else if (constraints.maxWidth > PolyReadSpacing.tabletBreakpoint) {
+          crossAxisCount = 4;
+          childAspectRatio = 0.72;
+        } else if (constraints.maxWidth > PolyReadSpacing.mobileBreakpoint) {
+          crossAxisCount = 3;
+          childAspectRatio = 0.75;
+        } else {
+          crossAxisCount = 2;
+          childAspectRatio = 0.7;
+        }
+        
+        return GridView.builder(
+          physics: const BouncingScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            childAspectRatio: childAspectRatio,
+            crossAxisSpacing: PolyReadSpacing.bookShelfSpacing,
+            mainAxisSpacing: PolyReadSpacing.bookShelfSpacing,
+          ),
+          itemCount: books.length,
+          itemBuilder: (context, index) {
+            final book = books[index];
+            return _buildAnimatedBookCard(book, index);
+          },
+        );
+      },
+    );
+  }
+  
+  Widget _buildAnimatedBookCard(Book book, int index) {
+    return AnimatedContainer(
+      duration: PolyReadSpacing.mediumAnimation,
+      curve: PolyReadSpacing.defaultCurve,
+      child: BookCard(
+        book: book,
+        onTap: () => _openBook(book),
+        onDelete: () => _deleteBook(book),
       ),
     );
   }
@@ -378,63 +584,5 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         );
       }
     }
-  }
-}
-
-class _PhaseStatusCard extends StatelessWidget {
-  const _PhaseStatusCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.all(20),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            const Text(
-              'Implementation Status',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 15),
-            _buildPhaseStatus('Phase 0: Architecture Validation', true),
-            _buildPhaseStatus('Phase 1: Foundation Architecture', false),
-            _buildPhaseStatus('Phase 2: Reading Core', false),
-            _buildPhaseStatus('Phase 3: Translation Services', false),
-            _buildPhaseStatus('Phase 4: Language Pack Management', false),
-            _buildPhaseStatus('Phase 5: Advanced Features', false),
-            _buildPhaseStatus('Phase 6: Polish & Deployment', false),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPhaseStatus(String phaseName, bool isActive) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(
-            isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-            color: isActive ? Colors.green : Colors.grey,
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              phaseName,
-              style: TextStyle(
-                color: isActive ? Colors.green : Colors.grey,
-                fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

@@ -32,23 +32,23 @@ PolyRead is a Flutter-based language learning application that enables users to 
 
 ## 📊 Production Status
 
-### ✅ **COMPLETED v2.1 - CYCLING SYSTEM 100% OPERATIONAL** 🎯
+### ✅ **COMPLETED v2.2 - TAP-TO-TRANSLATE FUNCTIONAL** 🎯
 - **🗂️ Complete Legacy Removal**: ALL legacy dictionary code removed - ZERO backward compatibility
 - **🧹 Deep Code Cleanup**: Unused imports removed, legacy fallbacks eliminated, deprecated proofs disabled
 - **🏗️ Clean Architecture**: Single cycling dictionary paradigm throughout entire codebase
-- **🎨 Revolutionary UI**: Tap-to-cycle + long-press-to-expand fully implemented and working
+- **🎨 Working Translation**: Tap-to-translate functionality fully operational in EPUB reader
 - **🔄 Bidirectional Support**: Both source→target and target→source with quality-ranked cycling
 - **⚡ Production Scale**: 94K+ word groups, 126K+ meanings, 66K+ reverse lookups
-- **🚀 Zero Compilation Errors**: Core translation flow builds and runs perfectly (3 minor warnings only)
-- **📱 Ready for Use**: Users can select text, cycle meanings, get sentence translations
+- **🚀 Zero Compilation Errors**: Core translation flow builds and runs perfectly
+- **📱 Ready for Use**: Users can tap words for precise translation with WebView text selection
 - **🔧 Clean Database**: Only cycling tables exist (WordGroups, Meanings, TargetReverseLookup)
-- **🎯 Service Integration**: CyclingDictionaryService → TranslationService → ML Kit pipeline
-- **📋 Updated Documentation**: All docs reflect cycling-only implementation
+- **🎯 Service Integration**: EPUB WebView → CyclingDictionaryService → TranslationService pipeline
+- **📋 Updated Documentation**: All docs reflect current implementation state
 - **🗑️ Legacy Artifacts Removed**: DatabaseAdapter deleted, SQLite proof disabled, JSON fallbacks removed
 - **🧽 Code Optimization**: Unused imports cleaned, commented code removed, unused variables fixed
 - **📐 Style Consistency**: Error handling patterns verified, TODO comments audited, dead code eliminated
 - **⚡ Performance Optimizations**: Parallel provider status checks, optimized async operations, resource cleanup
-- **🎯 Service Integration**: Real cache service integration planned, mock services replaced, provider patterns improved
+- **🎯 Immersive Mode Removed**: Gesture overlays removed to prevent interference with text selection
 
 ### 🚧 Development Pipeline
 - **French-English**: Ready for generation (~1M+ entries)

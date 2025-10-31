@@ -6,6 +6,7 @@ import 'package:polyread/features/reader/services/reader_translation_service.dar
 import 'package:polyread/features/translation/services/translation_service.dart';
 import 'package:polyread/features/translation/services/cycling_dictionary_service.dart';
 import 'package:polyread/features/vocabulary/providers/vocabulary_provider.dart';
+import 'package:polyread/features/vocabulary/services/drift_vocabulary_service.dart';
 import 'package:polyread/core/providers/database_provider.dart';
 
 // Cycling dictionary service

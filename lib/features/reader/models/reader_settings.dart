@@ -1,14 +1,12 @@
 // Reader Settings Model
-// Stores and manages reading experience preferences
+// Stores and manages reading experience preferences with PolyRead themes
 
 import 'package:flutter/material.dart';
+import 'package:polyread/core/themes/polyread_theme.dart';
+import 'package:polyread/core/themes/polyread_typography.dart';
 
-enum ReaderTheme {
-  light,
-  sepia,
-  dark,
-  custom,
-}
+// Use PolyRead theme types for enhanced reading experience
+typedef ReaderTheme = ReadingThemeType;
 
 class ReaderSettings {
   // Text settings
@@ -44,20 +42,20 @@ class ReaderSettings {
     required this.fullScreenMode,
   });
   
-  /// Default settings
+  /// Default settings with PolyRead optimizations
   factory ReaderSettings.defaultSettings() {
     return const ReaderSettings(
-      fontSize: 16,
-      lineHeight: 1.5,
-      fontFamily: 'System Default',
+      fontSize: 18, // Optimized for reading
+      lineHeight: 1.6, // Better reading line spacing
+      fontFamily: 'Literata', // Premium reading font
       textAlign: TextAlign.left,
-      theme: ReaderTheme.light,
+      theme: ReadingThemeType.warmLight, // Use PolyRead theme
       brightness: 1.0,
-      pageMargins: 16,
+      pageMargins: 24, // Better reading margins
       autoScroll: false,
       autoScrollSpeed: 1.0,
       keepScreenOn: false,
-      fullScreenMode: false,
+      fullScreenMode: true, // Default to immersive reading
     );
   }
   
@@ -112,103 +110,111 @@ class ReaderSettings {
     };
   }
   
-  /// Create from JSON
+  /// Create from JSON with PolyRead defaults
   factory ReaderSettings.fromJson(Map<String, dynamic> json) {
     return ReaderSettings(
-      fontSize: (json['fontSize'] as num?)?.toDouble() ?? 16,
-      lineHeight: (json['lineHeight'] as num?)?.toDouble() ?? 1.5,
-      fontFamily: json['fontFamily'] as String? ?? 'System Default',
+      fontSize: (json['fontSize'] as num?)?.toDouble() ?? 18,
+      lineHeight: (json['lineHeight'] as num?)?.toDouble() ?? 1.6,
+      fontFamily: json['fontFamily'] as String? ?? 'Literata',
       textAlign: TextAlign.values[json['textAlign'] as int? ?? 0],
-      theme: ReaderTheme.values[json['theme'] as int? ?? 0],
+      theme: ReadingThemeType.values[json['theme'] as int? ?? 0],
       brightness: (json['brightness'] as num?)?.toDouble() ?? 1.0,
-      pageMargins: (json['pageMargins'] as num?)?.toDouble() ?? 16,
+      pageMargins: (json['pageMargins'] as num?)?.toDouble() ?? 24,
       autoScroll: json['autoScroll'] as bool? ?? false,
       autoScrollSpeed: (json['autoScrollSpeed'] as num?)?.toDouble() ?? 1.0,
       keepScreenOn: json['keepScreenOn'] as bool? ?? false,
-      fullScreenMode: json['fullScreenMode'] as bool? ?? false,
+      fullScreenMode: json['fullScreenMode'] as bool? ?? true,
     );
   }
   
-  /// Get theme colors
+  /// Get PolyRead theme based on reader settings
   ThemeData getThemeData(BuildContext context) {
-    final baseTheme = Theme.of(context);
+    // For custom theme, adjust brightness manually
+    if (theme == ReadingThemeType.custom) {
+      // Create a custom brightness-adjusted theme
+      final brightness = this.brightness;
+      final isDark = brightness < 0.5;
+      
+      return PolyReadTheme.createTheme(
+        themeType: isDark ? ReadingThemeType.trueDark : ReadingThemeType.warmLight,
+        brightness: isDark ? Brightness.dark : Brightness.light,
+      );
+    }
     
+    // Use PolyRead theme system for optimal reading experience
+    final brightness = _getThemeBrightness();
+    return PolyReadTheme.createTheme(
+      themeType: theme,
+      brightness: brightness,
+    );
+  }
+  
+  /// Get appropriate brightness for the theme
+  Brightness _getThemeBrightness() {
     switch (theme) {
-      case ReaderTheme.light:
-        return baseTheme.copyWith(
-          scaffoldBackgroundColor: Colors.white,
-          cardColor: Colors.white,
-          textTheme: baseTheme.textTheme.apply(
-            bodyColor: Colors.black87,
-            displayColor: Colors.black87,
-          ),
-        );
-        
-      case ReaderTheme.sepia:
-        const sepiaBackground = Color(0xFFFDF6E3);
-        const sepiaText = Color(0xFF5D4E37);
-        return baseTheme.copyWith(
-          scaffoldBackgroundColor: sepiaBackground,
-          cardColor: sepiaBackground,
-          textTheme: baseTheme.textTheme.apply(
-            bodyColor: sepiaText,
-            displayColor: sepiaText,
-          ),
-        );
-        
-      case ReaderTheme.dark:
-        const darkBackground = Color(0xFF1A1A1A);
-        const darkCard = Color(0xFF2A2A2A);
-        return baseTheme.copyWith(
-          scaffoldBackgroundColor: darkBackground,
-          cardColor: darkCard,
-          textTheme: baseTheme.textTheme.apply(
-            bodyColor: Colors.white,
-            displayColor: Colors.white,
-          ),
-        );
-        
-      case ReaderTheme.custom:
-        final customBackground = Colors.grey.shade300.withOpacity(brightness);
-        final customText = brightness > 0.5 ? Colors.black87 : Colors.white;
-        return baseTheme.copyWith(
-          scaffoldBackgroundColor: customBackground,
-          cardColor: customBackground,
-          textTheme: baseTheme.textTheme.apply(
-            bodyColor: customText,
-            displayColor: customText,
-          ),
-        );
+      case ReadingThemeType.trueDark:
+        return Brightness.dark;
+      case ReadingThemeType.warmLight:
+      case ReadingThemeType.enhancedSepia:
+      case ReadingThemeType.blueFilter:
+        return Brightness.light;
+      case ReadingThemeType.custom:
+        return brightness < 0.5 ? Brightness.dark : Brightness.light;
     }
   }
   
-  /// Get text style based on settings
+  /// Get reading text style with PolyRead typography
   TextStyle getTextStyle(BuildContext context) {
-    String? fontFamily;
+    // Use PolyRead typography system for optimal reading
+    TextStyle baseStyle;
     
-    // Map font family names to actual font families
-    switch (this.fontFamily) {
-      case 'System Default':
-        fontFamily = null; // Use system default
+    switch (fontFamily) {
+      case 'Literata':
+        baseStyle = PolyReadTypography.readingBody;
         break;
-      case 'Georgia':
-      case 'Times New Roman':
-      case 'Arial':
-      case 'Helvetica':
-      case 'Open Sans':
-      case 'Roboto':
-        fontFamily = this.fontFamily;
+      case 'Source Serif Pro':
+      case 'Crimson Text':
+      case 'Lora':
+      case 'Merriweather':
+        baseStyle = PolyReadTypography.getReadingFont(fontFamily);
         break;
       default:
-        fontFamily = null;
+        baseStyle = PolyReadTypography.readingBody;
     }
     
-    return TextStyle(
+    // Apply user customizations
+    return baseStyle.copyWith(
       fontSize: fontSize,
       height: lineHeight,
-      fontFamily: fontFamily,
     );
   }
+  
+  /// Get available font options
+  static List<String> get availableFonts => [
+    'Literata',
+    'Source Serif Pro',
+    'Crimson Text',
+    'Lora',
+    'Merriweather',
+  ];
+  
+  /// Get theme display names
+  static Map<ReadingThemeType, String> get themeNames => {
+    ReadingThemeType.warmLight: 'Warm Light',
+    ReadingThemeType.trueDark: 'True Dark',
+    ReadingThemeType.enhancedSepia: 'Enhanced Sepia',
+    ReadingThemeType.blueFilter: 'Blue Light Filter',
+    ReadingThemeType.custom: 'Custom',
+  };
+  
+  /// Get theme descriptions
+  static Map<ReadingThemeType, String> get themeDescriptions => {
+    ReadingThemeType.warmLight: 'Warm, cream-colored background perfect for daytime reading',
+    ReadingThemeType.trueDark: 'Deep black background for comfortable night reading',
+    ReadingThemeType.enhancedSepia: 'Rich sepia tones that reduce eye strain',
+    ReadingThemeType.blueFilter: 'Amber-tinted theme that filters blue light for evening reading',
+    ReadingThemeType.custom: 'Customizable brightness level',
+  };
   
   @override
   bool operator ==(Object other) {
@@ -247,6 +253,6 @@ class ReaderSettings {
   
   @override
   String toString() {
-    return 'ReaderSettings(fontSize: $fontSize, theme: $theme, fontFamily: $fontFamily)';
+    return 'ReaderSettings(fontSize: $fontSize, theme: ${themeNames[theme]}, fontFamily: $fontFamily, fullScreen: $fullScreenMode)';
   }
 }

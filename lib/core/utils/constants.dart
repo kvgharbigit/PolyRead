@@ -1,6 +1,8 @@
 // App Constants
 // Centralized constants used throughout the application
 
+import 'package:flutter/material.dart';
+
 class AppConstants {
   // App Info
   static const String appName = 'PolyRead';
@@ -65,6 +67,13 @@ class AppConstants {
   static const Duration shortAnimation = Duration(milliseconds: 150);
   static const Duration mediumAnimation = Duration(milliseconds: 300);
   static const Duration longAnimation = Duration(milliseconds: 500);
+  static const Duration microAnimation = Duration(milliseconds: 100);
+  static const Duration slowAnimation = Duration(milliseconds: 800);
+  
+  // Animation Curves for premium feel
+  static const Curve elegantCurve = Curves.easeOutQuart;
+  static const Curve bouncyCurve = Curves.elasticOut;
+  static const Curve smoothCurve = Curves.easeInOutCubic;
   
   // Error Messages
   static const String genericErrorMessage = 'An unexpected error occurred. Please try again.';

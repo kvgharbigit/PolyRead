@@ -19,7 +19,6 @@ import 'package:polyread/features/reader/widgets/bookmarks_dialog.dart';
 import 'package:polyread/features/reader/services/bookmark_service.dart';
 import 'package:polyread/features/translation/widgets/cycling_translation_popup.dart';
 import 'package:polyread/features/reader/providers/reader_translation_provider.dart';
-import 'package:polyread/features/vocabulary/services/drift_vocabulary_service.dart';
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/core/providers/database_provider.dart';
 import 'package:polyread/core/providers/settings_provider.dart';
@@ -68,8 +67,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   // Reader settings
   ReaderSettings _readerSettings = ReaderSettings.defaultSettings();
   
-  // Immersive reading UI state
-  bool _uiVisible = true;
+  // UI state (immersive mode removed)
   Timer? _uiHideTimer;
   
   @override
@@ -161,8 +159,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       // Start progress tracking
       _startProgressTracking();
       
-      // Start immersive UI timer
-      _startUIHideTimer();
+      // Immersive UI removed
       
       setState(() {
         _isLoading = false;
@@ -178,41 +175,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   
   /// Immersive Reading UI Control Methods
   
-  void _startUIHideTimer() {
-    _uiHideTimer?.cancel();
-    _uiHideTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _uiVisible = false;
-        });
-      }
-    });
-  }
-  
-  void _showUI() {
-    if (!_uiVisible) {
-      setState(() {
-        _uiVisible = true;
-      });
-    }
-    _startUIHideTimer();
-  }
-  
-  void _toggleUI() {
-    setState(() {
-      _uiVisible = !_uiVisible;
-    });
-    
-    if (_uiVisible) {
-      _startUIHideTimer();
-    } else {
-      _uiHideTimer?.cancel();
-    }
-  }
-  
-  void _onUserInteraction() {
-    _showUI(); // Show UI and reset timer on any user interaction
-  }
+  // Immersive UI methods removed
   
   void _startProgressTracking() {
     // Save progress periodically 
@@ -319,39 +282,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     }
   }
   
-  // Translation event handlers - TODO: Connect to reader engines when needed
-  /*
-  void _handleWordTap(String word, Offset position, TextSelection selection) {
-    if (_translationService == null) return;
-    
-    // Extract context around the word for sentence translation
-    final context = _extractContext(word, selection);
-    
-    setState(() {
-      _selectedText = word;
-      _tapPosition = position;
-      _selectedContext = context;
-      _selectedTextSelection = selection;
-      _showTranslationPopup = true;
-    });
-    
-    _sessionTranslations++;
-  }
-  
-  void _handleSentenceTap(String sentence, Offset position, TextSelection selection) {
-    if (_translationService == null) return;
-    
-    setState(() {
-      _selectedText = sentence;
-      _tapPosition = position;
-      _selectedContext = sentence; // For sentence tap, the selected text is the context
-      _selectedTextSelection = selection;
-      _showTranslationPopup = true;
-    });
-    
-    _sessionTranslations++;
-  }
-  */
+  // Legacy translation handlers removed - now handled in _setupTextSelectionHandlers
   
   String? _extractContext(String word, TextSelection selection) {
     // Use the reader engine to extract context around the word
@@ -372,6 +303,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       _selectedContext = null;
       _selectedTextSelection = null;
     });
+    
+    // Translation popup closed
   }
   
   void _addToVocabulary(String word) {
@@ -483,9 +416,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     return Theme(
       data: _readerSettings.getThemeData(context),
       child: Scaffold(
-        appBar: _uiVisible ? _buildAppBar() : null,
+        appBar: _buildAppBar(),
         body: _buildReaderBody(),
-        bottomNavigationBar: _uiVisible ? _buildBottomControls() : null,
+        bottomNavigationBar: _buildBottomControls(),
         extendBody: true, // Extend body behind bottom nav for seamless experience
         extendBodyBehindAppBar: true, // Extend body behind app bar
       ),
@@ -569,28 +502,25 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
         // Main reader content
         _buildReaderContent(),
         
-        // Gesture overlay for immersive navigation (only when translation popup is not shown)
-        if (!_showTranslationPopup)
-          _buildGestureOverlay(),
+        // Immersive view removed - was interfering with text selection
         
-        // Reading progress indicator (subtle, only visible when UI is shown)
-        if (_uiVisible)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 2, // Made thinner for less distraction
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: _readerEngine!.progress,
-                child: Container(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
-                ),
+        // Reading progress indicator
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            height: 2,
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: _readerEngine!.progress,
+              child: Container(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
               ),
             ),
           ),
+        ),
         
         // Translation popup overlay with tap-outside-to-dismiss
         if (_showTranslationPopup && _selectedText != null)
@@ -629,67 +559,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   }
   
   /// Build gesture overlay for immersive reading navigation
-  Widget _buildGestureOverlay() {
-    return Positioned.fill(
-      child: Row(
-        children: [
-          // Left edge (20%) - previous page
-          Expanded(
-            flex: 2,
-            child: GestureDetector(
-              onTap: () {
-                _goToPrevious();
-                _onUserInteraction();
-              },
-              behavior: HitTestBehavior.translucent,
-              child: Container(
-                color: Colors.transparent,
-                // Debug: Uncomment to see tap zones
-                // decoration: BoxDecoration(
-                //   border: Border.all(color: Colors.red.withOpacity(0.3)),
-                // ),
-              ),
-            ),
-          ),
-          // Center (60%) - show/hide UI
-          Expanded(
-            flex: 6,
-            child: GestureDetector(
-              onTap: _toggleUI,
-              behavior: HitTestBehavior.translucent,
-              child: Container(
-                color: Colors.transparent,
-                // Debug: Uncomment to see tap zones
-                // decoration: BoxDecoration(
-                //   border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                // ),
-              ),
-            ),
-          ),
-          // Right edge (20%) - next page
-          Expanded(
-            flex: 2,
-            child: GestureDetector(
-              onTap: () {
-                _goToNext();
-                _onUserInteraction();
-              },
-              behavior: HitTestBehavior.translucent,
-              child: Container(
-                color: Colors.transparent,
-                // Debug: Uncomment to see tap zones
-                // decoration: BoxDecoration(
-                //   border: Border.all(color: Colors.green.withOpacity(0.3)),
-                // ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Gesture overlay removed - was interfering with text selection
   
-  /// Navigate to previous page/section
+  /// Navigate to previous chapter
   void _goToPrevious() async {
     if (_readerEngine != null) {
       await _readerEngine!.goToPrevious();
@@ -697,7 +569,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     }
   }
   
-  /// Navigate to next page/section
+  /// Navigate to next chapter
   void _goToNext() async {
     if (_readerEngine != null) {
       await _readerEngine!.goToNext();
@@ -725,10 +597,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
           // Previous button
           IconButton(
             icon: const Icon(Icons.chevron_left),
-            onPressed: () async {
-              await _readerEngine!.goToPrevious();
-              setState(() {}); // Update progress
-            },
+            onPressed: _goToPrevious,
           ),
           
           // Position indicator
@@ -743,10 +612,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
           // Next button
           IconButton(
             icon: const Icon(Icons.chevron_right),
-            onPressed: () async {
-              await _readerEngine!.goToNext();
-              setState(() {}); // Update progress
-            },
+            onPressed: _goToNext,
           ),
         ],
       ),

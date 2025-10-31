@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:polyread/features/reader/models/reader_settings.dart';
+import 'package:polyread/core/themes/polyread_theme.dart';
 
 class ReaderSettingsService {
   static const String _settingsKey = 'reader_settings';
@@ -101,7 +102,7 @@ class ReaderSettingsService {
       }
       
       // Handle brightness (for custom theme)
-      if (settings.theme == ReaderTheme.custom) {
+      if (settings.theme == ReadingThemeType.custom) {
         SystemChrome.setSystemUIOverlayStyle(
           SystemUiOverlayStyle(
             statusBarBrightness: settings.brightness > 0.5 
@@ -160,25 +161,7 @@ class ReaderSettingsService {
       SystemUiOverlayStyle overlayStyle;
       
       switch (settings.theme) {
-        case ReaderTheme.light:
-          overlayStyle = const SystemUiOverlayStyle(
-            statusBarBrightness: Brightness.light,
-            statusBarIconBrightness: Brightness.dark,
-            systemNavigationBarColor: Color(0xFFFFFFFF),
-            systemNavigationBarIconBrightness: Brightness.dark,
-          );
-          break;
-          
-        case ReaderTheme.dark:
-          overlayStyle = const SystemUiOverlayStyle(
-            statusBarBrightness: Brightness.dark,
-            statusBarIconBrightness: Brightness.light,
-            systemNavigationBarColor: Color(0xFF1A1A1A),
-            systemNavigationBarIconBrightness: Brightness.light,
-          );
-          break;
-          
-        case ReaderTheme.sepia:
+        case ReadingThemeType.warmLight:
           overlayStyle = const SystemUiOverlayStyle(
             statusBarBrightness: Brightness.light,
             statusBarIconBrightness: Brightness.dark,
@@ -187,7 +170,34 @@ class ReaderSettingsService {
           );
           break;
           
-        case ReaderTheme.custom:
+        case ReadingThemeType.trueDark:
+          overlayStyle = const SystemUiOverlayStyle(
+            statusBarBrightness: Brightness.dark,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: Color(0xFF000000),
+            systemNavigationBarIconBrightness: Brightness.light,
+          );
+          break;
+          
+        case ReadingThemeType.enhancedSepia:
+          overlayStyle = const SystemUiOverlayStyle(
+            statusBarBrightness: Brightness.light,
+            statusBarIconBrightness: Brightness.dark,
+            systemNavigationBarColor: Color(0xFFF4ECD8),
+            systemNavigationBarIconBrightness: Brightness.dark,
+          );
+          break;
+          
+        case ReadingThemeType.blueFilter:
+          overlayStyle = const SystemUiOverlayStyle(
+            statusBarBrightness: Brightness.light,
+            statusBarIconBrightness: Brightness.dark,
+            systemNavigationBarColor: Color(0xFFFFF8E1),
+            systemNavigationBarIconBrightness: Brightness.dark,
+          );
+          break;
+          
+        case ReadingThemeType.custom:
           final isDarkBrightness = settings.brightness < 0.5;
           overlayStyle = SystemUiOverlayStyle(
             statusBarBrightness: isDarkBrightness ? Brightness.dark : Brightness.light,
@@ -341,34 +351,43 @@ class ReaderEngineSettings {
   /// Get theme colors for styling
   ThemeColors _getThemeColors() {
     switch (theme) {
-      case ReaderTheme.light:
-        return const ThemeColors(
-          backgroundColor: '#FFFFFF',
-          textColor: '#000000',
-          selectionColor: '#B3D4FC',
-          selectionTextColor: '#000000',
-          highlightColor: '#FFEB3B',
-        );
-        
-      case ReaderTheme.sepia:
+      case ReadingThemeType.warmLight:
         return const ThemeColors(
           backgroundColor: '#FDF6E3',
+          textColor: '#2E2A24',
+          selectionColor: '#E6D7C3',
+          selectionTextColor: '#2E2A24',
+          highlightColor: '#F4E8C1',
+        );
+        
+      case ReadingThemeType.enhancedSepia:
+        return const ThemeColors(
+          backgroundColor: '#F4ECD8',
           textColor: '#5D4E37',
           selectionColor: '#E6D7C3',
           selectionTextColor: '#5D4E37',
           highlightColor: '#F4E8C1',
         );
         
-      case ReaderTheme.dark:
+      case ReadingThemeType.trueDark:
         return const ThemeColors(
-          backgroundColor: '#1A1A1A',
-          textColor: '#FFFFFF',
+          backgroundColor: '#000000',
+          textColor: '#E8E6E3',
           selectionColor: '#404040',
-          selectionTextColor: '#FFFFFF',
+          selectionTextColor: '#E8E6E3',
           highlightColor: '#FFB74D',
         );
         
-      case ReaderTheme.custom:
+      case ReadingThemeType.blueFilter:
+        return const ThemeColors(
+          backgroundColor: '#FFF8E1',
+          textColor: '#3E2723',
+          selectionColor: '#F5E5B7',
+          selectionTextColor: '#3E2723',
+          highlightColor: '#FFD54F',
+        );
+        
+      case ReadingThemeType.custom:
         final bgBrightness = (brightness * 255).round();
         final textBrightness = brightness > 0.5 ? 0 : 255;
         return ThemeColors(
@@ -432,13 +451,15 @@ extension ReaderSettingsTextStyle on ReaderSettings {
   /// Get colors based on theme
   Color getBackgroundColor() {
     switch (theme) {
-      case ReaderTheme.light:
-        return const Color(0xFFFFFFFF);
-      case ReaderTheme.sepia:
+      case ReadingThemeType.warmLight:
         return const Color(0xFFFDF6E3);
-      case ReaderTheme.dark:
-        return const Color(0xFF1A1A1A);
-      case ReaderTheme.custom:
+      case ReadingThemeType.enhancedSepia:
+        return const Color(0xFFF4ECD8);
+      case ReadingThemeType.trueDark:
+        return const Color(0xFF000000);
+      case ReadingThemeType.blueFilter:
+        return const Color(0xFFFFF8E1);
+      case ReadingThemeType.custom:
         final brightness = (this.brightness * 255).round();
         return Color.fromRGBO(brightness, brightness, brightness, 1.0);
     }
@@ -447,13 +468,15 @@ extension ReaderSettingsTextStyle on ReaderSettings {
   /// Get text color based on theme
   Color getTextColor() {
     switch (theme) {
-      case ReaderTheme.light:
-        return const Color(0xFF000000);
-      case ReaderTheme.sepia:
+      case ReadingThemeType.warmLight:
+        return const Color(0xFF2E2A24);
+      case ReadingThemeType.enhancedSepia:
         return const Color(0xFF5D4E37);
-      case ReaderTheme.dark:
-        return const Color(0xFFFFFFFF);
-      case ReaderTheme.custom:
+      case ReadingThemeType.trueDark:
+        return const Color(0xFFE8E6E3);
+      case ReadingThemeType.blueFilter:
+        return const Color(0xFF3E2723);
+      case ReadingThemeType.custom:
         return brightness > 0.5 ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
     }
   }
