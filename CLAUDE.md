@@ -32,7 +32,15 @@ PolyRead is a Flutter-based language learning application that enables users to 
 
 ## 📊 Production Status
 
-### ✅ **COMPLETED v2.3 - ENHANCED TRANSLATION POPUP** 🎯
+### ✅ **COMPLETED v2.4 - SMART CONTEXTUAL TRANSLATION** 🧠
+- **🧠 Smart Word Prioritization**: AI-powered ranking using ML Kit sentence translation as ground truth
+- **🎯 Fuzzy Matching Algorithm**: Handles conjugations, accents, and spelling variations (80% similarity + 20% position weight)
+- **📍 Position-Aware Scoring**: Prioritizes translations based on expected word position in sentence context
+- **⚡ Real-Time Sentence Translation**: Parallel word + sentence translation with automatic context extraction  
+- **🎨 Visual Match Highlighting**: Bold matching words in sentence translation for immediate visual feedback
+- **🔄 Dynamic Updates**: Highlighting updates seamlessly when cycling through different translation options
+- **📊 Comprehensive Logging**: Detailed scoring breakdown with 🧠 SmartPrioritization and 🎯 highlighting logs
+- **⚙️ Performance Optimized**: Smart caching of match results, no redundant calculations in UI layer
 - **🎨 Ultra-Minimal Design**: Clean cycling translations without bracketed clutter
 - **🔄 Smart Context Expansion**: Long-press reveals contextual information only when available
 - **🌍 Home Language Translation**: Expanded context automatically translated to user's home language
@@ -68,6 +76,30 @@ PolyRead is a Flutter-based language learning application that enables users to 
 - **Data Source**: Vuizur Wiktionary-Dictionaries repository  
 - **GitHub Actions**: `.github/workflows/dictionary-release.yml` for automated builds
 - **Output**: Production-ready `.sqlite.zip` packages with cycling support
+
+## 🧠 **BREAKTHROUGH: Smart Contextual Translation v2.4**
+
+**✅ IMPLEMENTATION COMPLETE** - AI-powered contextual translation prioritization achieved:
+
+### **Smart Prioritization Algorithm:**
+- **Ground Truth**: Uses ML Kit sentence translation to rank dictionary candidates
+- **Two-Factor Scoring**: 80% fuzzy similarity + 20% positional distance weighting
+- **Fuzzy Matching**: Handles conjugations (beber→bebiendo), accents (desesperación→desperacion), case differences
+- **Position Mapping**: Maps expected word position from source to target sentence  
+- **Real-Time Processing**: Parallel sentence translation + word lookup with smart ranking
+- **Visual Feedback**: Bolds matching words in sentence translation for immediate confirmation
+- **Performance Optimized**: Caches match results, eliminates redundant calculations
+
+### **Example Success Case:**
+```
+English: "How is he my master?" 
+Spanish: "¿Cómo es él mi maestro?"
+User taps: "master"
+
+Before: Random order → amo, dueño, maestro, señor...
+After:  Smart order → maestro (1.000), maestre (0.611), others (0.000)
+Visual: "¿Cómo es él mi **maestro**?" (bolded for confirmation)
+```
 
 ## 🎯 **MAJOR MILESTONE: Enhanced Translation Popup v2.3**
 
