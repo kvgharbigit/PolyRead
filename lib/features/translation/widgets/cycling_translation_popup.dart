@@ -547,27 +547,16 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Simple hint section that adapts naturally
+            // Subtle cycling indicator when multiple meanings available
             if (cyclableMeaning.totalMeanings > 1) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
-                '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings} • Tap to cycle, long press to expand',
+                '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings}',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 11,
                 ),
                 textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ] else ...[
-              const SizedBox(height: 8),
-              Text(
-                'Long press to expand',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
               ),
             ],
           ],
@@ -684,27 +673,16 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Simple hint section that adapts naturally
+            // Subtle cycling indicator when multiple translations available
             if (cyclableReverse.totalTranslations > 1) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
-                '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations} • Tap to cycle, long press to expand',
+                '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations}',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 11,
                 ),
                 textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ] else ...[
-              const SizedBox(height: 8),
-              Text(
-                'Long press to expand',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
               ),
             ],
           ],
