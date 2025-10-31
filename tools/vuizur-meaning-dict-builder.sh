@@ -121,11 +121,15 @@ import re
 import sys
 
 def clean_meaning(meaning):
-    """Extract clean English meaning from HTML"""
+    """Extract clean core meaning without context brackets"""
     # Remove HTML tags
     clean = re.sub(r'<[^>]*>', '', meaning)
-    # Remove extra whitespace
+    # Remove parenthetical context (will be extracted separately)
+    clean = re.sub(r'\s*\([^)]*\)', '', clean)
+    # Remove extra whitespace and clean up punctuation
     clean = re.sub(r'\s+', ' ', clean).strip()
+    # Clean up any trailing commas or periods left after removing context
+    clean = re.sub(r'[,\s]+$', '', clean)
     return clean
 
 def extract_context(meaning):

@@ -262,7 +262,7 @@ class CyclingDictionaryService {
         wordGroupId: row.read<int>('word_group_id'),
         meaningOrder: row.read<int>('lookup_order'), // Use lookup order for cycling
         targetMeaning: row.read<String>('source_word'), // The source word becomes our "translation"
-        context: row.readNullable<String>('m_pos'), // Show part of speech as context
+        context: row.readNullable<String>('context'), // Use actual context information
         partOfSpeech: row.readNullable<String>('m_pos'),
         isPrimary: row.read<int>('lookup_order') == 1,
         createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('m_created_at')),

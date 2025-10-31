@@ -117,22 +117,34 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   void _handleLongPress() async {
     if (_isExpanded) return; // Already expanded
     
-    setState(() {
-      _isExpanded = true;
-    });
-    
-    // Get the expanded definition with context
+    // Check if there's actually context to expand
+    bool hasContext = false;
     String fullDefinition = '';
     
     if (_isReverseLookup && _reverseLookupResult != null) {
       final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
-      fullDefinition = cyclableReverse.displayTranslation; // Use display instead of expanded to avoid duplication
+      // For reverse lookup, always allow expansion to show source word + meaning
+      hasContext = true;
+      fullDefinition = cyclableReverse.expandedTranslation;
     } else if (_sourceLookupResult != null) {
       final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
-      fullDefinition = cyclableMeaning.meaning.targetMeaning; // Use just the target meaning to avoid context duplication
+      
+      // Only expand if there's actual context information
+      hasContext = cyclableMeaning.meaning.context?.isNotEmpty == true;
+      
+      if (hasContext) {
+        fullDefinition = cyclableMeaning.meaning.expandedMeaning;
+      }
     } else if (_mlKitFallbackResult != null) {
-      fullDefinition = _mlKitFallbackResult!;
+      // ML Kit fallback has no context to expand
+      hasContext = false;
     }
+    
+    if (!hasContext) return; // Nothing to expand
+    
+    setState(() {
+      _isExpanded = true;
+    });
     
     // Translate the expanded definition to home language using ML Kit
     if (fullDefinition.isNotEmpty && widget.translationService != null) {
@@ -482,7 +494,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Just the expanded definition content
+                  // Show the translated expanded definition
                   if (_expandedDefinition != null)
                     Text(
                       _expandedDefinition!,
@@ -491,7 +503,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                       ),
                     )
                   else
-                    // Minimal loading indicator
+                    // Minimal loading indicator for translation
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -505,7 +517,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Translating...',
+                          'Translating context...',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
@@ -528,18 +540,37 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Subtle cycling indicator when multiple meanings available
-            if (cyclableMeaning.totalMeanings > 1) ...[
-              const SizedBox(height: 6),
-              Text(
-                '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings}',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+            // Indicators: cycling and expansion availability
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Cycling indicator (if multiple meanings)
+                if (cyclableMeaning.totalMeanings > 1)
+                  Text(
+                    '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings}',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
+                
+                // Expansion indicator (if context available)
+                if (cyclableMeaning.meaning.context?.isNotEmpty == true)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+                      shape: BoxShape.circle,
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
+              ],
+            ),
           ],
         ],
       ),

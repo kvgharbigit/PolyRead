@@ -32,7 +32,15 @@ PolyRead is a Flutter-based language learning application that enables users to 
 
 ## 📊 Production Status
 
-### ✅ **COMPLETED v2.2 - TAP-TO-TRANSLATE FUNCTIONAL** 🎯
+### ✅ **COMPLETED v2.3 - ENHANCED TRANSLATION POPUP** 🎯
+- **🎨 Ultra-Minimal Design**: Clean cycling translations without bracketed clutter
+- **🔄 Smart Context Expansion**: Long-press reveals contextual information only when available
+- **🌍 Home Language Translation**: Expanded context automatically translated to user's home language
+- **🎯 Part-of-Speech Emojis**: Visual indicators for word types (📦 noun, ⚡ verb, 🎨 adjective, etc.)
+- **💡 Visual Expansion Cues**: Small dot indicator shows when long-press expansion is available
+- **🔧 Clean Data Parsing**: Separated core meanings from contextual brackets in dictionary generation
+- **📊 Quality Filtering**: Context extraction properly distinguishes grammatical info from semantic context
+- **⚡ Production Ready**: Working with 126K+ meanings, proper context separation, home language support
 - **🗂️ Complete Legacy Removal**: ALL legacy dictionary code removed - ZERO backward compatibility
 - **🧹 Deep Code Cleanup**: Unused imports removed, legacy fallbacks eliminated, deprecated proofs disabled
 - **🏗️ Clean Architecture**: Single cycling dictionary paradigm throughout entire codebase
@@ -61,21 +69,30 @@ PolyRead is a Flutter-based language learning application that enables users to 
 - **GitHub Actions**: `.github/workflows/dictionary-release.yml` for automated builds
 - **Output**: Production-ready `.sqlite.zip` packages with cycling support
 
-## 🎯 **MAJOR MILESTONE: Cycling Dictionary System v2.1**
+## 🎯 **MAJOR MILESTONE: Enhanced Translation Popup v2.3**
 
-**✅ IMPLEMENTATION COMPLETE** - Revolutionary cycling interface achieved:
+**✅ IMPLEMENTATION COMPLETE** - Revolutionary user experience achieved:
 
 ### **Core Achievements:**
+- **Ultra-Minimal Interface**: Clean translations without bracketed clutter (📦 water vs ⚡ to be (auxiliary verb...))
+- **Smart Context Expansion**: Long-press reveals meaningful context only when available
+- **Home Language Translation**: Contextual information automatically translated to user's preferred language
+- **Visual Word Type Indicators**: Part-of-speech emojis (📦 noun, ⚡ verb, 🎨 adjective, 👤 pronoun, etc.)
+- **Intelligent Expansion Cues**: Small dot indicator shows when additional context is available
+- **Clean Data Separation**: Core meanings vs contextual brackets properly parsed and stored
 - **One-Level Cycling**: Simple tap-to-cycle through meanings without complex hierarchies
 - **Generalized Schema**: Support for any language pair (es-en, fr-en, de-en, etc.)
 - **Bidirectional Support**: Both source→target and target→source lookup with quality ranking
-- **UI Innovation**: Tap-to-cycle + long-press-to-expand interaction pattern
 - **Production Scale**: 94K+ word groups, 126K+ meanings, 66K+ target words
 
 ### **Technical Implementation:**
+- **Enhanced UI Components**: `CyclingTranslationPopup` with smart expansion logic and emoji indicators
+- **Part-of-Speech System**: `PartOfSpeechEmojis` with comprehensive language-specific mappings
+- **Improved Data Parsing**: Clean meaning extraction separating core translations from contextual brackets
+- **Context Detection**: Intelligent expansion availability based on actual semantic context vs grammatical info
+- **ML Kit Integration**: Automatic translation of expanded context to user's home language
 - **Database Schema v6**: Generalized field names (`target_meaning`, `target_reverse_lookup`)
 - **Service Layer**: `CyclingDictionaryService` with complete cycling functionality
-- **UI Components**: `CyclingTranslationPopup` with cycling and expansion capabilities
 - **GitHub Pipeline**: Automated multi-language dictionary generation
 - **Quality Filtering**: Proper noun removal, context preservation, quality scoring
 
