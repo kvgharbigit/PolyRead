@@ -123,9 +123,11 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     if (_isReverseLookup && _reverseLookupResult != null) {
       final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
-      // For reverse lookup, always allow expansion to show source word + meaning
-      hasContext = true;
-      fullDefinition = cyclableReverse.expandedTranslation;
+      // For reverse lookup, show only the source meaning context
+      hasContext = cyclableReverse.sourceMeaning.isNotEmpty;
+      if (hasContext) {
+        fullDefinition = cyclableReverse.sourceMeaning;
+      }
     } else if (_sourceLookupResult != null) {
       final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
       
@@ -133,7 +135,8 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       hasContext = cyclableMeaning.meaning.context?.isNotEmpty == true;
       
       if (hasContext) {
-        fullDefinition = cyclableMeaning.meaning.expandedMeaning;
+        // Extract only the context part, not the repeated word
+        fullDefinition = cyclableMeaning.meaning.context!;
       }
     } else if (_mlKitFallbackResult != null) {
       // ML Kit fallback has no context to expand
