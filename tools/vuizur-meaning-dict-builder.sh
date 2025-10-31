@@ -115,7 +115,7 @@ echo "✅ Database schema created"
 echo "🔄 Processing Vuizur data with meaning extraction..."
 
 # Python script to parse Vuizur data properly
-python3 << 'PYTHON_EOF'
+PAIR="$PAIR" python3 << 'PYTHON_EOF'
 import sqlite3
 import re
 import sys
@@ -380,8 +380,14 @@ def calculate_meaning_priority(meaning, context, is_primary):
 
 # Determine source and target languages from pair
 import os
-db_path = os.path.abspath('../dist/es-en.sqlite')
-pair = os.path.basename(db_path).replace('.sqlite', '')
+import sys
+
+# Get the language pair from environment or detect from output directory
+pair = os.environ.get('PAIR', 'es-en')
+db_path = os.path.abspath(f'../dist/{pair}.sqlite')
+
+print(f"🔍 Detected language pair: {pair}")
+print(f"🗄️ Database path: {db_path}")
 
 if pair.startswith('es-'):
     source_lang, target_lang = 'es', 'en'
