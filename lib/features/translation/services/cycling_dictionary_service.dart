@@ -353,6 +353,7 @@ class CyclingDictionaryService {
           targetWord: row.read<String>('target_word'),
           sourceWord: row.read<String>('source_word'),
           sourceMeaning: row.read<String>('target_meaning'),
+          context: row.readNullable<String>('context'),
           partOfSpeech: row.readNullable<String>('part_of_speech'),
           qualityScore: row.read<int>('quality_score'),
           currentIndex: i + 1,

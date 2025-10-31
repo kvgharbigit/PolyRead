@@ -123,10 +123,11 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     if (_isReverseLookup && _reverseLookupResult != null) {
       final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
-      // For reverse lookup, show only the source meaning context
-      hasContext = cyclableReverse.sourceMeaning.isNotEmpty;
+      // For reverse lookup, check if there's context available from the original entry
+      hasContext = cyclableReverse.context?.isNotEmpty == true;
       if (hasContext) {
-        fullDefinition = cyclableReverse.sourceMeaning;
+        // Extract only the context part for translation to home language
+        fullDefinition = cyclableReverse.context!;
       }
     } else if (_sourceLookupResult != null) {
       final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
@@ -669,18 +670,37 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Subtle cycling indicator when multiple translations available
-            if (cyclableReverse.totalTranslations > 1) ...[
-              const SizedBox(height: 6),
-              Text(
-                '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations}',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+            // Indicators: cycling and expansion availability
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Cycling indicator (if multiple translations)
+                if (cyclableReverse.totalTranslations > 1)
+                  Text(
+                    '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations}',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
+                
+                // Expansion indicator (if context available)
+                if (cyclableReverse.context?.isNotEmpty == true)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+                      shape: BoxShape.circle,
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
+              ],
+            ),
           ],
         ],
       ),

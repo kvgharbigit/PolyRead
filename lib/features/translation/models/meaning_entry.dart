@@ -160,6 +160,7 @@ class CyclableReverseLookup {
   final String targetWord;
   final String sourceWord;
   final String sourceMeaning;
+  final String? context;
   final String? partOfSpeech;
   final int qualityScore;
   final int currentIndex;
@@ -169,6 +170,7 @@ class CyclableReverseLookup {
     required this.targetWord,
     required this.sourceWord,
     required this.sourceMeaning,
+    this.context,
     this.partOfSpeech,
     required this.qualityScore,
     required this.currentIndex,
