@@ -15,6 +15,7 @@ import '../../../core/themes/polyread_theme.dart';
 import '../../../core/utils/constants.dart';
 import 'translation_requirements_dialog.dart';
 import '../models/translation_response.dart';
+import '../config/part_of_speech_emojis.dart';
 
 class CyclingTranslationPopup extends ConsumerStatefulWidget {
   final String selectedText;
@@ -357,7 +358,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-              // Word and meaning
+              // Word and meaning with emoji indicator
               Text(
                 widget.selectedText,
                 style: PolyReadTypography.translationWord.copyWith(
@@ -367,13 +368,30 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: PolyReadSpacing.smallSpacing),
-              Text(
-                cyclableMeaning.displayTranslation,
-                style: PolyReadTypography.translationMeaning.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Part-of-speech emoji indicator
+                  Text(
+                    PartOfSpeechEmojis.getEmojiForPOS(
+                      cyclableMeaning.meaning.partOfSpeech, 
+                      language: widget.sourceLanguage,
+                    ),
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(width: 6),
+                  // Translation text
+                  Expanded(
+                    child: Text(
+                      cyclableMeaning.displayTranslation,
+                      style: PolyReadTypography.translationMeaning.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
               if (cyclableMeaning.meaning.context?.isNotEmpty == true) ...[
                 const SizedBox(height: PolyReadSpacing.microSpacing),
@@ -416,7 +434,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Word and translation
+              // Word and translation with emoji indicator
               Text(
                 widget.selectedText,
                 style: PolyReadTypography.translationWord.copyWith(
@@ -426,13 +444,30 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: PolyReadSpacing.smallSpacing),
-              Text(
-                cyclableReverse.displayTranslation,
-                style: PolyReadTypography.translationMeaning.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Part-of-speech emoji indicator
+                  Text(
+                    PartOfSpeechEmojis.getEmojiForPOS(
+                      cyclableReverse.partOfSpeech, 
+                      language: widget.targetLanguage,
+                    ),
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(width: 6),
+                  // Translation text
+                  Expanded(
+                    child: Text(
+                      cyclableReverse.displayTranslation,
+                      style: PolyReadTypography.translationMeaning.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
               
               // Close button
@@ -458,7 +493,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Word and translation
+              // Word and translation with generic emoji for AI
               Text(
                 widget.selectedText,
                 style: PolyReadTypography.translationWord.copyWith(
@@ -468,13 +503,27 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: PolyReadSpacing.smallSpacing),
-              Text(
-                _mlKitFallbackResult!,
-                style: PolyReadTypography.translationMeaning.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // AI translation indicator (brain emoji)
+                  const Text(
+                    '🧠',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(width: 6),
+                  // Translation text
+                  Expanded(
+                    child: Text(
+                      _mlKitFallbackResult!,
+                      style: PolyReadTypography.translationMeaning.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: PolyReadSpacing.microSpacing),
               Text(
