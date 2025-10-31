@@ -24,6 +24,7 @@ import 'package:polyread/core/providers/database_provider.dart';
 import 'package:polyread/core/providers/settings_provider.dart';
 import 'package:polyread/core/providers/immersive_mode_provider.dart';
 import 'package:polyread/core/utils/constants.dart';
+import '../config/reader_config.dart';
 
 class BookReaderWidget extends ConsumerStatefulWidget {
   final Book book;
@@ -43,7 +44,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   ReaderEngine? _readerEngine;
   ReadingProgressService? _progressService;
   dynamic _translationService;
-  // DriftVocabularyService? _vocabularyService;
   BookmarkService? _bookmarkService;
   ReaderSettingsService? _settingsService;
   AutoScrollService? _autoScrollService;
@@ -53,7 +53,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   String? _error;
   
   // Reading session tracking
-  final int _sessionWordsRead = 0; // TODO: Implement word counting
   int _sessionTranslations = 0;
   
   // Translation popup state
@@ -136,8 +135,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
         bookTitle: widget.book.title,
       );
       
-      // Initialize vocabulary service
-      // _vocabularyService = DriftVocabularyService(database);
       
       // Create appropriate reader engine
       if (widget.book.fileType == 'pdf') {
@@ -169,8 +166,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       // Start progress tracking
       _startProgressTracking();
       
-      // Immersive UI removed
-      
       setState(() {
         _isLoading = false;
       });
@@ -183,9 +178,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     }
   }
   
-  /// Immersive Reading UI Control Methods
-  
-  // Immersive UI methods removed
   
   void _startProgressTracking() {
     // Save progress periodically 
@@ -212,7 +204,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       position: currentPosition,
       progressPercentage: _readerEngine!.progress,
       readingTimeMs: sessionTime,
-      wordsRead: _sessionWordsRead,
+      wordsRead: 0, // TODO: Implement word counting
       translationsUsed: _sessionTranslations,
     );
   }
@@ -232,14 +224,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       }
       
       // Check if text contains only whitespace or special characters
-      if (!RegExp(r'[a-zA-Z]').hasMatch(trimmedText)) {
+      if (!RegExp(ReaderConfig.validTextPattern).hasMatch(trimmedText)) {
         print('BookReader: Text contains no letters, ignoring tap: "$trimmedText"');
         return;
       }
       
       // Check if text is too long (likely accidental selection)
-      // Allow longer text for sentence translation (increased from 50 to 200 characters)
-      if (trimmedText.length > 200) {
+      if (trimmedText.length > ReaderConfig.maxTranslationTextLength) {
         print('BookReader: Text too long, likely accidental selection: ${trimmedText.length} chars');
         return;
       }
@@ -292,14 +283,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     }
   }
   
-  // Legacy translation handlers removed - now handled in _setupTextSelectionHandlers
   
   String? _extractContext(String word, TextSelection selection) {
     // Use the reader engine to extract context around the word
     if (_readerEngine == null) return null;
     
     try {
-      return _readerEngine!.extractContextAroundWord(word, contextWords: 8);
+      return _readerEngine!.extractContextAroundWord(word, contextWords: ReaderConfig.contextWordsCount);
     } catch (e) {
       print('BookReader: Failed to extract context: $e');
       return null;
@@ -313,8 +303,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       _selectedContext = null;
       _selectedTextSelection = null;
     });
-    
-    // Translation popup closed
   }
 
   void _toggleImmersiveMode() {
@@ -333,7 +321,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
 
   void _startImmersiveModeTimer() {
     _immersiveModeTimer?.cancel();
-    _immersiveModeTimer = Timer(const Duration(seconds: 10), () {
+    _immersiveModeTimer = Timer(ReaderConfig.immersiveModeAutoTimeout, () {
       if (mounted) {
         final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
         immersiveModeNotifier.setImmersiveMode(false);
@@ -476,7 +464,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
               await _toggleBookmark();
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Bookmark service not available')),
+                const SnackBar(content: Text(ReaderConfig.bookmarkServiceNotAvailable)),
               );
             }
           },
@@ -531,7 +519,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   
   Widget _buildReaderBody() {
     if (_readerEngine == null) {
-      return const Center(child: Text('Reader not initialized'));
+      return const Center(child: Text(ReaderConfig.readerNotInitialized));
     }
     
     // Wrap entire reader body with double-tap gesture for immersive mode
@@ -543,8 +531,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
           // Main reader content
           _buildReaderContent(),
         
-        // Immersive view removed - was interfering with text selection
-        
         // Reading progress indicator (hidden in immersive mode)  
         if (!ref.watch(immersiveModeProvider))
           Positioned(
@@ -552,13 +538,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              height: ReaderConfig.progressIndicatorHeight,
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: ReaderConfig.progressIndicatorOpacity),
               child: FractionallySizedBox(
                 alignment: Alignment.centerLeft,
                 widthFactor: _readerEngine!.progress,
                 child: Container(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: ReaderConfig.progressBarOpacity),
                 ),
               ),
             ),
@@ -595,12 +581,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   }
   
   Widget _buildReaderContent() {
-    // Reader content without gesture detector (now handled at body level)
     return _readerEngine!.buildReader(context);
   }
-  
-  
-  
   
   void _showSearchDialog() {
     showDialog(
