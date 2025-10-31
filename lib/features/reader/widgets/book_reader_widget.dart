@@ -423,8 +423,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       child: Scaffold(
         appBar: _buildAppBar(),
         body: _buildReaderBody(),
-        bottomNavigationBar: _buildBottomControls(),
-        extendBody: true, // Extend body behind bottom nav for seamless experience
         extendBodyBehindAppBar: true, // Extend body behind app bar
       ),
     );
@@ -563,66 +561,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     return _readerEngine!.buildReader(context);
   }
   
-  /// Build gesture overlay for immersive reading navigation
-  // Gesture overlay removed - was interfering with text selection
   
-  /// Navigate to previous chapter
-  void _goToPrevious() async {
-    if (_readerEngine != null) {
-      await _readerEngine!.goToPrevious();
-      setState(() {}); // Update progress
-    }
-  }
   
-  /// Navigate to next chapter
-  void _goToNext() async {
-    if (_readerEngine != null) {
-      await _readerEngine!.goToNext();
-      setState(() {}); // Update progress
-    }
-  }
-  
-  Widget _buildBottomControls() {
-    if (_readerEngine == null) return const SizedBox.shrink();
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.defaultPadding,
-        vertical: AppConstants.smallPadding,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade300),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Previous button
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: _goToPrevious,
-          ),
-          
-          // Position indicator
-          Expanded(
-            child: Text(
-              _readerEngine!.currentPosition.toString(),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          
-          // Next button
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: _goToNext,
-          ),
-        ],
-      ),
-    );
-  }
   
   void _showSearchDialog() {
     showDialog(
