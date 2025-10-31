@@ -351,8 +351,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                       child: Container(
                         width: _isExpanded ? 300 : 200,
                         constraints: BoxConstraints(
-                          minHeight: 60,
-                          maxHeight: _isExpanded ? 250 : 130,
+                          minWidth: _isExpanded ? 300 : 200,
                           maxWidth: _isExpanded ? 300 : 200,
                         ),
                         decoration: BoxDecoration(
@@ -436,9 +435,9 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
     
-    return SingleChildScrollView(
-      child: Container(
-        padding: const EdgeInsets.all(12),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      child: IntrinsicHeight(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -548,29 +547,35 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Show cycling hint when not expanded (simplified to prevent overflow)
+            // Flexible hint section - adapts to available space
             if (cyclableMeaning.totalMeanings > 1) ...[
-              const SizedBox(height: 3),
-              Text(
-                '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings} • Tap=cycle, Hold=expand',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 10,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Flexible(
+                    child: Text(
+                      '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings} • Tap to cycle, long press to expand',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.fade,
+                    ),
+                  );
+                },
               ),
             ] else ...[
-              const SizedBox(height: 3),
-              Text(
-                'Hold to expand',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 10,
+              const SizedBox(height: 8),
+              Flexible(
+                child: Text(
+                  'Long press to expand',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
               ),
             ],
           ],
@@ -587,9 +592,9 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
     
-    return SingleChildScrollView(
-      child: Container(
-        padding: const EdgeInsets.all(12),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      child: IntrinsicHeight(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -687,29 +692,35 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Show cycling hint when not expanded (simplified to prevent overflow)
+            // Flexible hint section - adapts to available space
             if (cyclableReverse.totalTranslations > 1) ...[
-              const SizedBox(height: 3),
-              Text(
-                '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations} • Tap=cycle, Hold=expand',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 10,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Flexible(
+                    child: Text(
+                      '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations} • Tap to cycle, long press to expand',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.fade,
+                    ),
+                  );
+                },
               ),
             ] else ...[
-              const SizedBox(height: 3),
-              Text(
-                'Hold to expand',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 10,
+              const SizedBox(height: 8),
+              Flexible(
+                child: Text(
+                  'Long press to expand',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
               ),
             ],
           ],
