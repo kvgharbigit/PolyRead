@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        language_pair: ${{ fromJson(format('["{0}"]', github.event.inputs.language_pairs || 'es-en fr-en de-en')) }}
+        language_pair: ${{ fromJson(format('["{0}"]', replace(github.event.inputs.language_pairs || 'es-en fr-en de-en', ' ', '", "'))) }}
       fail-fast: false
       
     steps:
