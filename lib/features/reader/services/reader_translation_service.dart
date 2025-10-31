@@ -51,6 +51,9 @@ class ReaderTranslationService extends ChangeNotifier {
   bool get hasSelection => _selectedText != null && _selectedText!.isNotEmpty;
   bool get needsModelDownload => _needsModelDownload;
   String? get missingModelProvider => _missingModelProvider;
+  
+  // Access to underlying translation service for ML Kit provider
+  TranslationService get translationService => _translationService;
 
   /// Initialize the service
   Future<void> initialize() async {

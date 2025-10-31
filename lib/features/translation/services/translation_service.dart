@@ -16,6 +16,9 @@ class TranslationService {
   late final MlKitTranslationProvider _mlKitProvider;
   late final ServerTranslationProvider _serverProvider;
   
+  // Public getters for external access
+  MlKitTranslationProvider get mlKitProvider => _mlKitProvider;
+  
   TranslationService({
     required CyclingDictionaryService dictionaryService,
     required dynamic cacheService,

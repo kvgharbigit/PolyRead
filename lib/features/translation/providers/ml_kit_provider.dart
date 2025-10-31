@@ -158,23 +158,24 @@ class MlKitTranslationProvider implements TranslationProvider {
       var completedDownloads = 0;
       
       if (!sourceDownloaded) {
-        onProgress?.call(0.1); // Starting download
+        onProgress?.call(0.2); // Starting source download
         await modelManager.downloadModel(
           sourceLanguage,
           isWifiRequired: wifiOnly,
         );
         completedDownloads++;
-        onProgress?.call(completedDownloads / totalDownloads * 0.8 + 0.1); // 80% progress per model
+        onProgress?.call(completedDownloads / totalDownloads * 0.7 + 0.2); // More granular progress
       }
       
       if (!targetDownloaded) {
-        if (sourceDownloaded) onProgress?.call(0.1); // Starting first download
+        if (sourceDownloaded) onProgress?.call(0.2); // Starting first download
+        else onProgress?.call(0.5); // Starting target after source
         await modelManager.downloadModel(
           targetLanguage,
           isWifiRequired: wifiOnly,
         );
         completedDownloads++;
-        onProgress?.call(completedDownloads / totalDownloads * 0.8 + 0.1);
+        onProgress?.call(completedDownloads / totalDownloads * 0.7 + 0.2);
       }
       
       // Verify downloads
@@ -182,7 +183,8 @@ class MlKitTranslationProvider implements TranslationProvider {
       final finalSourceDownloaded = await modelManager.isModelDownloaded(sourceLanguage);
       final finalTargetDownloaded = await modelManager.isModelDownloaded(targetLanguage);
       
-      onProgress?.call(1.0); // Complete
+      // Always complete progress regardless of verification result
+      onProgress?.call(1.0);
       
       return ModelDownloadResult(
         success: finalSourceDownloaded && finalTargetDownloaded,
@@ -193,6 +195,8 @@ class MlKitTranslationProvider implements TranslationProvider {
         targetDownloaded: finalTargetDownloaded,
       );
     } catch (e) {
+      // Complete progress even on failure to prevent UI from hanging
+      onProgress?.call(1.0);
       return ModelDownloadResult(
         success: false,
         message: 'Download failed: $e',

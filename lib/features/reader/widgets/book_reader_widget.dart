@@ -106,8 +106,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       
       print('BookReader: Language settings - Source: $_sourceLanguage, Home: $_homeLanguage');
       
-      // Alert user if target language is not English
-      if (_homeLanguage != 'en') {
+      // DICTIONARY FIX: Our dictionary is es-en (Spanish→English)
+      // If user is reading English and wants Spanish translations, we need to use reverse lookup
+      // The dictionary expects Spanish source words, so for English books we swap the parameters
+      if (_sourceLanguage == 'en' && _homeLanguage == 'es') {
+        print('BookReader: NOTICE - Reading English book with Spanish-English dictionary');
+        print('BookReader: Will use reverse lookup (English words → Spanish translations)');
+      } else if (_homeLanguage != 'en') {
         print('BookReader: WARNING - Target language is set to "$_homeLanguage" instead of "en" (English)');
         print('BookReader: This will translate TO $_homeLanguage instead of TO English');
         print('BookReader: Change your target language to "en" in settings if you want translations to English');

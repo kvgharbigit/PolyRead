@@ -268,8 +268,8 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
       return _buildElegantErrorState();
     }
     
-    // Loading state
-    if (_availablePacks == null) {
+    // Loading state (initial load or retry)
+    if (_availablePacks == null || _isRetrying) {
       return _buildElegantLoadingState();
     }
     
@@ -995,8 +995,56 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     );
   }
 
-  /// Build elegant loading state with shimmer effect
+  /// Build elegant loading state with clear loading indicator
   Widget _buildElegantLoadingState() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+        boxShadow: PolyReadSpacing.cardShadow,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(PolyReadSpacing.majorSpacing),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Loading spinner
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: PolyReadSpacing.sectionSpacing),
+            
+            // Loading text
+            Text(
+              'Fetching Available Language Packs...',
+              style: PolyReadTypography.interfaceHeadline.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: PolyReadSpacing.elementSpacing),
+            
+            // Subtitle
+            Text(
+              'Checking GitHub for the latest dictionary packages',
+              style: PolyReadTypography.interfaceCaption.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build elegant shimmer loading state for when showing placeholders
+  Widget _buildShimmerLoadingState() {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
