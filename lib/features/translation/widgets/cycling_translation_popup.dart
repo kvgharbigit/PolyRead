@@ -123,8 +123,10 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     if (_isReverseLookup && _reverseLookupResult != null) {
       final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
+      
       // For reverse lookup, check if there's context available from the original entry
       hasContext = cyclableReverse.context?.isNotEmpty == true;
+      
       if (hasContext) {
         // Extract only the context part for translation to home language
         fullDefinition = cyclableReverse.context!;
@@ -528,18 +530,6 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                         ),
                       ],
                     ),
-                  
-                  // Show context if available (without "Context:" label)
-                  if (cyclableMeaning.meaning.context?.isNotEmpty == true) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      cyclableMeaning.meaning.context!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
