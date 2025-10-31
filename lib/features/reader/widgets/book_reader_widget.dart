@@ -244,7 +244,10 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       print('BookReader: Translation service available, processing...');
       
       // Extract context around the selected text
+      print('BookReader: 🔍 Extracting context for word: "$trimmedText"');
       final context = _extractContext(text, selection);
+      print('BookReader: 📝 Context extracted: "$context"');
+      print('BookReader: 📏 Context length: ${context?.length ?? 0} characters');
       
       setState(() {
         _selectedText = trimmedText; // Use trimmed text
@@ -254,10 +257,58 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
         _showTranslationPopup = true;
       });
       
+      print('BookReader: 🎯 About to show translation popup');
+      print('BookReader: Selected text: "$trimmedText"');
+      print('BookReader: Context being passed: "$context"');
+      
       print('BookReader: Translation popup shown, starting translation...');
       
       // Note: Translation will be performed by the CyclingTranslationPopup widget
       // No need to call translation service here as it would duplicate the call
+      
+      _sessionTranslations++;
+    }
+
+    // Handle text selection with pre-extracted context (for EPUB WebView)
+    void handleTextSelectionWithContext(String text, Offset position, TextSelection selection, String? context) async {
+      print('BookReader: handleTextSelectionWithContext called with "$text" and context: "$context"');
+      
+      // Validate that we have actual meaningful text
+      final trimmedText = text.trim();
+      if (trimmedText.isEmpty || trimmedText.length < 1) {
+        print('BookReader: No meaningful text selected, ignoring tap');
+        return;
+      }
+      
+      // Check if text contains only whitespace or special characters
+      if (!RegExp(ReaderConfig.validTextPattern).hasMatch(trimmedText)) {
+        print('BookReader: Text contains no letters, ignoring tap: "$trimmedText"');
+        return;
+      }
+      
+      // Check if text is too long (likely accidental selection)
+      if (trimmedText.length > ReaderConfig.maxTranslationTextLength) {
+        print('BookReader: Text too long, likely accidental selection: ${trimmedText.length} chars');
+        return;
+      }
+      
+      if (_translationService == null) {
+        print('BookReader: Translation service is null!');
+        return;
+      }
+      
+      print('BookReader: Translation service available, processing...');
+      print('BookReader: 🎯 Using pre-extracted context: "$context"');
+      
+      setState(() {
+        _selectedText = trimmedText; // Use trimmed text
+        _tapPosition = position;
+        _selectedContext = context; // Use the pre-extracted context
+        _selectedTextSelection = selection;
+        _showTranslationPopup = true;
+      });
+      
+      print('BookReader: 🎯 Translation popup shown with context: "$context"');
       
       _sessionTranslations++;
     }
@@ -312,14 +363,15 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       print('BookReader: Setting EPUB text selection callback');
       (_readerEngine as EpubReaderEngine).setTextSelectionCallback((selectionData) {
         print('BookReader: EPUB callback triggered with ${selectionData.type.name}: "${selectionData.text}"');
+        print('BookReader: EPUB context from WebView: "${selectionData.context}"');
         
         // Route to appropriate handler based on selection type
         if (selectionData.isSentence) {
           handleSentenceSelection(selectionData);
         } else {
-          // Handle as traditional word selection
-          handleTextSelection(selectionData.text, selectionData.position, 
-            TextSelection(baseOffset: 0, extentOffset: selectionData.text.length));
+          // Handle as word selection, but use the context from WebView JavaScript
+          handleTextSelectionWithContext(selectionData.text, selectionData.position, 
+            TextSelection(baseOffset: 0, extentOffset: selectionData.text.length), selectionData.context);
         }
       });
     } else if (_readerEngine is PdfReaderEngine) {
@@ -334,13 +386,26 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   
   
   String? _extractContext(String word, TextSelection selection) {
+    print('BookReader: 🔍 _extractContext() called');
+    print('BookReader: Word: "$word"');
+    print('BookReader: Selection: baseOffset=${selection.baseOffset}, extentOffset=${selection.extentOffset}');
+    print('BookReader: Reader engine type: ${_readerEngine.runtimeType}');
+    print('BookReader: Context words count: ${ReaderConfig.contextWordsCount}');
+    
     // Use the reader engine to extract context around the word
-    if (_readerEngine == null) return null;
+    if (_readerEngine == null) {
+      print('BookReader: ❌ Reader engine is null');
+      return null;
+    }
     
     try {
-      return _readerEngine!.extractContextAroundWord(word, contextWords: ReaderConfig.contextWordsCount);
+      print('BookReader: 📞 Calling reader engine extractContextAroundWord...');
+      final context = _readerEngine!.extractContextAroundWord(word, contextWords: ReaderConfig.contextWordsCount);
+      print('BookReader: 📄 Engine returned context: "$context"');
+      print('BookReader: 📏 Engine context length: ${context?.length ?? 0} characters');
+      return context;
     } catch (e) {
-      print('BookReader: Failed to extract context: $e');
+      print('BookReader: ❌ Failed to extract context: $e');
       return null;
     }
   }

@@ -17,6 +17,19 @@ import 'translation_requirements_dialog.dart';
 import '../models/translation_response.dart';
 import '../config/part_of_speech_emojis.dart';
 
+/// Content metrics for intelligent popup sizing
+class _ContentMetrics {
+  final double estimatedMinHeight;
+  final int estimatedLines;
+  final bool hasLongContent;
+  
+  const _ContentMetrics({
+    required this.estimatedMinHeight,
+    required this.estimatedLines,
+    required this.hasLongContent,
+  });
+}
+
 class CyclingTranslationPopup extends ConsumerStatefulWidget {
   final String selectedText;
   final String sourceLanguage;
@@ -62,10 +75,24 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   bool _isExpanded = false;
   String? _mlKitFallbackResult; // Store ML Kit fallback translation
   String? _expandedDefinition; // Store ML Kit translated expanded definition
+  String? _sentenceTranslation; // Store ML Kit sentence translation
+  bool _isSentenceLoading = false; // Loading state for sentence translation
+  
+  // Performance optimization: Cache calculated constraints
+  BoxConstraints? _cachedConstraints;
+  Size? _lastScreenSize;
   
   @override
   void initState() {
     super.initState();
+    
+    print('CyclingPopup: 🚀 initState() called');
+    print('CyclingPopup: Selected text: "${widget.selectedText}"');
+    print('CyclingPopup: Source language: ${widget.sourceLanguage}');
+    print('CyclingPopup: Target language: ${widget.targetLanguage}');
+    print('CyclingPopup: Context received: "${widget.context}"');
+    print('CyclingPopup: Context length: ${widget.context?.length ?? 0} characters');
+    print('CyclingPopup: Translation service available: ${widget.translationService != null}');
     
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 200),
@@ -85,6 +112,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     _showPopup();
     _performLookup();
+    _performSentenceTranslation();
   }
   
   @override
@@ -323,23 +351,127 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     }
   }
 
+  /// Perform sentence translation using ML Kit
+  Future<void> _performSentenceTranslation() async {
+    print('CyclingPopup: ==> _performSentenceTranslation() called');
+    print('CyclingPopup: Selected word: "${widget.selectedText}"');
+    print('CyclingPopup: Context received: "${widget.context}"');
+    print('CyclingPopup: Context length: ${widget.context?.length ?? 0} characters');
+    print('CyclingPopup: Source language: ${widget.sourceLanguage}');
+    print('CyclingPopup: Target language: ${widget.targetLanguage}');
+    
+    // Show more details about the context
+    if (widget.context != null && widget.context!.length > 100) {
+      print('CyclingPopup: 📏 Long context detected (${widget.context!.length} chars)');
+      print('CyclingPopup: 📄 First 100 chars: "${widget.context!.substring(0, 100)}..."');
+      print('CyclingPopup: 📄 Last 100 chars: "...${widget.context!.substring(widget.context!.length - 100)}"');
+    }
+    
+    // Only translate sentence if we have context (the sentence)
+    if (widget.context == null || widget.context!.trim().isEmpty) {
+      print('CyclingPopup: ❌ No context available for sentence translation');
+      print('CyclingPopup: Context is null: ${widget.context == null}');
+      if (widget.context != null) {
+        print('CyclingPopup: Context length: ${widget.context!.length}');
+        print('CyclingPopup: Context trimmed length: ${widget.context!.trim().length}');
+      }
+      return;
+    }
+    
+    // Only translate if we have a translation service
+    if (widget.translationService == null) {
+      print('CyclingPopup: ❌ No translation service available for sentence translation');
+      return;
+    }
+    
+    print('CyclingPopup: ✅ Starting sentence translation...');
+    print('CyclingPopup: Context to translate: "${widget.context}"');
+    print('CyclingPopup: Context length: ${widget.context!.length} characters');
+    
+    setState(() {
+      _isSentenceLoading = true;
+    });
+    
+    try {
+      print('CyclingPopup: 📡 Calling translation service...');
+      
+      final translationResponse = await widget.translationService.translateText(
+        text: widget.context!,
+        sourceLanguage: widget.sourceLanguage,
+        targetLanguage: widget.targetLanguage,
+        useCache: true,
+      );
+      
+      print('CyclingPopup: 📨 Translation response received');
+      print('CyclingPopup: Translated text: "${translationResponse.translatedText}"');
+      print('CyclingPopup: Translation source: ${translationResponse.source}');
+      
+      if (translationResponse.translatedText.isNotEmpty) {
+        setState(() {
+          _sentenceTranslation = translationResponse.translatedText;
+          _isSentenceLoading = false;
+          _invalidateConstraintsCache(); // Content changed, invalidate cache
+        });
+        print('CyclingPopup: ✅ Sentence translation completed successfully');
+        print('CyclingPopup: Final sentence translation: "${_sentenceTranslation}"');
+      } else {
+        setState(() {
+          _isSentenceLoading = false;
+          _invalidateConstraintsCache(); // Content changed, invalidate cache
+        });
+        print('CyclingPopup: ❌ Sentence translation returned empty result');
+      }
+    } catch (e) {
+      print('CyclingPopup: ❌ Sentence translation error: $e');
+      setState(() {
+        _isSentenceLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    Widget content;
+    Widget wordContent;
     
     if (_isLoading) {
-      content = _buildLoadingView();
+      wordContent = _buildLoadingView();
     } else if (_error != null) {
-      content = _buildErrorView();
+      wordContent = _buildErrorView();
     } else if (_mlKitFallbackResult != null) {
-      content = _buildMlKitFallbackView();
+      wordContent = _buildMlKitFallbackView();
     } else if (_isReverseLookup && _reverseLookupResult != null) {
-      content = _buildReverseLookupView();
+      wordContent = _buildReverseLookupView();
     } else if (_sourceLookupResult != null) {
-      content = _buildSourceMeaningView();
+      wordContent = _buildSourceMeaningView();
     } else {
-      content = _buildErrorView();
+      wordContent = _buildErrorView();
     }
+
+    // Combine word content with sentence translation
+    Widget content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Word translation (existing content)
+        wordContent,
+        
+        // Sentence translation (new content)
+        if (_sentenceTranslation != null || _isSentenceLoading) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: PolyReadSpacing.smallSpacing),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing), // More padding for readability
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.08), // Slightly more subtle background
+                borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
+              ),
+              child: _buildSentenceTranslationView(),
+            ),
+          ),
+        ],
+      ],
+    );
 
     final position = _calculatePopupPosition();
 
@@ -366,23 +498,23 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                     borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                      child: Container(
-                        width: _isExpanded ? 300 : 200,
-                        constraints: BoxConstraints(
-                          minWidth: _isExpanded ? 300 : 200,
-                          maxWidth: _isExpanded ? 300 : 200,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                      child: IntrinsicWidth(
+                        child: ConstrainedBox(
+                          constraints: _getPopupConstraints(),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: GestureDetector(
+                              onLongPress: _handleLongPress,
+                              onTap: _handleTap,
+                              child: content,
+                            ),
                           ),
-                        ),
-                        child: GestureDetector(
-                          onLongPress: _handleLongPress,
-                          onTap: _handleTap,
-                          child: content,
                         ),
                       ),
                     ),
@@ -734,6 +866,176 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     );
   }
 
+  /// Calculate optimal popup constraints based on content and screen
+  BoxConstraints _getPopupConstraints() {
+    final screenSize = MediaQuery.of(context).size;
+    
+    // Performance optimization: Only recalculate if screen size changed or content changed
+    if (_cachedConstraints != null && 
+        _lastScreenSize == screenSize && 
+        !_hasContentChanged()) {
+      return _cachedConstraints!;
+    }
+    
+    final screenPadding = MediaQuery.of(context).padding;
+    
+    // Available space considering safe areas and UI chrome
+    final availableWidth = screenSize.width - screenPadding.horizontal - 32; // 16px margin each side
+    final availableHeight = screenSize.height - screenPadding.vertical - 120; // Space for app bar, etc.
+    
+    // Content-aware sizing
+    final contentMetrics = _analyzeContentRequirements();
+    
+    // Base constraints adapted to content
+    final baseMinWidth = _getBaseMinWidth();
+    final contentAdjustedMaxWidth = _getContentAwareMaxWidth(availableWidth, contentMetrics);
+    
+    final constraints = BoxConstraints(
+      minWidth: baseMinWidth,
+      maxWidth: contentAdjustedMaxWidth,
+      minHeight: contentMetrics.estimatedMinHeight,
+      maxHeight: (availableHeight * 0.7).clamp(120, double.infinity), // Max 70% of available height
+    );
+    
+    // Cache the result
+    _cachedConstraints = constraints;
+    _lastScreenSize = screenSize;
+    
+    return constraints;
+  }
+  
+  /// Check if content has changed since last calculation
+  bool _hasContentChanged() {
+    // This is a simple heuristic - in a more sophisticated implementation,
+    // we could track specific content change flags
+    return _isSentenceLoading || _isLoading;
+  }
+  
+  /// Invalidate cached constraints when content changes
+  void _invalidateConstraintsCache() {
+    _cachedConstraints = null;
+    _lastScreenSize = null;
+  }
+  
+  /// Analyze content requirements for intelligent sizing
+  _ContentMetrics _analyzeContentRequirements() {
+    double estimatedMinHeight = 60; // Base height for word translation
+    int estimatedLines = 1;
+    
+    // Factor in sentence translation content
+    if (_sentenceTranslation != null) {
+      final sentenceLength = _sentenceTranslation!.length;
+      // Rough estimation: 50 chars per line at average width
+      estimatedLines = ((sentenceLength / 45).ceil()).clamp(1, 8);
+      estimatedMinHeight += estimatedLines * 22; // ~22px per line
+    } else if (_isSentenceLoading) {
+      estimatedMinHeight += 30; // Space for loading indicator
+    }
+    
+    // Factor in expanded content
+    if (_isExpanded && _expandedDefinition != null) {
+      final expandedLength = _expandedDefinition!.length;
+      estimatedLines += ((expandedLength / 45).ceil()).clamp(1, 5);
+      estimatedMinHeight += estimatedLines * 20;
+    }
+    
+    return _ContentMetrics(
+      estimatedMinHeight: estimatedMinHeight,
+      estimatedLines: estimatedLines,
+      hasLongContent: estimatedLines > 3,
+    );
+  }
+  
+  /// Get content-aware maximum width
+  double _getContentAwareMaxWidth(double availableWidth, _ContentMetrics metrics) {
+    if (_isExpanded) {
+      return (availableWidth * 0.9).clamp(320, double.infinity);
+    } else if (metrics.hasLongContent) {
+      // Long content needs more width for better line breaks
+      return (availableWidth * 0.88).clamp(300, double.infinity);
+    } else if (_sentenceTranslation != null || _isSentenceLoading) {
+      return (availableWidth * 0.82).clamp(280, double.infinity);
+    } else {
+      return (availableWidth * 0.6).clamp(200, 300); // Word-only
+    }
+  }
+  
+  /// Get base minimum width based on content type
+  double _getBaseMinWidth() {
+    if (_isExpanded) {
+      return 280; // Expanded content needs more space
+    } else if (_sentenceTranslation != null || _isSentenceLoading) {
+      return 240; // Sentence translation minimum
+    } else {
+      return 180; // Word-only minimum
+    }
+  }
+  
+  /// Get base maximum width based on available space
+  double _getBaseMaxWidth(double availableWidth) {
+    if (_isExpanded) {
+      return (availableWidth * 0.9).clamp(320, double.infinity);
+    } else if (_sentenceTranslation != null || _isSentenceLoading) {
+      return (availableWidth * 0.85).clamp(280, double.infinity);
+    } else {
+      return (availableWidth * 0.6).clamp(200, 300); // Word-only doesn't need much width
+    }
+  }
+
+  /// Build sentence translation view
+  Widget _buildSentenceTranslationView() {
+    if (_isSentenceLoading) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Translating sentence...',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_sentenceTranslation == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Label for sentence translation
+        Text(
+          'Sentence:',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        // Translated sentence - fully visible without line limits
+        Text(
+          _sentenceTranslation!,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+            height: 1.4, // Slightly more line height for readability
+            fontSize: 14, // Slightly smaller for longer text
+          ),
+          // No maxLines limit - let it expand as needed
+          softWrap: true,
+        ),
+      ],
+    );
+  }
+
   /// Handle missing components by showing unified installation prompt
   Future<void> _handleMissingComponents(MissingComponent missingComponent) async {
     // Close the current popup first
@@ -820,11 +1122,34 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       return {'left': 50.0, 'top': 100.0};
     }
     
-    // Adaptive positioning for different popup sizes
-    final popupWidth = _isExpanded ? 300.0 : 200.0;
-    final x = widget.position!.dx - (popupWidth / 2); // Center popup
-    final y = widget.position!.dy + 20;   // Below selection
+    final screenSize = MediaQuery.of(context).size;
+    final screenPadding = MediaQuery.of(context).padding;
+    final constraints = _getPopupConstraints();
     
-    return {'left': x.clamp(10.0, 400.0), 'top': y.clamp(50.0, 600.0)};
+    // Estimate popup dimensions for positioning
+    final estimatedWidth = (constraints.minWidth + constraints.maxWidth) / 2;
+    final estimatedHeight = constraints.maxHeight * 0.4; // Conservative estimate
+    
+    // Calculate safe positioning bounds
+    final safeLeft = screenPadding.left + 16;
+    final safeRight = screenSize.width - screenPadding.right - estimatedWidth - 16;
+    final safeTop = screenPadding.top + 60; // Below app bar
+    final safeBottom = screenSize.height - screenPadding.bottom - estimatedHeight - 20;
+    
+    // Preferred position: centered horizontally, below tap point
+    double x = widget.position!.dx - (estimatedWidth / 2);
+    double y = widget.position!.dy + 40; // Offset below tap point
+    
+    // Smart positioning adjustments
+    if (y > safeBottom) {
+      // If popup would go below screen, position above tap point instead
+      y = widget.position!.dy - estimatedHeight - 10;
+    }
+    
+    // Ensure popup stays within safe bounds
+    x = x.clamp(safeLeft, safeRight);
+    y = y.clamp(safeTop, safeBottom);
+    
+    return {'left': x, 'top': y};
   }
 }

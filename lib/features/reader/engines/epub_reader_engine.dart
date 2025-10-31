@@ -164,12 +164,17 @@ function handleWordTap(event) {
             console.log('Debug: Single word only:', singleWord);
             
             if (singleWord.length > 0 && singleWord.length < 50) {
-                // Send word tap to Flutter
+                // Extract sentence context around the tapped word
+                const sentenceContext = extractSentenceFromPosition(textNode, range.startOffset);
+                console.log('Debug: Sentence context for word tap:', sentenceContext);
+                
+                // Send word tap with sentence context to Flutter
                 if (window.TextSelection) {
                     window.TextSelection.postMessage(JSON.stringify({
                         type: 'wordTap',
                         text: singleWord,
-                        position: { x: event.clientX, y: event.clientY }
+                        position: { x: event.clientX, y: event.clientY },
+                        context: sentenceContext || singleWord
                     }));
                 }
             }
@@ -274,12 +279,14 @@ document.addEventListener('mouseleave', handleMouseUp); // Cancel if mouse leave
       if (selectionType == 'wordTap') {
         final word = data['text'] as String;
         final position = data['position'] as Map<String, dynamic>;
+        final context = data['context'] as String?; // Get context from JavaScript
         final offset = Offset(
           (position['x'] as num).toDouble(),
           (position['y'] as num).toDouble(),
         );
         
         print('EPUB WebView: Exact word tapped: "$word" at $offset');
+        print('EPUB WebView: Context from JavaScript: "$context"');
         
         _selectedText = word;
         
@@ -288,6 +295,7 @@ document.addEventListener('mouseleave', handleMouseUp); // Cancel if mouse leave
             text: word,
             type: TextSelectionType.word,
             position: offset,
+            context: context, // Pass the JavaScript-extracted context
           );
           onTextSelectionCallback!(selectionData);
         }
@@ -459,12 +467,23 @@ document.addEventListener('mouseleave', handleMouseUp); // Cancel if mouse leave
   
   @override
   String? extractContextAroundWord(String word, {int contextWords = 10}) {
+    print('EPUB: 🔍 extractContextAroundWord() called');
+    print('EPUB: Word to find: "$word"');
+    print('EPUB: ⚠️ WARNING: This method extracts context from entire chapter, not tap position');
+    print('EPUB: ⚠️ This may return wrong sentence context for EPUB readers');
+    
+    // For EPUB, we should ideally use the WebView's context extraction
+    // But as a fallback, we'll extract context from the current chapter
+    // This may not be the exact sentence where the user tapped
+    
     if (_book?.Chapters?.isEmpty == true || _currentChapterIndex >= _book!.Chapters!.length) {
+      print('EPUB: ❌ No chapters available or invalid chapter index');
       return null;
     }
     
     final currentChapter = _book!.Chapters![_currentChapterIndex];
     final htmlContent = currentChapter.HtmlContent ?? '';
+    print('EPUB: 📄 Chapter title: "${currentChapter.Title}"');
     
     // Simple text extraction and context building
     final plainText = htmlContent
@@ -473,16 +492,38 @@ document.addEventListener('mouseleave', handleMouseUp); // Cancel if mouse leave
         .trim();
     
     final words = plainText.split(' ');
-    final wordIndex = words.indexWhere(
-      (w) => w.toLowerCase().contains(word.toLowerCase()),
-    );
+    print('EPUB: 🔤 Total words in chapter: ${words.length}');
     
-    if (wordIndex == -1) return null;
+    // Find the LAST occurrence of the word to get more recent context
+    // This is still not perfect but better than first occurrence
+    int wordIndex = -1;
+    for (int i = words.length - 1; i >= 0; i--) {
+      if (words[i].toLowerCase().contains(word.toLowerCase())) {
+        wordIndex = i;
+        break;
+      }
+    }
+    
+    print('EPUB: 🎯 Last word occurrence found at index: $wordIndex');
+    if (wordIndex >= 0 && wordIndex < words.length) {
+      print('EPUB: 🎯 Matched word: "${words[wordIndex]}"');
+    }
+    
+    if (wordIndex == -1) {
+      print('EPUB: ❌ Word "$word" not found in chapter text');
+      return null;
+    }
     
     final startIndex = (wordIndex - contextWords).clamp(0, words.length);
     final endIndex = (wordIndex + contextWords + 1).clamp(0, words.length);
     
-    return words.sublist(startIndex, endIndex).join(' ');
+    print('EPUB: 📍 Context range: $startIndex to $endIndex (word at $wordIndex)');
+    
+    final contextText = words.sublist(startIndex, endIndex).join(' ');
+    print('EPUB: ✅ Context extracted: "$contextText"');
+    print('EPUB: 📏 Context length: ${contextText.length} characters');
+    
+    return contextText;
   }
   
   @override
