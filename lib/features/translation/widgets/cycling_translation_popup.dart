@@ -1518,19 +1518,21 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   }
   
   /// Normalize word for comparison (remove accents, lowercase, trim)
+  /// Supports Spanish, French, German, Portuguese, and other European languages
   String _normalizeWord(String word) {
     return word
         .toLowerCase()
         .trim()
         // Remove common punctuation
         .replaceAll(RegExp(r'''[.,!?;:'"]'''), '')
-        // Normalize common accent variations
-        .replaceAll('á', 'a').replaceAll('à', 'a').replaceAll('ä', 'a').replaceAll('â', 'a')
-        .replaceAll('é', 'e').replaceAll('è', 'e').replaceAll('ë', 'e').replaceAll('ê', 'e')
-        .replaceAll('í', 'i').replaceAll('ì', 'i').replaceAll('ï', 'i').replaceAll('î', 'i')
-        .replaceAll('ó', 'o').replaceAll('ò', 'o').replaceAll('ö', 'o').replaceAll('ô', 'o')
-        .replaceAll('ú', 'u').replaceAll('ù', 'u').replaceAll('ü', 'u').replaceAll('û', 'u')
-        .replaceAll('ñ', 'n').replaceAll('ç', 'c');
+        // Normalize accent variations (Spanish, French, German, Portuguese, Italian)
+        .replaceAll('á', 'a').replaceAll('à', 'a').replaceAll('ä', 'a').replaceAll('â', 'a').replaceAll('ã', 'a').replaceAll('å', 'a')
+        .replaceAll('é', 'e').replaceAll('è', 'e').replaceAll('ë', 'e').replaceAll('ê', 'e').replaceAll('ē', 'e')
+        .replaceAll('í', 'i').replaceAll('ì', 'i').replaceAll('ï', 'i').replaceAll('î', 'i').replaceAll('ī', 'i')
+        .replaceAll('ó', 'o').replaceAll('ò', 'o').replaceAll('ö', 'o').replaceAll('ô', 'o').replaceAll('õ', 'o').replaceAll('ø', 'o')
+        .replaceAll('ú', 'u').replaceAll('ù', 'u').replaceAll('ü', 'u').replaceAll('û', 'u').replaceAll('ū', 'u')
+        .replaceAll('ñ', 'n').replaceAll('ç', 'c').replaceAll('ß', 'ss') // German ß
+        .replaceAll('æ', 'ae').replaceAll('œ', 'oe'); // French ligatures
   }
   
   /// Calculate Levenshtein distance between two strings
