@@ -692,13 +692,13 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Ultra-minimal: just brain emoji + translation
+          // Ultra-minimal: question mark emoji + translation (indicating uncertainty)
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // AI translation indicator (brain emoji)
+              // Uncertainty indicator for ML Kit translations
               const Text(
-                '🧠',
+                '🤔',
                 style: TextStyle(fontSize: 18),
               ),
               const SizedBox(width: 8),
