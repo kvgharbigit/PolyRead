@@ -547,35 +547,27 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Flexible hint section - adapts to available space
+            // Simple hint section that adapts naturally
             if (cyclableMeaning.totalMeanings > 1) ...[
               const SizedBox(height: 8),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return Flexible(
-                    child: Text(
-                      '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings} • Tap to cycle, long press to expand',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.fade,
-                    ),
-                  );
-                },
+              Text(
+                '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings} • Tap to cycle, long press to expand',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ] else ...[
               const SizedBox(height: 8),
-              Flexible(
-                child: Text(
-                  'Long press to expand',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
+              Text(
+                'Long press to expand',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
               ),
             ],
           ],
@@ -692,35 +684,27 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Flexible hint section - adapts to available space
+            // Simple hint section that adapts naturally
             if (cyclableReverse.totalTranslations > 1) ...[
               const SizedBox(height: 8),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return Flexible(
-                    child: Text(
-                      '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations} • Tap to cycle, long press to expand',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.fade,
-                    ),
-                  );
-                },
+              Text(
+                '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations} • Tap to cycle, long press to expand',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ] else ...[
               const SizedBox(height: 8),
-              Flexible(
-                child: Text(
-                  'Long press to expand',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
+              Text(
+                'Long press to expand',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
               ),
             ],
           ],
