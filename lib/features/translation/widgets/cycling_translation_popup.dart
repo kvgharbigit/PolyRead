@@ -59,9 +59,9 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   int _currentMeaningIndex = 0;
   int _currentReverseIndex = 0;
   bool _isReverseLookup = false;
-  bool _meaningExpanded = false;
-  bool _reverseExpanded = false;
+  bool _isExpanded = false;
   String? _mlKitFallbackResult; // Store ML Kit fallback translation
+  String? _expandedDefinition; // Store ML Kit translated expanded definition
   
   @override
   void initState() {
@@ -111,6 +111,87 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
 
     // Step 1: Check what translation components are available
     await _checkTranslationComponents();
+  }
+
+  /// Handle long press for expanded definition
+  void _handleLongPress() async {
+    if (_isExpanded) return; // Already expanded
+    
+    setState(() {
+      _isExpanded = true;
+    });
+    
+    // Get the expanded definition with context
+    String fullDefinition = '';
+    
+    if (_isReverseLookup && _reverseLookupResult != null) {
+      final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
+      fullDefinition = cyclableReverse.expandedTranslation;
+    } else if (_sourceLookupResult != null) {
+      final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
+      fullDefinition = cyclableMeaning.expandedTranslation;
+    } else if (_mlKitFallbackResult != null) {
+      fullDefinition = _mlKitFallbackResult!;
+    }
+    
+    // Translate the expanded definition to home language using ML Kit
+    if (fullDefinition.isNotEmpty && widget.translationService != null) {
+      try {
+        final translationResponse = await widget.translationService.translateText(
+          text: fullDefinition,
+          sourceLanguage: widget.sourceLanguage,
+          targetLanguage: widget.targetLanguage,
+          useCache: true,
+        );
+        
+        if (translationResponse.translatedText.isNotEmpty) {
+          setState(() {
+            _expandedDefinition = translationResponse.translatedText;
+          });
+        }
+      } catch (e) {
+        print('Failed to translate expanded definition: $e');
+        // Fallback to original definition
+        setState(() {
+          _expandedDefinition = fullDefinition;
+        });
+      }
+    }
+  }
+  
+  /// Handle tap for cycling through meanings
+  void _handleTap() {
+    if (_isExpanded) {
+      // Collapse expanded view
+      setState(() {
+        _isExpanded = false;
+        _expandedDefinition = null;
+      });
+      return;
+    }
+    
+    // Cycle through meanings if available
+    if (_isReverseLookup && _reverseLookupResult != null) {
+      if (_currentReverseIndex < _reverseLookupResult!.translations.length - 1) {
+        setState(() {
+          _currentReverseIndex++;
+        });
+      } else {
+        setState(() {
+          _currentReverseIndex = 0; // Loop back to first
+        });
+      }
+    } else if (_sourceLookupResult != null) {
+      if (_currentMeaningIndex < _sourceLookupResult!.meanings.length - 1) {
+        setState(() {
+          _currentMeaningIndex++;
+        });
+      } else {
+        setState(() {
+          _currentMeaningIndex = 0; // Loop back to first
+        });
+      }
+    }
   }
 
   /// Check availability of translation components and show prompts if missing
@@ -268,11 +349,11 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                       child: Container(
-                        width: 200,
-                        constraints: const BoxConstraints(
+                        width: _isExpanded ? 300 : 200,
+                        constraints: BoxConstraints(
                           minHeight: 50,
-                          maxHeight: 120,
-                          maxWidth: 200,
+                          maxHeight: _isExpanded ? 250 : 120,
+                          maxWidth: _isExpanded ? 300 : 200,
                         ),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
@@ -281,7 +362,11 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                             color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
                           ),
                         ),
-                        child: content,
+                        child: GestureDetector(
+                          onLongPress: _handleLongPress,
+                          onTap: _handleTap,
+                          child: content,
+                        ),
                       ),
                     ),
                   ),
@@ -357,7 +442,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Ultra-minimal: just emoji + translation
+          // Main translation row: emoji + translation
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -378,12 +463,111 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                     color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w500,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: _isExpanded ? null : 2,
+                  overflow: _isExpanded ? null : TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
+          
+          // Expanded content when long-pressed
+          if (_isExpanded) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Expanded definition header
+                  Text(
+                    'Full Definition:',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  
+                  // Show expanded definition (translated to home language)
+                  if (_expandedDefinition != null)
+                    Text(
+                      _expandedDefinition!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    )
+                  else
+                    // Show loading indicator while translating
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Translating definition...',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  
+                  // Show original context if available
+                  if (cyclableMeaning.meaning.context?.isNotEmpty == true) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Context: ${cyclableMeaning.meaning.context}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                  
+                  // Instructions
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap to collapse',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Show cycling hint when not expanded
+            if (cyclableMeaning.totalMeanings > 1) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Tap to cycle (${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings}) • Long press for full definition',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ] else ...[
+              const SizedBox(height: 4),
+              Text(
+                'Long press for full definition',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -402,7 +586,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Ultra-minimal: just emoji + translation
+          // Main translation row: emoji + translation
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -423,12 +607,99 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                     color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w500,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: _isExpanded ? null : 2,
+                  overflow: _isExpanded ? null : TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
+          
+          // Expanded content when long-pressed
+          if (_isExpanded) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Expanded translation header
+                  Text(
+                    'Full Translation:',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  
+                  // Show expanded translation (translated to home language)
+                  if (_expandedDefinition != null)
+                    Text(
+                      _expandedDefinition!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    )
+                  else
+                    // Show loading indicator while translating
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Translating...',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  
+                  // Instructions
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap to collapse',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Show cycling hint when not expanded
+            if (cyclableReverse.totalTranslations > 1) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Tap to cycle (${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations}) • Long press for full translation',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ] else ...[
+              const SizedBox(height: 4),
+              Text(
+                'Long press for full translation',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -556,8 +827,9 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       return {'left': 50.0, 'top': 100.0};
     }
     
-    // Simple positioning - center the smaller popup
-    final x = widget.position!.dx - 100; // Half of popup width (200)
+    // Adaptive positioning for different popup sizes
+    final popupWidth = _isExpanded ? 300.0 : 200.0;
+    final x = widget.position!.dx - (popupWidth / 2); // Center popup
     final y = widget.position!.dy + 20;   // Below selection
     
     return {'left': x.clamp(10.0, 400.0), 'top': y.clamp(50.0, 600.0)};
