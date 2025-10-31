@@ -97,6 +97,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   String? _expandedDefinition; // Store ML Kit translated expanded definition
   String? _sentenceTranslation; // Store ML Kit sentence translation
   bool _isSentenceLoading = false; // Loading state for sentence translation
+  String? _currentBestMatch; // Store the best matching word from sentence for current translation
   
   // Performance optimization: Cache calculated constraints
   BoxConstraints? _cachedConstraints;
@@ -241,20 +242,24 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       if (_currentReverseIndex < _reverseLookupResult!.translations.length - 1) {
         setState(() {
           _currentReverseIndex++;
+          _updateCurrentBestMatch();
         });
       } else {
         setState(() {
           _currentReverseIndex = 0; // Loop back to first
+          _updateCurrentBestMatch();
         });
       }
     } else if (_sourceLookupResult != null) {
       if (_currentMeaningIndex < _sourceLookupResult!.meanings.length - 1) {
         setState(() {
           _currentMeaningIndex++;
+          _updateCurrentBestMatch();
         });
       } else {
         setState(() {
           _currentMeaningIndex = 0; // Loop back to first
+          _updateCurrentBestMatch();
         });
       }
     }
@@ -338,6 +343,8 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
           _sourceLookupResult = prioritizedResult;
           _isReverseLookup = false;
           _isLoading = false;
+          // Store the best match for highlighting
+          _updateCurrentBestMatch();
         });
         return;
       }
@@ -362,6 +369,8 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
           _reverseLookupResult = prioritizedResult;
           _isReverseLookup = true;
           _isLoading = false;
+          // Store the best match for highlighting
+          _updateCurrentBestMatch();
         });
         return;
       }
@@ -1059,10 +1068,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   Widget _buildHighlightedSentenceTranslation() {
     final sentenceText = _sentenceTranslation!;
     
-    // Find the best matching word from current dictionary results
-    final bestMatch = _findBestMatchInSentence();
-    
-    if (bestMatch == null || bestMatch.isEmpty) {
+    if (_currentBestMatch == null || _currentBestMatch!.isEmpty) {
       // No match found, show plain text
       return Text(
         sentenceText,
@@ -1075,7 +1081,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       );
     }
     
-    print('🎯 Highlighting best match: "$bestMatch" in sentence: "$sentenceText"');
+    print('🎯 Highlighting stored best match: "$_currentBestMatch" in sentence: "$sentenceText"');
     
     // Split sentence into words and spaces separately to preserve formatting
     final pattern = RegExp(r'(\S+)'); // Match non-whitespace sequences
@@ -1084,7 +1090,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     int lastEnd = 0;
     bool hasHighlighted = false;
-    final normalizedBestMatch = _normalizeWord(bestMatch);
+    final normalizedBestMatch = _normalizeWord(_currentBestMatch!);
     
     for (final match in matches) {
       // Add any whitespace before this word
@@ -1104,14 +1110,10 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       final cleanWord = word.replaceAll(RegExp(r'''[.,!?;:'"]'''), '');
       final normalizedWord = _normalizeWord(cleanWord);
       
-      // Check if this word matches our best match (and we haven't highlighted yet)
-      if (!hasHighlighted && cleanWord.isNotEmpty && 
-          (normalizedWord == normalizedBestMatch || 
-           (normalizedWord.length > 2 && normalizedBestMatch.length > 2 && 
-            (normalizedWord.contains(normalizedBestMatch) || 
-             normalizedBestMatch.contains(normalizedWord))))) {
+      // Check if this word matches our stored best match (simple exact match after normalization)
+      if (!hasHighlighted && normalizedWord == normalizedBestMatch) {
         
-        print('🎯 Found match to highlight: "$word" (normalized: "$normalizedWord") matches "$bestMatch" (normalized: "$normalizedBestMatch")');
+        print('🎯 Found word to highlight: "$word" matches stored best match "$_currentBestMatch"');
         
         // Bold this word
         spans.add(TextSpan(
@@ -1158,65 +1160,6 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     );
   }
 
-  /// Find the best matching word from current dictionary results
-  String? _findBestMatchInSentence() {
-    String? bestCandidate;
-    
-    // Get the top translation candidate (first in list after prioritization)
-    if (_sourceLookupResult != null && _sourceLookupResult!.meanings.isNotEmpty) {
-      bestCandidate = _sourceLookupResult!.meanings[_currentMeaningIndex].meaning.targetMeaning;
-    } else if (_reverseLookupResult != null && _reverseLookupResult!.translations.isNotEmpty) {
-      bestCandidate = _reverseLookupResult!.translations[_currentReverseIndex].sourceWord;
-    }
-    
-    if (bestCandidate == null || _sentenceTranslation == null) {
-      return null;
-    }
-    
-    print('🎯 Looking for best candidate "$bestCandidate" in sentence');
-    
-    // Find this candidate in the sentence translation
-    final sentenceWords = _sentenceTranslation!.toLowerCase()
-        .split(RegExp(r'[\s\p{P}]+', unicode: true))
-        .where((word) => word.isNotEmpty)
-        .toList();
-    
-    final normalizedCandidate = _normalizeWord(bestCandidate);
-    
-    // Find the best matching word in the sentence - prioritize exact matches
-    String? bestSentenceMatch = null;
-    double bestScore = 0.0;
-    
-    for (final sentenceWord in sentenceWords) {
-      final normalizedSentenceWord = _normalizeWord(sentenceWord);
-      double score = 0.0;
-      
-      if (normalizedSentenceWord == normalizedCandidate) {
-        // Exact match - highest priority
-        score = 1.0;
-      } else if (normalizedSentenceWord.length > 2 && normalizedCandidate.length > 2) {
-        // Only consider substring matches for longer words
-        if (normalizedSentenceWord.contains(normalizedCandidate)) {
-          score = normalizedCandidate.length / normalizedSentenceWord.length;
-        } else if (normalizedCandidate.contains(normalizedSentenceWord)) {
-          score = normalizedSentenceWord.length / normalizedCandidate.length;
-        }
-      }
-      
-      if (score > bestScore) {
-        bestScore = score;
-        bestSentenceMatch = sentenceWord;
-      }
-    }
-    
-    if (bestSentenceMatch != null && bestScore > 0.5) {
-      print('🎯 Found best match: "$bestSentenceMatch" (score: ${bestScore.toStringAsFixed(3)}) for candidate "$bestCandidate"');
-      return bestSentenceMatch;
-    }
-    
-    print('🎯 No match found for candidate "$bestCandidate"');
-    return null;
-  }
 
   /// Handle missing components by showing unified installation prompt
   Future<void> _handleMissingComponents(MissingComponent missingComponent) async {
@@ -1492,6 +1435,51 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     print('🧠 SmartPrioritization: Final score: ${finalScore.toStringAsFixed(3)}');
     
     return result;
+  }
+
+  /// Update the current best match for highlighting based on current cycling position
+  void _updateCurrentBestMatch() {
+    if (_sentenceTranslation == null) {
+      _currentBestMatch = null;
+      return;
+    }
+
+    String? currentCandidate;
+    
+    // Get current candidate based on cycling position
+    if (_sourceLookupResult != null && _sourceLookupResult!.meanings.isNotEmpty) {
+      currentCandidate = _sourceLookupResult!.meanings[_currentMeaningIndex].meaning.targetMeaning;
+    } else if (_reverseLookupResult != null && _reverseLookupResult!.translations.isNotEmpty) {
+      currentCandidate = _reverseLookupResult!.translations[_currentReverseIndex].sourceWord;
+    }
+    
+    if (currentCandidate == null) {
+      _currentBestMatch = null;
+      return;
+    }
+    
+    print('🎯 Updating best match for current candidate: "$currentCandidate"');
+    
+    // Find the best match in sentence translation using same logic as prioritization
+    final sentenceWords = _sentenceTranslation!.toLowerCase()
+        .split(RegExp(r'[\s\p{P}]+', unicode: true))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    
+    final normalizedCandidate = _normalizeWord(currentCandidate);
+    
+    for (final sentenceWord in sentenceWords) {
+      final normalizedSentenceWord = _normalizeWord(sentenceWord);
+      
+      if (normalizedSentenceWord == normalizedCandidate) {
+        _currentBestMatch = sentenceWord;
+        print('🎯 Stored best match: "$sentenceWord" for candidate "$currentCandidate"');
+        return;
+      }
+    }
+    
+    print('🎯 No exact match found for candidate "$currentCandidate"');
+    _currentBestMatch = null;
   }
   
   /// Calculate fuzzy similarity between candidate and sentence word
