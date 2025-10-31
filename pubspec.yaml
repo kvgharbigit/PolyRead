@@ -23,6 +23,9 @@ dependencies:
   # HTTP
   http: ^1.1.0
   
+  # Typography
+  google_fonts: ^6.1.0
+  
   # File management  
   path_provider: ^2.1.5
   path: ^1.8.3

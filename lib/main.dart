@@ -12,6 +12,7 @@ import 'core/providers/file_service_provider.dart';
 import 'features/translation/services/cycling_dictionary_service.dart';
 // Dictionary loader service removed - using cycling dictionary system
 import 'core/utils/constants.dart';
+import 'core/themes/polyread_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -124,9 +125,9 @@ class PolyReadApp extends ConsumerWidget {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       
-      // Theme configuration based on settings
-      theme: _buildTheme(Brightness.light, settings.fontSize),
-      darkTheme: _buildTheme(Brightness.dark, settings.fontSize),
+      // PolyRead theme system replacing Material Design
+      theme: _buildPolyReadTheme(Brightness.light, settings),
+      darkTheme: _buildPolyReadTheme(Brightness.dark, settings),
       themeMode: _getThemeMode(settings.themeMode),
       
       // Router configuration
@@ -134,65 +135,16 @@ class PolyReadApp extends ConsumerWidget {
     );
   }
   
-  ThemeData _buildTheme(Brightness brightness, double fontSize) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: Colors.blue,
-      brightness: brightness,
-    );
+  /// Build PolyRead theme based on user settings and system brightness
+  ThemeData _buildPolyReadTheme(Brightness brightness, dynamic settings) {
+    // Default to warm light theme, but this could be made configurable
+    final themeType = brightness == Brightness.dark 
+        ? ReadingThemeType.trueDark 
+        : ReadingThemeType.warmLight;
     
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: colorScheme,
-      textTheme: _buildTextTheme(fontSize),
-      appBarTheme: AppBarTheme(
-        centerTitle: true,
-        backgroundColor: colorScheme.surface,
-        foregroundColor: colorScheme.onSurface,
-        elevation: 0,
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: colorScheme.surface,
-        indicatorColor: colorScheme.primaryContainer,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface,
-            );
-          }
-          return TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: colorScheme.onSurfaceVariant,
-          );
-        }),
-      ),
-      cardTheme: CardThemeData(
-        elevation: 2,
-        color: colorScheme.surface,
-        surfaceTintColor: colorScheme.surfaceTint,
-      ),
-    );
-  }
-  
-  TextTheme _buildTextTheme(double baseFontSize) {
-    return TextTheme(
-      displayLarge: TextStyle(fontSize: baseFontSize + 24),
-      displayMedium: TextStyle(fontSize: baseFontSize + 20),
-      displaySmall: TextStyle(fontSize: baseFontSize + 16),
-      headlineLarge: TextStyle(fontSize: baseFontSize + 12),
-      headlineMedium: TextStyle(fontSize: baseFontSize + 8),
-      headlineSmall: TextStyle(fontSize: baseFontSize + 4),
-      titleLarge: TextStyle(fontSize: baseFontSize + 6),
-      titleMedium: TextStyle(fontSize: baseFontSize + 2),
-      titleSmall: TextStyle(fontSize: baseFontSize),
-      bodyLarge: TextStyle(fontSize: baseFontSize + 2),
-      bodyMedium: TextStyle(fontSize: baseFontSize),
-      bodySmall: TextStyle(fontSize: baseFontSize - 2),
-      labelLarge: TextStyle(fontSize: baseFontSize),
-      labelMedium: TextStyle(fontSize: baseFontSize - 1),
-      labelSmall: TextStyle(fontSize: baseFontSize - 2),
+    return PolyReadTheme.createTheme(
+      themeType: themeType,
+      brightness: brightness,
     );
   }
   
