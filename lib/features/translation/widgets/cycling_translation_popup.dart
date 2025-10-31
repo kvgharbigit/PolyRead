@@ -268,11 +268,11 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                       child: Container(
-                        width: 280,
+                        width: 200,
                         constraints: const BoxConstraints(
-                          minHeight: 80,
-                          maxHeight: 300,
-                          maxWidth: 280,
+                          minHeight: 50,
+                          maxHeight: 120,
+                          maxWidth: 200,
                         ),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
@@ -296,16 +296,24 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
 
   Widget _buildLoadingView() {
     return Container(
-      padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
-      child: Column(
+      padding: const EdgeInsets.all(12),
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: PolyReadSpacing.elementSpacing),
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(
-            'Looking up "${widget.selectedText}"...',
-            style: PolyReadTypography.interfaceCaption,
-            textAlign: TextAlign.center,
+            'Translating...',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         ],
       ),
@@ -314,30 +322,22 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
 
   Widget _buildErrorView() {
     return Container(
-      padding: const EdgeInsets.all(PolyReadSpacing.sectionSpacing),
-      child: Column(
+      padding: const EdgeInsets.all(12),
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.warning_rounded,
-            color: Theme.of(context).colorScheme.error,
-            size: 32,
-          ),
-          const SizedBox(height: PolyReadSpacing.elementSpacing),
           Text(
-            'Translation Error',
-            style: PolyReadTypography.interfaceHeadline.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            textAlign: TextAlign.center,
+            '❌',
+            style: const TextStyle(fontSize: 18),
           ),
-          const SizedBox(height: PolyReadSpacing.smallSpacing),
-          Text(
-            _error ?? 'Unknown error occurred',
-            style: PolyReadTypography.interfaceCaption.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Translation failed',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -351,72 +351,41 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
     
-    return SingleChildScrollView(
-      child: Container(
-        padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-              // Word and meaning with emoji indicator
+    return Container(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Ultra-minimal: just emoji + translation
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Part-of-speech emoji indicator
               Text(
-                widget.selectedText,
-                style: PolyReadTypography.translationWord.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
+                PartOfSpeechEmojis.getEmojiForPOS(
+                  cyclableMeaning.meaning.partOfSpeech, 
+                  language: widget.sourceLanguage,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 18),
               ),
-              const SizedBox(height: PolyReadSpacing.smallSpacing),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Part-of-speech emoji indicator
-                  Text(
-                    PartOfSpeechEmojis.getEmojiForPOS(
-                      cyclableMeaning.meaning.partOfSpeech, 
-                      language: widget.sourceLanguage,
-                    ),
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(width: 6),
-                  // Translation text
-                  Expanded(
-                    child: Text(
-                      cyclableMeaning.displayTranslation,
-                      style: PolyReadTypography.translationMeaning.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              if (cyclableMeaning.meaning.context?.isNotEmpty == true) ...[
-                const SizedBox(height: PolyReadSpacing.microSpacing),
-                Text(
-                  cyclableMeaning.meaning.context!,
-                  style: PolyReadTypography.translationContext.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+              const SizedBox(width: 8),
+              // Translation text
+              Expanded(
+                child: Text(
+                  cyclableMeaning.displayTranslation,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ],
-              
-              // Close button
-              const SizedBox(height: PolyReadSpacing.elementSpacing),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: widget.onClose,
-                  child: Text('Close'),
-                ),
               ),
             ],
           ),
-        ),
+        ],
+      ),
     );
   }
 
@@ -427,127 +396,77 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
     
-    return SingleChildScrollView(
-        child: Container(
-          padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Ultra-minimal: just emoji + translation
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Word and translation with emoji indicator
+              // Part-of-speech emoji indicator
               Text(
-                widget.selectedText,
-                style: PolyReadTypography.translationWord.copyWith(
-                  color: Theme.of(context).colorScheme.secondary,
+                PartOfSpeechEmojis.getEmojiForPOS(
+                  cyclableReverse.partOfSpeech, 
+                  language: widget.targetLanguage,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 18),
               ),
-              const SizedBox(height: PolyReadSpacing.smallSpacing),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Part-of-speech emoji indicator
-                  Text(
-                    PartOfSpeechEmojis.getEmojiForPOS(
-                      cyclableReverse.partOfSpeech, 
-                      language: widget.targetLanguage,
-                    ),
-                    style: const TextStyle(fontSize: 16),
+              const SizedBox(width: 8),
+              // Translation text
+              Expanded(
+                child: Text(
+                  cyclableReverse.displayTranslation,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(width: 6),
-                  // Translation text
-                  Expanded(
-                    child: Text(
-                      cyclableReverse.displayTranslation,
-                      style: PolyReadTypography.translationMeaning.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              
-              // Close button
-              const SizedBox(height: PolyReadSpacing.elementSpacing),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: widget.onClose,
-                  child: Text('Close'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-        ),
+        ],
+      ),
     );
   }
 
   Widget _buildMlKitFallbackView() {
-    return SingleChildScrollView(
-        child: Container(
-          padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Ultra-minimal: just brain emoji + translation
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Word and translation with generic emoji for AI
-              Text(
-                widget.selectedText,
-                style: PolyReadTypography.translationWord.copyWith(
-                  color: Theme.of(context).colorScheme.tertiary,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              // AI translation indicator (brain emoji)
+              const Text(
+                '🧠',
+                style: TextStyle(fontSize: 18),
               ),
-              const SizedBox(height: PolyReadSpacing.smallSpacing),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // AI translation indicator (brain emoji)
-                  const Text(
-                    '🧠',
-                    style: TextStyle(fontSize: 16),
+              const SizedBox(width: 8),
+              // Translation text
+              Expanded(
+                child: Text(
+                  _mlKitFallbackResult!,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(width: 6),
-                  // Translation text
-                  Expanded(
-                    child: Text(
-                      _mlKitFallbackResult!,
-                      style: PolyReadTypography.translationMeaning.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: PolyReadSpacing.microSpacing),
-              Text(
-                '(AI Translation)',
-                style: PolyReadTypography.translationContext.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              
-              // Close button
-              const SizedBox(height: PolyReadSpacing.elementSpacing),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: widget.onClose,
-                  child: Text('Close'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-        ),
+        ],
+      ),
     );
   }
 
@@ -637,8 +556,8 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       return {'left': 50.0, 'top': 100.0};
     }
     
-    // Simple positioning - center the popup
-    final x = widget.position!.dx - 150; // Half of popup width (300)
+    // Simple positioning - center the smaller popup
+    final x = widget.position!.dx - 100; // Half of popup width (200)
     final y = widget.position!.dy + 20;   // Below selection
     
     return {'left': x.clamp(10.0, 400.0), 'top': y.clamp(50.0, 600.0)};
