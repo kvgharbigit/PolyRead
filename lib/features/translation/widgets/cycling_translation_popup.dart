@@ -482,17 +482,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Expanded definition header
-                  Text(
-                    'Full Definition:',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  
-                  // Show expanded definition (translated to home language)
+                  // Just the expanded definition content
                   if (_expandedDefinition != null)
                     Text(
                       _expandedDefinition!,
@@ -501,48 +491,39 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                       ),
                     )
                   else
-                    // Show loading indicator while translating
+                    // Minimal loading indicator
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
-                          width: 14,
-                          height: 14,
+                          width: 12,
+                          height: 12,
                           child: CircularProgressIndicator(
                             strokeWidth: 1.5,
                             color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Text(
-                          'Translating definition...',
+                          'Translating...',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontStyle: FontStyle.italic,
                           ),
                         ),
                       ],
                     ),
                   
-                  // Show original context if available
+                  // Show context if available (without "Context:" label)
                   if (cyclableMeaning.meaning.context?.isNotEmpty == true) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
-                      'Context: ${cyclableMeaning.meaning.context}',
+                      cyclableMeaning.meaning.context!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
                   ],
-                  
-                  // Instructions
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap to collapse',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -620,17 +601,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Expanded translation header
-                  Text(
-                    'Full Translation:',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  
-                  // Show expanded translation (translated to home language)
+                  // Just the expanded translation content
                   if (_expandedDefinition != null)
                     Text(
                       _expandedDefinition!,
@@ -639,36 +610,27 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                       ),
                     )
                   else
-                    // Show loading indicator while translating
+                    // Minimal loading indicator
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
-                          width: 14,
-                          height: 14,
+                          width: 12,
+                          height: 12,
                           child: CircularProgressIndicator(
                             strokeWidth: 1.5,
                             color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Text(
                           'Translating...',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontStyle: FontStyle.italic,
                           ),
                         ),
                       ],
                     ),
-                  
-                  // Instructions
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap to collapse',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
                 ],
               ),
             ),
