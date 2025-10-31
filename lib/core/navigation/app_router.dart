@@ -10,6 +10,7 @@ import 'package:polyread/presentation/onboarding/onboarding_screen.dart';
 import 'package:polyread/presentation/reader/reader_screen.dart';
 import 'package:polyread/presentation/settings/settings_screen.dart';
 import 'package:polyread/features/language_packs/widgets/language_pack_manager.dart';
+import 'package:polyread/core/providers/immersive_mode_provider.dart';
 
 // Route paths
 class AppRoutes {
@@ -25,7 +26,11 @@ class AppRoutes {
 final routerProvider = Provider<GoRouter>((ref) {
   final settings = ref.watch(settingsProvider);
   
+  final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+  final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
+
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: settings.showOnboarding ? AppRoutes.onboarding : AppRoutes.library,
     routes: [
       // Onboarding flow
@@ -37,7 +42,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       
       // Main shell with bottom navigation
       ShellRoute(
+        navigatorKey: shellNavigatorKey,
         builder: (context, state, child) {
+          print('MainShell: Building with bottom navigation bar for path: ${state.uri}');
           return MainShell(child: child);
         },
         routes: [
@@ -68,26 +75,28 @@ final routerProvider = Provider<GoRouter>((ref) {
             name: 'vocabulary',
             builder: (context, state) => const VocabularyPlaceholderScreen(),
           ),
+          
+          // Reader screen (now inside shell, will conditionally hide bottom nav)
+          GoRoute(
+            path: '${AppRoutes.reader}/:bookId',
+            name: 'reader',
+            builder: (context, state) {
+              print('Router: Building reader route for path: ${state.uri}');
+              final bookIdStr = state.pathParameters['bookId'];
+              if (bookIdStr == null) {
+                return const ErrorScreen(message: 'Invalid book ID');
+              }
+              
+              final bookId = int.tryParse(bookIdStr);
+              if (bookId == null) {
+                return ErrorScreen(message: 'Invalid book ID: $bookIdStr');
+              }
+              
+              print('Router: Reader route in shell - bottom nav controlled by immersive mode');
+              return ReaderScreen(bookId: bookId);
+            },
+          ),
         ],
-      ),
-      
-      // Reader screen (full screen, no bottom nav)
-      GoRoute(
-        path: '${AppRoutes.reader}/:bookId',
-        name: 'reader',
-        builder: (context, state) {
-          final bookIdStr = state.pathParameters['bookId'];
-          if (bookIdStr == null) {
-            return const ErrorScreen(message: 'Invalid book ID');
-          }
-          
-          final bookId = int.tryParse(bookIdStr);
-          if (bookId == null) {
-            return ErrorScreen(message: 'Invalid book ID: $bookIdStr');
-          }
-          
-          return ReaderScreen(bookId: bookId);
-        },
       ),
     ],
     
@@ -128,9 +137,16 @@ class MainShell extends StatelessWidget {
   
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: const MainBottomNavigationBar(),
+    return Consumer(
+      builder: (context, ref, _) {
+        final isImmersive = ref.watch(immersiveModeProvider);
+        print('MainShell: Building with immersive mode: $isImmersive');
+        
+        return Scaffold(
+          body: child,
+          bottomNavigationBar: isImmersive ? null : const MainBottomNavigationBar(),
+        );
+      },
     );
   }
 }

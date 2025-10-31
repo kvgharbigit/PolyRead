@@ -22,6 +22,7 @@ import 'package:polyread/features/reader/providers/reader_translation_provider.d
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/core/providers/database_provider.dart';
 import 'package:polyread/core/providers/settings_provider.dart';
+import 'package:polyread/core/providers/immersive_mode_provider.dart';
 import 'package:polyread/core/utils/constants.dart';
 
 class BookReaderWidget extends ConsumerStatefulWidget {
@@ -67,8 +68,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   // Reader settings
   ReaderSettings _readerSettings = ReaderSettings.defaultSettings();
   
-  // Immersive reading mode state
-  bool _immersiveMode = false;
+  // Immersive reading mode timer (state managed by provider)
   Timer? _immersiveModeTimer;
   
   @override
@@ -82,6 +82,10 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   void dispose() {
     _progressTimer?.cancel();
     _immersiveModeTimer?.cancel();
+    
+    // Reset immersive mode when leaving reader
+    ref.read(immersiveModeProvider.notifier).setImmersiveMode(false);
+    
     _readerEngine?.dispose();
     // Don't dispose translation service here - it's managed by Riverpod
     _settingsService?.dispose();
@@ -314,12 +318,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   }
 
   void _toggleImmersiveMode() {
-    setState(() {
-      _immersiveMode = !_immersiveMode;
-    });
+    final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
+    immersiveModeNotifier.toggle();
+    
+    final isImmersive = ref.read(immersiveModeProvider);
     
     // Optional: Auto-show UI after 10 seconds of immersive mode
-    if (_immersiveMode) {
+    if (isImmersive) {
       _startImmersiveModeTimer();
     } else {
       _immersiveModeTimer?.cancel();
@@ -329,10 +334,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   void _startImmersiveModeTimer() {
     _immersiveModeTimer?.cancel();
     _immersiveModeTimer = Timer(const Duration(seconds: 10), () {
-      if (mounted && _immersiveMode) {
-        setState(() {
-          _immersiveMode = false;
-        });
+      if (mounted) {
+        final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
+        immersiveModeNotifier.setImmersiveMode(false);
       }
     });
   }
@@ -391,6 +395,11 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   
   @override
   Widget build(BuildContext context) {
+    final isImmersive = ref.watch(immersiveModeProvider);
+    
+    // Debug: Check if we're in the correct route context
+    print('BookReader: Building in immersive mode: $isImmersive');
+    
     // Update translation service context for dialog prompts (only if context changed)
     if (_translationService != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -446,7 +455,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     return Theme(
       data: _readerSettings.getThemeData(context),
       child: Scaffold(
-        appBar: _immersiveMode ? null : _buildAppBar(),
+        appBar: isImmersive ? null : _buildAppBar(),
         body: _buildReaderBody(),
         extendBodyBehindAppBar: true, // Extend body behind app bar
       ),
@@ -525,15 +534,19 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       return const Center(child: Text('Reader not initialized'));
     }
     
-    return Stack(
-      children: [
-        // Main reader content
-        _buildReaderContent(),
+    // Wrap entire reader body with double-tap gesture for immersive mode
+    return GestureDetector(
+      onDoubleTap: _toggleImmersiveMode,
+      behavior: HitTestBehavior.translucent,
+      child: Stack(
+        children: [
+          // Main reader content
+          _buildReaderContent(),
         
         // Immersive view removed - was interfering with text selection
         
-        // Reading progress indicator (hidden in immersive mode)
-        if (!_immersiveMode)
+        // Reading progress indicator (hidden in immersive mode)  
+        if (!ref.watch(immersiveModeProvider))
           Positioned(
             bottom: 0,
             left: 0,
@@ -576,17 +589,14 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
               ),
             ],
           ),
-      ],
+        ],
+      ),
     );
   }
   
   Widget _buildReaderContent() {
-    // Wrap reader with double-tap gesture for immersive mode toggle
-    return GestureDetector(
-      onDoubleTap: _toggleImmersiveMode,
-      behavior: HitTestBehavior.translucent,
-      child: _readerEngine!.buildReader(context),
-    );
+    // Reader content without gesture detector (now handled at body level)
+    return _readerEngine!.buildReader(context);
   }
   
   
