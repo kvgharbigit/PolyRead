@@ -1083,7 +1083,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     bool hasHighlighted = false;
     for (final word in words) {
-      final cleanWord = word.replaceAll(RegExp(r'[.,!?;:\'""]'), '').toLowerCase();
+      final cleanWord = word.replaceAll(RegExp(r'''[.,!?;:'"]'''), '').toLowerCase();
       final normalizedBestMatch = _normalizeWord(bestMatch);
       final normalizedWord = _normalizeWord(cleanWord);
       
