@@ -3,6 +3,7 @@
 // Minimal working version for compilation
 
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,6 +28,25 @@ class _ContentMetrics {
     required this.estimatedMinHeight,
     required this.estimatedLines,
     required this.hasLongContent,
+  });
+}
+
+/// Word prioritization result with scoring details
+class _WordPrioritizationResult {
+  final double fuzzySimilarity;
+  final double positionScore;
+  final double finalScore;
+  final String bestMatch;
+  final int expectedPosition;
+  final int actualPosition;
+  
+  const _WordPrioritizationResult({
+    required this.fuzzySimilarity,
+    required this.positionScore,
+    required this.finalScore,
+    required this.bestMatch,
+    required this.expectedPosition,
+    required this.actualPosition,
   });
 }
 
@@ -310,8 +330,12 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       print('CyclingPopup: Source lookup result - hasResults: ${sourceResult.hasResults}');
       if (sourceResult.hasResults) {
         print('CyclingPopup: Source lookup found ${sourceResult.meanings.length} meanings');
+        
+        // Apply smart prioritization if we have sentence translation
+        final prioritizedResult = await _applySmartPrioritization(sourceResult, false);
+        
         setState(() {
-          _sourceLookupResult = sourceResult;
+          _sourceLookupResult = prioritizedResult;
           _isReverseLookup = false;
           _isLoading = false;
         });
@@ -330,8 +354,12 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       print('CyclingPopup: Reverse lookup result - hasResults: ${reverseResult.hasResults}');
       if (reverseResult.hasResults) {
         print('CyclingPopup: Reverse lookup found ${reverseResult.translations.length} translations');
+        
+        // Apply smart prioritization if we have sentence translation
+        final prioritizedResult = await _applySmartPrioritization(reverseResult, true);
+        
         setState(() {
-          _reverseLookupResult = reverseResult;
+          _reverseLookupResult = prioritizedResult;
           _isReverseLookup = true;
           _isLoading = false;
         });
@@ -1151,5 +1179,277 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     y = y.clamp(safeTop, safeBottom);
     
     return {'left': x, 'top': y};
+  }
+
+  /// Apply smart prioritization to dictionary results using ML Kit sentence translation
+  Future<dynamic> _applySmartPrioritization(dynamic lookupResult, bool isReverseLookup) async {
+    print('🧠 SmartPrioritization: Starting smart prioritization...');
+    print('🧠 SmartPrioritization: Is reverse lookup: $isReverseLookup');
+    
+    // Wait for sentence translation to complete if it's still loading
+    if (_sentenceTranslation == null && _isSentenceLoading) {
+      print('🧠 SmartPrioritization: Waiting for sentence translation to complete...');
+      // Wait a bit for sentence translation, but don't block indefinitely
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    
+    // If we don't have sentence translation, return original results
+    if (_sentenceTranslation == null || _sentenceTranslation!.trim().isEmpty) {
+      print('🧠 SmartPrioritization: No sentence translation available, using original order');
+      return lookupResult;
+    }
+    
+    print('🧠 SmartPrioritization: Using sentence translation: "${_sentenceTranslation}"');
+    print('🧠 SmartPrioritization: Selected word: "${widget.selectedText}"');
+    print('🧠 SmartPrioritization: Source context: "${widget.context}"');
+    
+    // Calculate expected position of the word in the source sentence
+    final expectedPosition = _calculateExpectedPosition();
+    
+    if (isReverseLookup) {
+      return _prioritizeReverseResults(lookupResult as ReverseLookupResult, expectedPosition);
+    } else {
+      return _prioritizeSourceResults(lookupResult as MeaningLookupResult, expectedPosition);
+    }
+  }
+  
+  /// Prioritize source lookup results (meanings)
+  MeaningLookupResult _prioritizeSourceResults(MeaningLookupResult sourceResult, int expectedPosition) {
+    print('🧠 SmartPrioritization: Prioritizing ${sourceResult.meanings.length} source meanings');
+    
+    final prioritizedMeanings = <CyclableMeaning>[];
+    final scoringResults = <String, _WordPrioritizationResult>{};
+    
+    for (final meaning in sourceResult.meanings) {
+      final targetMeaning = meaning.meaning.targetMeaning;
+      final score = _calculateWordPriorityScore(targetMeaning, expectedPosition);
+      
+      print('🧠 SmartPrioritization: "${targetMeaning}" -> Score: ${score.finalScore.toStringAsFixed(3)} (similarity: ${score.fuzzySimilarity.toStringAsFixed(3)}, position: ${score.positionScore.toStringAsFixed(3)})');
+      
+      scoringResults[targetMeaning] = score;
+      prioritizedMeanings.add(meaning);
+    }
+    
+    // Sort by final score (highest first)
+    prioritizedMeanings.sort((a, b) {
+      final scoreA = scoringResults[a.meaning.targetMeaning]?.finalScore ?? 0.0;
+      final scoreB = scoringResults[b.meaning.targetMeaning]?.finalScore ?? 0.0;
+      return scoreB.compareTo(scoreA);
+    });
+    
+    print('🧠 SmartPrioritization: Final order: ${prioritizedMeanings.map((m) => '"${m.meaning.targetMeaning}" (${scoringResults[m.meaning.targetMeaning]?.finalScore.toStringAsFixed(3)})').join(', ')}');
+    
+    return MeaningLookupResult(
+      query: sourceResult.query,
+      meanings: prioritizedMeanings,
+      sourceLanguage: sourceResult.sourceLanguage,
+      targetLanguage: sourceResult.targetLanguage,
+      latencyMs: sourceResult.latencyMs,
+      fromCache: sourceResult.fromCache,
+    );
+  }
+  
+  /// Prioritize reverse lookup results (translations)
+  ReverseLookupResult _prioritizeReverseResults(ReverseLookupResult reverseResult, int expectedPosition) {
+    print('🧠 SmartPrioritization: Prioritizing ${reverseResult.translations.length} reverse translations');
+    
+    final prioritizedTranslations = <CyclableReverseLookup>[];
+    final scoringResults = <String, _WordPrioritizationResult>{};
+    
+    for (final translation in reverseResult.translations) {
+      final sourceWord = translation.sourceWord;
+      final score = _calculateWordPriorityScore(sourceWord, expectedPosition);
+      
+      print('🧠 SmartPrioritization: "${sourceWord}" -> Score: ${score.finalScore.toStringAsFixed(3)} (similarity: ${score.fuzzySimilarity.toStringAsFixed(3)}, position: ${score.positionScore.toStringAsFixed(3)})');
+      
+      scoringResults[sourceWord] = score;
+      prioritizedTranslations.add(translation);
+    }
+    
+    // Sort by final score (highest first)
+    prioritizedTranslations.sort((a, b) {
+      final scoreA = scoringResults[a.sourceWord]?.finalScore ?? 0.0;
+      final scoreB = scoringResults[b.sourceWord]?.finalScore ?? 0.0;
+      return scoreB.compareTo(scoreA);
+    });
+    
+    print('🧠 SmartPrioritization: Final order: ${prioritizedTranslations.map((t) => '"${t.sourceWord}" (${scoringResults[t.sourceWord]?.finalScore.toStringAsFixed(3)})').join(', ')}');
+    
+    return ReverseLookupResult(
+      query: reverseResult.query,
+      translations: prioritizedTranslations,
+      sourceLanguage: reverseResult.sourceLanguage,
+      targetLanguage: reverseResult.targetLanguage,
+      latencyMs: reverseResult.latencyMs,
+      fromCache: reverseResult.fromCache,
+    );
+  }
+  
+  /// Calculate priority score for a word candidate based on fuzzy similarity and position
+  _WordPrioritizationResult _calculateWordPriorityScore(String candidate, int expectedPosition) {
+    final sentenceWords = _sentenceTranslation!.toLowerCase()
+        .split(RegExp(r'[\s\p{P}]+', unicode: true))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    
+    print('🧠 SmartPrioritization: Sentence words: [${sentenceWords.join(', ')}]');
+    print('🧠 SmartPrioritization: Evaluating candidate: "${candidate}"');
+    print('🧠 SmartPrioritization: Expected position: $expectedPosition');
+    
+    // Find best fuzzy match in the sentence
+    double bestFuzzySimilarity = 0.0;
+    String bestMatch = '';
+    int actualPosition = -1;
+    
+    for (int i = 0; i < sentenceWords.length; i++) {
+      final sentenceWord = sentenceWords[i];
+      final similarity = _calculateFuzzySimilarity(candidate, sentenceWord);
+      
+      if (similarity > bestFuzzySimilarity) {
+        bestFuzzySimilarity = similarity;
+        bestMatch = sentenceWord;
+        actualPosition = i;
+      }
+    }
+    
+    // Calculate position score (closer to expected = higher score)
+    double positionScore = 0.0;
+    if (bestFuzzySimilarity > 0.0 && sentenceWords.isNotEmpty) {
+      final distance = (expectedPosition - actualPosition).abs();
+      final maxDistance = sentenceWords.length;
+      positionScore = maxDistance > 0 ? 1.0 - (distance / maxDistance) : 1.0;
+    }
+    
+    // Weighted final score: 80% similarity, 20% position
+    final finalScore = (bestFuzzySimilarity * 0.8) + (positionScore * 0.2);
+    
+    final result = _WordPrioritizationResult(
+      fuzzySimilarity: bestFuzzySimilarity,
+      positionScore: positionScore,
+      finalScore: finalScore,
+      bestMatch: bestMatch,
+      expectedPosition: expectedPosition,
+      actualPosition: actualPosition,
+    );
+    
+    print('🧠 SmartPrioritization: Best match: "${bestMatch}" at position $actualPosition');
+    print('🧠 SmartPrioritization: Fuzzy similarity: ${bestFuzzySimilarity.toStringAsFixed(3)}');
+    print('🧠 SmartPrioritization: Position score: ${positionScore.toStringAsFixed(3)}');
+    print('🧠 SmartPrioritization: Final score: ${finalScore.toStringAsFixed(3)}');
+    
+    return result;
+  }
+  
+  /// Calculate fuzzy similarity between candidate and sentence word
+  double _calculateFuzzySimilarity(String candidate, String sentenceWord) {
+    final normCandidate = _normalizeWord(candidate);
+    final normSentenceWord = _normalizeWord(sentenceWord);
+    
+    // Exact match
+    if (normCandidate == normSentenceWord) {
+      return 1.0;
+    }
+    
+    // Substring match (handles conjugations and partial words)
+    if (normSentenceWord.contains(normCandidate) || normCandidate.contains(normSentenceWord)) {
+      final longerLength = math.max(normCandidate.length, normSentenceWord.length);
+      final shorterLength = math.min(normCandidate.length, normSentenceWord.length);
+      
+      // Score based on how much of the longer word is covered
+      return shorterLength / longerLength * 0.8;
+    }
+    
+    // Levenshtein similarity for spelling variations and accent differences
+    final distance = _levenshteinDistance(normCandidate, normSentenceWord);
+    final maxLen = math.max(normCandidate.length, normSentenceWord.length);
+    
+    if (maxLen == 0) return 0.0;
+    
+    final similarity = 1.0 - (distance / maxLen);
+    
+    // Only consider it a match if similarity is above threshold and words are not too short
+    if (similarity >= 0.7 && maxLen >= 3) {
+      return similarity * 0.6; // Reduced score for fuzzy matches
+    }
+    
+    return 0.0;
+  }
+  
+  /// Normalize word for comparison (remove accents, lowercase, trim)
+  String _normalizeWord(String word) {
+    return word
+        .toLowerCase()
+        .trim()
+        // Remove common punctuation
+        .replaceAll(RegExp(r'''[.,!?;:'"]'''), '')
+        // Normalize common accent variations
+        .replaceAll('á', 'a').replaceAll('à', 'a').replaceAll('ä', 'a').replaceAll('â', 'a')
+        .replaceAll('é', 'e').replaceAll('è', 'e').replaceAll('ë', 'e').replaceAll('ê', 'e')
+        .replaceAll('í', 'i').replaceAll('ì', 'i').replaceAll('ï', 'i').replaceAll('î', 'i')
+        .replaceAll('ó', 'o').replaceAll('ò', 'o').replaceAll('ö', 'o').replaceAll('ô', 'o')
+        .replaceAll('ú', 'u').replaceAll('ù', 'u').replaceAll('ü', 'u').replaceAll('û', 'u')
+        .replaceAll('ñ', 'n').replaceAll('ç', 'c');
+  }
+  
+  /// Calculate Levenshtein distance between two strings
+  int _levenshteinDistance(String a, String b) {
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+    
+    final List<List<int>> matrix = List.generate(
+      a.length + 1,
+      (i) => List.generate(b.length + 1, (j) => 0),
+    );
+    
+    // Initialize first row and column
+    for (int i = 0; i <= a.length; i++) {
+      matrix[i][0] = i;
+    }
+    for (int j = 0; j <= b.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    // Fill the matrix
+    for (int i = 1; i <= a.length; i++) {
+      for (int j = 1; j <= b.length; j++) {
+        final cost = a[i - 1] == b[j - 1] ? 0 : 1;
+        matrix[i][j] = math.min(
+          math.min(
+            matrix[i - 1][j] + 1,     // deletion
+            matrix[i][j - 1] + 1,     // insertion
+          ),
+          matrix[i - 1][j - 1] + cost, // substitution
+        );
+      }
+    }
+    
+    return matrix[a.length][b.length];
+  }
+  
+  /// Calculate expected position of the selected word in the source sentence
+  int _calculateExpectedPosition() {
+    if (widget.context == null || widget.context!.trim().isEmpty) {
+      return 0; // Default to beginning if no context
+    }
+    
+    final sourceWords = widget.context!.toLowerCase()
+        .split(RegExp(r'[\s\p{P}]+', unicode: true))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    
+    final normalizedSelectedWord = _normalizeWord(widget.selectedText);
+    
+    // Find the position of the selected word in the source sentence
+    for (int i = 0; i < sourceWords.length; i++) {
+      final normalizedSourceWord = _normalizeWord(sourceWords[i]);
+      if (normalizedSourceWord.contains(normalizedSelectedWord) || 
+          normalizedSelectedWord.contains(normalizedSourceWord)) {
+        print('🧠 SmartPrioritization: Found selected word "${widget.selectedText}" at position $i in source sentence');
+        return i;
+      }
+    }
+    
+    print('🧠 SmartPrioritization: Selected word "${widget.selectedText}" not found in context, defaulting to position 0');
+    return 0; // Default to beginning if word not found
   }
 }
