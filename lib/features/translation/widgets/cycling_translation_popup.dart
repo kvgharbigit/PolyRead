@@ -1049,19 +1049,121 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
           ),
         ),
         const SizedBox(height: 4),
-        // Translated sentence - fully visible without line limits
-        Text(
-          _sentenceTranslation!,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface,
-            height: 1.4, // Slightly more line height for readability
-            fontSize: 14, // Slightly smaller for longer text
-          ),
-          // No maxLines limit - let it expand as needed
-          softWrap: true,
-        ),
+        // Translated sentence with bolded matched words
+        _buildHighlightedSentenceTranslation(),
       ],
     );
+  }
+
+  /// Build sentence translation with the best matching word bolded
+  Widget _buildHighlightedSentenceTranslation() {
+    final sentenceText = _sentenceTranslation!;
+    
+    // Find the best matching word from current dictionary results
+    final bestMatch = _findBestMatchInSentence();
+    
+    if (bestMatch == null || bestMatch.isEmpty) {
+      // No match found, show plain text
+      return Text(
+        sentenceText,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurface,
+          height: 1.4,
+          fontSize: 14,
+        ),
+        softWrap: true,
+      );
+    }
+    
+    print('🎯 Highlighting best match: "$bestMatch" in sentence: "$sentenceText"');
+    
+    // Split sentence into words and find the best match to bold
+    final words = sentenceText.split(RegExp(r'(\s+)')); // Preserve whitespace
+    final spans = <TextSpan>[];
+    
+    bool hasHighlighted = false;
+    for (final word in words) {
+      final cleanWord = word.replaceAll(RegExp(r'[.,!?;:\'""]'), '').toLowerCase();
+      final normalizedBestMatch = _normalizeWord(bestMatch);
+      final normalizedWord = _normalizeWord(cleanWord);
+      
+      // Check if this word matches our best match (and we haven't highlighted yet)
+      if (!hasHighlighted && (normalizedWord == normalizedBestMatch || 
+          normalizedWord.contains(normalizedBestMatch) || 
+          normalizedBestMatch.contains(normalizedWord))) {
+        
+        print('🎯 Found match to highlight: "$word" matches "$bestMatch"');
+        
+        // Bold this word
+        spans.add(TextSpan(
+          text: word,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+            height: 1.4,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ));
+        hasHighlighted = true;
+      } else {
+        // Regular word
+        spans.add(TextSpan(
+          text: word,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+            height: 1.4,
+            fontSize: 14,
+          ),
+        ));
+      }
+    }
+    
+    return RichText(
+      text: TextSpan(children: spans),
+      softWrap: true,
+    );
+  }
+
+  /// Find the best matching word from current dictionary results
+  String? _findBestMatchInSentence() {
+    String? bestCandidate;
+    
+    // Get the top translation candidate (first in list after prioritization)
+    if (_sourceLookupResult != null && _sourceLookupResult!.meanings.isNotEmpty) {
+      bestCandidate = _sourceLookupResult!.meanings[_currentMeaningIndex].meaning.targetMeaning;
+    } else if (_reverseLookupResult != null && _reverseLookupResult!.translations.isNotEmpty) {
+      bestCandidate = _reverseLookupResult!.translations[_currentReverseIndex].sourceWord;
+    }
+    
+    if (bestCandidate == null || _sentenceTranslation == null) {
+      return null;
+    }
+    
+    print('🎯 Looking for best candidate "$bestCandidate" in sentence');
+    
+    // Find this candidate in the sentence translation
+    final sentenceWords = _sentenceTranslation!.toLowerCase()
+        .split(RegExp(r'[\s\p{P}]+', unicode: true))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    
+    final normalizedCandidate = _normalizeWord(bestCandidate);
+    
+    // Find the best matching word in the sentence
+    for (final sentenceWord in sentenceWords) {
+      final normalizedSentenceWord = _normalizeWord(sentenceWord);
+      
+      if (normalizedSentenceWord == normalizedCandidate ||
+          normalizedSentenceWord.contains(normalizedCandidate) ||
+          normalizedCandidate.contains(normalizedSentenceWord)) {
+        
+        print('🎯 Found best match: "$sentenceWord" for candidate "$bestCandidate"');
+        return sentenceWord;
+      }
+    }
+    
+    print('🎯 No match found for candidate "$bestCandidate"');
+    return null;
   }
 
   /// Handle missing components by showing unified installation prompt
