@@ -351,8 +351,8 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                       child: Container(
                         width: _isExpanded ? 300 : 200,
                         constraints: BoxConstraints(
-                          minHeight: 50,
-                          maxHeight: _isExpanded ? 250 : 120,
+                          minHeight: 60,
+                          maxHeight: _isExpanded ? 250 : 130,
                           maxWidth: _isExpanded ? 300 : 200,
                         ),
                         decoration: BoxDecoration(
@@ -436,12 +436,13 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
     
-    return Container(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    return SingleChildScrollView(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
           // Main translation row: emoji + translation
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -547,28 +548,34 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Show cycling hint when not expanded
+            // Show cycling hint when not expanded (simplified to prevent overflow)
             if (cyclableMeaning.totalMeanings > 1) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
-                'Tap to cycle (${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings}) • Long press for full definition',
+                '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings} • Tap=cycle, Hold=expand',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 10,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ] else ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
-                'Long press for full definition',
+                'Hold to expand',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 10,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 1,
               ),
             ],
           ],
         ],
+      ),
       ),
     );
   }
@@ -580,12 +587,13 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
     
-    return Container(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    return SingleChildScrollView(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
           // Main translation row: emoji + translation
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -679,28 +687,34 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
               ),
             ),
           ] else ...[
-            // Show cycling hint when not expanded
+            // Show cycling hint when not expanded (simplified to prevent overflow)
             if (cyclableReverse.totalTranslations > 1) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
-                'Tap to cycle (${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations}) • Long press for full translation',
+                '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations} • Tap=cycle, Hold=expand',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 10,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ] else ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
-                'Long press for full translation',
+                'Hold to expand',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 10,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 1,
               ),
             ],
           ],
         ],
+      ),
       ),
     );
   }
