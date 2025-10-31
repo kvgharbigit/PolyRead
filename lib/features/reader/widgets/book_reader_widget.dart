@@ -67,8 +67,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   // Reader settings
   ReaderSettings _readerSettings = ReaderSettings.defaultSettings();
   
-  // UI state (immersive mode removed)
-  Timer? _uiHideTimer;
+  // Immersive reading mode state
+  bool _immersiveMode = false;
+  Timer? _immersiveModeTimer;
   
   @override
   void initState() {
@@ -80,7 +81,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   @override
   void dispose() {
     _progressTimer?.cancel();
-    _uiHideTimer?.cancel();
+    _immersiveModeTimer?.cancel();
     _readerEngine?.dispose();
     // Don't dispose translation service here - it's managed by Riverpod
     _settingsService?.dispose();
@@ -311,6 +312,30 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     
     // Translation popup closed
   }
+
+  void _toggleImmersiveMode() {
+    setState(() {
+      _immersiveMode = !_immersiveMode;
+    });
+    
+    // Optional: Auto-show UI after 10 seconds of immersive mode
+    if (_immersiveMode) {
+      _startImmersiveModeTimer();
+    } else {
+      _immersiveModeTimer?.cancel();
+    }
+  }
+
+  void _startImmersiveModeTimer() {
+    _immersiveModeTimer?.cancel();
+    _immersiveModeTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted && _immersiveMode) {
+        setState(() {
+          _immersiveMode = false;
+        });
+      }
+    });
+  }
   
   void _addToVocabulary(String word) {
     // TODO: Implement vocabulary service integration
@@ -421,7 +446,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     return Theme(
       data: _readerSettings.getThemeData(context),
       child: Scaffold(
-        appBar: _buildAppBar(),
+        appBar: _immersiveMode ? null : _buildAppBar(),
         body: _buildReaderBody(),
         extendBodyBehindAppBar: true, // Extend body behind app bar
       ),
@@ -507,23 +532,24 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
         
         // Immersive view removed - was interfering with text selection
         
-        // Reading progress indicator
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: Container(
-            height: 2,
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: _readerEngine!.progress,
-              child: Container(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+        // Reading progress indicator (hidden in immersive mode)
+        if (!_immersiveMode)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 2,
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: _readerEngine!.progress,
+                child: Container(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+                ),
               ),
             ),
           ),
-        ),
         
         // Translation popup overlay with tap-outside-to-dismiss
         if (_showTranslationPopup && _selectedText != null)
@@ -555,10 +581,12 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   }
   
   Widget _buildReaderContent() {
-    // For now, return the engine's reader wrapped with interactive text
-    // This is a simplified version - in reality, we'd need to extract
-    // text from PDF/EPUB engines and wrap it with InteractiveText
-    return _readerEngine!.buildReader(context);
+    // Wrap reader with double-tap gesture for immersive mode toggle
+    return GestureDetector(
+      onDoubleTap: _toggleImmersiveMode,
+      behavior: HitTestBehavior.translucent,
+      child: _readerEngine!.buildReader(context),
+    );
   }
   
   
