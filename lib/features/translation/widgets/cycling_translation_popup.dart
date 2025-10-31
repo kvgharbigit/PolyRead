@@ -1,12 +1,11 @@
-// Cycling Translation Popup with expansion UI pattern
-// Supports tap-to-cycle + long-press/tap-to-expand for any language pair
+// Enhanced Cycling Translation Popup
+// Based on PolyBook's superior UI patterns with improved positioning and animations
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/meaning_entry.dart';
 import '../services/cycling_dictionary_service.dart';
-import '../../../core/providers/database_provider.dart';
 import '../../reader/providers/reader_translation_provider.dart';
 
 class CyclingTranslationPopup extends ConsumerStatefulWidget {
@@ -33,8 +32,15 @@ class CyclingTranslationPopup extends ConsumerStatefulWidget {
   ConsumerState<CyclingTranslationPopup> createState() => _CyclingTranslationPopupState();
 }
 
-class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopup> {
+class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopup>
+    with TickerProviderStateMixin {
   late CyclingDictionaryService _dictionaryService;
+  
+  // Animation controllers (PolyBook-inspired)
+  late AnimationController _fadeController;
+  late AnimationController _scaleController;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
   
   // Source → Target lookup state
   MeaningLookupResult? _sourceLookupResult;
@@ -59,8 +65,42 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   void initState() {
     super.initState();
     _dictionaryService = ref.read(cyclingDictionaryServiceProvider);
+    
+    // Initialize animations (PolyBook pattern)
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
+    );
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
+    );
+    
+    // Start animations and lookup
+    _showPopup();
     _performLookup();
   }
+  
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    _scaleController.dispose();
+    super.dispose();
+  }
+  
+  void _showPopup() {
+    _fadeController.forward();
+    _scaleController.forward();
+  }
+  
+  // Animation methods - _hidePopup() removed as animations are handled in dispose
 
   Future<void> _performLookup() async {
     print('🔍 Translation popup: Starting lookup for "${widget.selectedText}" (${widget.sourceLanguage} → ${widget.targetLanguage})');
@@ -199,9 +239,14 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   }
 
   Future<void> _loadSentenceTranslation() async {
+    print('🔄 Loading sentence translation...');
+    print('📝 Context: ${widget.context?.isNotEmpty == true ? "Available (${widget.context!.length} chars)" : "None"}');
+    print('🔧 Translation service: ${widget.translationService != null ? "Available" : "Null"}');
+    
     if (widget.context == null || 
         widget.context!.isEmpty || 
         widget.translationService == null) {
+      print('❌ Sentence translation skipped: missing context or service');
       return;
     }
 
@@ -211,6 +256,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
 
     try {
       final sentence = _extractSentenceFromContext();
+      print('📄 Extracted sentence: "${sentence.isEmpty ? "EMPTY" : sentence}"');
       if (sentence.isEmpty) {
         setState(() {
           _sentenceLoading = false;
@@ -218,11 +264,23 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
         return;
       }
 
+      print('📤 Calling translateText for: "${sentence.substring(0, sentence.length.clamp(0, 50))}..."');
+      
       final response = await widget.translationService?.translateText(
         text: sentence,
         sourceLanguage: widget.sourceLanguage,
         targetLanguage: widget.targetLanguage,
       );
+
+      print('📤 Translation response received: ${response != null ? "Success" : "Null"}');
+      if (response != null) {
+        print('❌ Has error: ${response.error ?? "None"}');
+        print('📝 Translated text length: ${response.translatedText.length}');
+        print('🔧 Provider: ${response.providerId ?? "Unknown"}');
+        if (response.translatedText.isNotEmpty) {
+          print('✅ Translation: "${response.translatedText.substring(0, response.translatedText.length.clamp(0, 50))}..."');
+        }
+      }
 
       setState(() {
         _sentenceTranslation = (response != null && response.error == null && response.translatedText.isNotEmpty) 
@@ -230,7 +288,11 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
             : null;
         _sentenceLoading = false;
       });
+      
+      // Debug: Final sentence translation result
+      // print('🎯 Final sentence translation: ${_sentenceTranslation ?? "NULL"}');
     } catch (e) {
+      print('❌ Sentence translation error: $e');
       setState(() {
         _sentenceLoading = false;
       });
@@ -269,27 +331,21 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   }
 
   Widget _buildLoadingView() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 8),
+          CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 16),
           Text(
             'Looking up "${widget.selectedText}"...',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -297,67 +353,70 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   }
 
   Widget _buildErrorView() {
-    // More comprehensive detection of missing language pack scenarios
+    // PolyBook-style error detection
     final isLanguagePackMissing = _error?.contains('Language pack not installed') == true ||
                                   _error?.contains('No translation found') == true ||
                                   _error?.contains('Dictionary not available') == true ||
                                   _error?.toLowerCase().contains('missing') == true ||
                                   _error?.toLowerCase().contains('not available') == true;
     
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           Icon(
-            isLanguagePackMissing ? Icons.download : Icons.error_outline,
+            isLanguagePackMissing ? Icons.download_outlined : Icons.error_outline,
             color: isLanguagePackMissing 
                 ? Theme.of(context).colorScheme.primary
                 : Theme.of(context).colorScheme.error,
-            size: 32,
+            size: 40,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             isLanguagePackMissing 
-                ? 'Dictionary not available'
-                : 'Translation error',
+                ? '📦 Language Pack Required'
+                : '❌ Translation Failed',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             isLanguagePackMissing 
-                ? 'Install ${widget.sourceLanguage}-${widget.targetLanguage} language pack to translate "${widget.selectedText}"'
+                ? 'Download ${widget.sourceLanguage}-${widget.targetLanguage} dictionary to translate "${widget.selectedText}"'
                 : _error!,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             textAlign: TextAlign.center,
           ),
           if (isLanguagePackMissing) ...[
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _openLanguagePackManager,
-              icon: const Icon(Icons.download),
-              label: const Text('Install Language Packs'),
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Download Dictionary'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This will download ~2-3MB and enable offline translation.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ],
+        ),
       ),
     );
   }
@@ -366,242 +425,273 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     final meaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
     final isExpanded = _meaningExpanded;
     
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return SingleChildScrollView(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with source word and language info
-          Row(
-            children: [
-              Text(
-                meaning.sourceWord,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (meaning.partOfSpeechTag != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    meaning.partOfSpeechTag!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              const Spacer(),
-              Text(
-                meaning.languagePair,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 12),
-          
-          // Main translation area (tappable for cycling and expansion)
-          GestureDetector(
-            onTap: _sourceLookupResult!.meanings.length > 1 ? _cycleToNextMeaning : _toggleExpansion,
-            onLongPress: _toggleExpansion,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isExpanded ? meaning.expandedTranslation : meaning.displayTranslation,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  if (meaning.isPrimary)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'PRIMARY',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+          // PolyBook-style content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Word Header Section
+                _buildWordHeader(meaning),
+                const SizedBox(height: 16),
+                
+                // Translation Section
+                _buildTranslationSection(meaning, isExpanded),
+                const SizedBox(height: 16),
+                
+                // Sentence Translation (if available)
+                if (widget.context != null && widget.context!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _buildSentenceSection(),
                 ],
-              ),
+              ],
             ),
           ),
           
-          const SizedBox(height: 12),
-          
-          // Bottom controls and info
-          Row(
-            children: [
-              // Cycling indicator
-              if (_sourceLookupResult!.meanings.length > 1) ...[
-                Icon(
-                  Icons.touch_app,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Tap (${_currentMeaningIndex + 1}/${_sourceLookupResult!.meanings.length})',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              
-              // Expansion indicator
-              Icon(
-                Icons.info_outline,
-                size: 16,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Hold for details',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              
-              const Spacer(),
-              
-              // Close button
-              IconButton(
-                onPressed: widget.onClose,
-                icon: const Icon(Icons.close),
-                iconSize: 20,
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-          
-          // Sentence translation (if available)
-          if (widget.context != null && widget.context!.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _buildSentenceTranslation(),
-          ],
+          // PolyBook-style Action Bar
+          _buildActionBar(),
         ],
       ),
     );
   }
-
-  Widget _buildSentenceTranslation() {
+  
+  Widget _buildWordHeader(CyclableMeaning meaning) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  meaning.sourceWord,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  meaning.languagePair.toUpperCase(),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (meaning.partOfSpeechTag != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                meaning.partOfSpeechTag!.toUpperCase(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildTranslationSection(CyclableMeaning meaning, bool isExpanded) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Divider
-        Divider(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-          height: 1,
+        // Section Title
+        Text(
+          '📝 Translation',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
         const SizedBox(height: 12),
         
-        // Section header
-        Row(
-          children: [
-            Icon(
-              Icons.text_fields,
-              size: 16,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Sentence Translation',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        
-        // Translated sentence
-        if (_sentenceLoading)
-          Row(
-            children: [
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Translating sentence...',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          )
-        else if (_sentenceTranslation != null)
-          Container(
+        // Translation Item
+        GestureDetector(
+          onTap: _sourceLookupResult!.meanings.length > 1 ? _cycleToNextMeaning : _toggleExpansion,
+          onLongPress: _toggleExpansion,
+          child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(6),
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
               ),
             ),
-            child: Text(
-              _sentenceTranslation!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSecondaryContainer,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isExpanded ? meaning.expandedTranslation : meaning.displayTranslation,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (meaning.isPrimary) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'PRIMARY',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (_sourceLookupResult!.meanings.length > 1)
+                      Text(
+                        'Tap (${_currentMeaningIndex + 1}/${_sourceLookupResult!.meanings.length})',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    const Spacer(),
+                    Text(
+                      'Hold for details',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-        
-        const SizedBox(height: 8),
-        
-        // Original sentence with highlighted word
-        _buildClickableOriginalSentence(),
+        ),
       ],
     );
   }
-
-  Widget _buildClickableOriginalSentence() {
+  
+  Widget _buildSentenceSection() {
+    print('🏗️ Building sentence section - Loading: $_sentenceLoading, Translation: ${_sentenceTranslation != null ? "Available" : "None"}');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Title
+        Text(
+          '📖 Sentence Translation',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        
+        // Sentence Content
+        if (_sentenceLoading)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Translating sentence...',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (_sentenceTranslation != null || _sentenceLoading)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_sentenceLoading)
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Translating sentence...',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSecondaryContainer.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    _sentenceTranslation ?? 'Sentence translation not available',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                _buildContextWithHighlight(),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+  
+  Widget _buildContextWithHighlight() {
     if (widget.context == null || widget.context!.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -635,13 +725,12 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     }
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(6),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
       ),
       child: RichText(
@@ -652,164 +741,263 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       ),
     );
   }
+  
+  Widget _buildActionBar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: widget.onClose,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              ),
+              child: Text(
+                'Close',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () {
+                // TODO: Add save to vocabulary functionality
+                widget.onClose?.call();
+              },
+              icon: const Icon(Icons.bookmark_add, size: 18),
+              label: const Text('Save'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Old methods removed - replaced by new sectioned components
 
   Widget _buildReverseLookupView() {
     final translation = _reverseLookupResult!.translations[_currentReverseIndex];
     final isExpanded = _reverseExpanded;
     
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return SingleChildScrollView(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with target word and language info
-          Row(
-            children: [
-              Text(
-                translation.targetWord,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (translation.partOfSpeechTag != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    translation.partOfSpeechTag!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              const Spacer(),
-              Text(
-                '${widget.targetLanguage}→${widget.sourceLanguage}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 12),
-          
-          // Main translation area (tappable for cycling and expansion)
-          GestureDetector(
-            onTap: _reverseLookupResult!.translations.length > 1 ? _cycleToNextMeaning : _toggleExpansion,
-            onLongPress: _toggleExpansion,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isExpanded ? translation.expandedTranslation : translation.displayTranslation,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  if (translation.qualityIndicator.isNotEmpty)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        translation.qualityIndicator,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                      ),
-                    ),
+          // PolyBook-style content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Word Header Section
+                _buildReverseWordHeader(translation),
+                const SizedBox(height: 16),
+                
+                // Translation Section
+                _buildReverseTranslationSection(translation, isExpanded),
+                const SizedBox(height: 16),
+                
+                // Sentence Translation (if available)
+                if (widget.context != null && widget.context!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _buildSentenceSection(),
                 ],
-              ),
+              ],
             ),
           ),
           
-          const SizedBox(height: 12),
-          
-          // Bottom controls and info
-          Row(
-            children: [
-              // Cycling indicator
-              if (_reverseLookupResult!.translations.length > 1) ...[
-                Icon(
-                  Icons.touch_app,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Tap (${_currentReverseIndex + 1}/${_reverseLookupResult!.translations.length})',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              
-              // Expansion indicator
-              Icon(
-                Icons.info_outline,
-                size: 16,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Hold for details',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              
-              const Spacer(),
-              
-              // Close button
-              IconButton(
-                onPressed: widget.onClose,
-                icon: const Icon(Icons.close),
-                iconSize: 20,
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-          
-          // Sentence translation (if available)
-          if (widget.context != null && widget.context!.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _buildSentenceTranslation(),
-          ],
+          // PolyBook-style Action Bar
+          _buildActionBar(),
         ],
       ),
     );
+  }
+  
+  Widget _buildReverseWordHeader(CyclableReverseLookup translation) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  translation.targetWord,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${widget.targetLanguage}→${widget.sourceLanguage}'.toUpperCase(),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (translation.partOfSpeechTag != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                translation.partOfSpeechTag!.toUpperCase(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildReverseTranslationSection(CyclableReverseLookup translation, bool isExpanded) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Title
+        Text(
+          '🔄 Reverse Translation',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.secondary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        
+        // Translation Item
+        GestureDetector(
+          onTap: _reverseLookupResult!.translations.length > 1 ? _cycleToNextMeaning : _toggleExpansion,
+          onLongPress: _toggleExpansion,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isExpanded ? translation.expandedTranslation : translation.displayTranslation,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.secondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (translation.qualityIndicator.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.secondary,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          translation.qualityIndicator,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSecondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (_reverseLookupResult!.translations.length > 1)
+                      Flexible(
+                        child: Text(
+                          'Tap (${_currentReverseIndex + 1}/${_reverseLookupResult!.translations.length})',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    const Spacer(),
+                    Flexible(
+                      child: Text(
+                        'Hold for details',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // PolyBook-inspired position calculation
+  Map<String, double> _calculatePopupPosition() {
+    if (widget.position == null) {
+      return {'left': 50, 'top': 100};
+    }
+
+    final screenSize = MediaQuery.of(context).size;
+    final position = widget.position!;
+    
+    // PolyBook's simpler approach
+    const popupWidth = 300.0;
+    const popupHeight = 250.0;
+    
+    double x = position.dx - popupWidth / 2;
+    double y = position.dy - popupHeight - 10; // Above the selection
+    
+    // Simple boundary checks (PolyBook pattern)
+    if (x < 20) x = 20;
+    if (x + popupWidth > screenSize.width - 20) {
+      x = screenSize.width - popupWidth - 20;
+    }
+    if (y < 60) y = position.dy + 30; // Below if no space above
+    
+    return {'left': x, 'top': y};
   }
 
   @override
@@ -828,93 +1016,44 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       content = _buildErrorView();
     }
 
-    // Calculate optimal position to keep popup on screen
-    final screenSize = MediaQuery.of(context).size;
-    final tapPosition = widget.position ?? const Offset(50, 100);
-    
-    // Popup dimensions - more realistic estimates
-    const popupWidth = 300.0;
-    const popupMinHeight = 120.0; // Minimum height for loading/error states
-    const popupMaxHeight = 250.0; // More conservative max height
-    const margin = 16.0; // Margin from screen edges
-    const tapOffset = 40.0; // Offset from tap point
-    
-    // Calculate horizontal position
-    double left = tapPosition.dx;
-    if (left + popupWidth + margin > screenSize.width) {
-      // Would go off right edge, position to the left of tap
-      left = tapPosition.dx - popupWidth;
-      print('📍 Popup positioned to left of tap (${tapPosition.dx} → $left)');
-    }
-    if (left < margin) {
-      // Would go off left edge, clamp to margin
-      left = margin;
-      print('📍 Popup clamped to left margin ($left)');
-    }
-    
-    // Calculate vertical position with better logic
-    double top = tapPosition.dy + tapOffset; // Position below tap point
-    final bottomBoundary = screenSize.height - margin;
-    final topBoundary = margin;
-    
-    // Check if popup would go off bottom
-    if (top + popupMaxHeight > bottomBoundary) {
-      // Try positioning above tap point
-      final alternateTop = tapPosition.dy - popupMaxHeight - tapOffset;
-      if (alternateTop >= topBoundary) {
-        // Fits above, use it
-        top = alternateTop;
-        print('📍 Popup positioned above tap (${tapPosition.dy} → $top)');
-      } else {
-        // Doesn't fit above either, find best position
-        final spaceAbove = tapPosition.dy - topBoundary;
-        final spaceBelow = bottomBoundary - (tapPosition.dy + tapOffset);
-        
-        if (spaceBelow >= popupMinHeight) {
-          // Use space below, but clamp to fit
-          top = tapPosition.dy + tapOffset;
-          print('📍 Popup positioned below with limited space');
-        } else if (spaceAbove >= popupMinHeight) {
-          // Use space above
-          top = topBoundary;
-          print('📍 Popup positioned at top with limited space');
-        } else {
-          // Very little space, center on tap point
-          top = (tapPosition.dy - popupMaxHeight / 2).clamp(topBoundary, bottomBoundary - popupMaxHeight);
-          print('📍 Popup centered on tap due to limited space');
-        }
-      }
-    }
-    
-    // Final bounds check
-    if (top < topBoundary) {
-      top = topBoundary;
-      print('📍 Popup clamped to top boundary ($top)');
-    }
-    if (top + popupMinHeight > bottomBoundary) {
-      top = bottomBoundary - popupMinHeight;
-      print('📍 Popup clamped to bottom boundary ($top)');
-    }
-    
-    print('📍 Final popup position: ($left, $top) for tap at (${tapPosition.dx}, ${tapPosition.dy}) on ${screenSize.width}x${screenSize.height} screen');
+    final position = _calculatePopupPosition();
 
-    return Positioned(
-      left: left,
-      top: top,
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.transparent,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 300,
-            minWidth: 250,
-            minHeight: 120, // Ensure minimum height
-            maxHeight: 250, // More conservative max height
+    // PolyBook-style Modal with animations
+    return AnimatedBuilder(
+      animation: Listenable.merge([_fadeAnimation, _scaleAnimation]),
+      builder: (context, child) {
+        return Positioned(
+          left: position['left'],
+          top: position['top'],
+          child: Opacity(
+            opacity: _fadeAnimation.value,
+            child: Transform.scale(
+              scale: _scaleAnimation.value,
+              child: Material(
+                elevation: 12,
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.transparent,
+                shadowColor: Colors.black.withValues(alpha: 0.25),
+                child: Container(
+                  width: 280,
+                  constraints: const BoxConstraints(
+                    minHeight: 120,
+                    maxHeight: 500,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: content,
+                ),
+              ),
+            ),
           ),
-          child: content,
-        ),
-      ),
+        );
+      },
     );
   }
   

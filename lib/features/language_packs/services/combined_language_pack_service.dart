@@ -8,6 +8,7 @@ import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/features/translation/services/cycling_dictionary_service.dart';
+import 'package:polyread/features/translation/services/translation_service.dart';
 import 'package:polyread/features/language_packs/repositories/github_releases_repo.dart';
 import 'package:polyread/features/language_packs/models/download_progress.dart';
 import 'package:polyread/features/language_packs/services/zip_extraction_service.dart';
@@ -17,6 +18,7 @@ class CombinedLanguagePackService {
   final AppDatabase _database;
   final GitHubReleasesRepository _repository;
   final CyclingDictionaryService _dictionaryService;
+  final TranslationService _translationService;
   
   // Progress stream for download tracking
   final StreamController<DownloadProgress> _progressController = StreamController<DownloadProgress>.broadcast();
@@ -27,7 +29,7 @@ class CombinedLanguagePackService {
   final Map<String, CancelToken> _cancelTokens = {};
   Map<String, DownloadProgress> get activeDownloads => Map.unmodifiable(_activeDownloads);
   
-  CombinedLanguagePackService(this._database, this._repository) 
+  CombinedLanguagePackService(this._database, this._repository, this._translationService) 
       : _dictionaryService = CyclingDictionaryService(_database);
   
   /// Check if cycling dictionary is available for language pair
@@ -324,11 +326,28 @@ class CombinedLanguagePackService {
           // Ignore cleanup errors
         }
         
-        // Step 5: Mark as installed in database
+        // Step 5: Download ML Kit models for complete language pack
+        print('🤖 Downloading ML Kit models for $packId...');
+        _progressController.add(DownloadProgress(
+          packId: packId,
+          packName: packId,
+          status: DownloadStatus.downloading,
+          downloadedBytes: 0,
+          totalBytes: 100,
+          progressPercent: 85.0,
+          filesCompleted: 2,
+          totalFiles: 3,
+          startTime: startTime,
+          stageDescription: 'Downloading ML Kit translation models...',
+        ));
+        
+        await _downloadMLKitModels(sourceLanguage, targetLanguage);
+        
+        // Step 6: Mark as installed in database
         print('📝 Marking $packId as installed...');
         await _markPackAsInstalled(packId, sourceLanguage, targetLanguage);
         
-        // Step 6: Complete installation
+        // Step 7: Complete installation
         print('🎉 Installation completed for $packId!');
         final completedProgress = DownloadProgress(
           packId: packId,
@@ -584,6 +603,49 @@ class CombinedLanguagePackService {
     } catch (e) {
       print('⚠️ Test lookup failed: $e');
       // Don't throw - this is just verification, not critical
+    }
+  }
+  
+  /// Download ML Kit translation models for the language pair
+  Future<void> _downloadMLKitModels(String sourceLanguage, String targetLanguage) async {
+    try {
+      print('📱 Attempting to download ML Kit models: $sourceLanguage → $targetLanguage');
+      
+      // Download models for both directions to ensure full language pack functionality
+      final futures = <Future>[];
+      
+      // Forward direction (e.g., en → es)
+      futures.add(_downloadMLKitModelDirection(_translationService, sourceLanguage, targetLanguage));
+      
+      // Reverse direction (e.g., es → en) 
+      futures.add(_downloadMLKitModelDirection(_translationService, targetLanguage, sourceLanguage));
+      
+      await Future.wait(futures);
+      
+      print('✅ ML Kit models download completed');
+      
+    } catch (e) {
+      print('⚠️ ML Kit models download failed: $e');
+      // Don't fail the entire installation for ML Kit issues
+    }
+  }
+  
+  /// Download ML Kit models for a specific direction
+  Future<void> _downloadMLKitModelDirection(TranslationService translationService, String source, String target) async {
+    try {
+      final result = await translationService.downloadModels(
+        sourceLanguage: source,
+        targetLanguage: target,
+        wifiOnly: true,
+      );
+      
+      if (result.success) {
+        print('✅ ML Kit models downloaded: $source → $target');
+      } else {
+        print('⚠️ ML Kit model download failed: $source → $target - ${result.message}');
+      }
+    } catch (e) {
+      print('⚠️ ML Kit model download error: $source → $target - $e');
     }
   }
   

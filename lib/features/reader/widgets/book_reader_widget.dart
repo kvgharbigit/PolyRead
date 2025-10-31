@@ -219,7 +219,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       }
       
       // Check if text is too long (likely accidental selection)
-      if (trimmedText.length > 50) {
+      // Allow longer text for sentence translation (increased from 50 to 200 characters)
+      if (trimmedText.length > 200) {
         print('BookReader: Text too long, likely accidental selection: ${trimmedText.length} chars');
         return;
       }

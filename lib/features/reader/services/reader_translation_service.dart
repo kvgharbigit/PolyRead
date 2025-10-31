@@ -306,6 +306,22 @@ class ReaderTranslationService extends ChangeNotifier {
     };
   }
 
+  /// Direct translation method for sentence translation
+  /// Delegates to the underlying TranslationService
+  Future<response_model.TranslationResponse> translateText({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+    bool useCache = true,
+  }) async {
+    return await _translationService.translateText(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      useCache: useCache,
+    );
+  }
+
   @override
   void dispose() {
     // Clear state without notifying listeners during disposal

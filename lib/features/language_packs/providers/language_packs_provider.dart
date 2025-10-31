@@ -9,6 +9,7 @@ import '../services/combined_language_pack_service.dart';
 import '../models/download_progress.dart';
 import '../../../core/utils/constants.dart';
 import '../../../core/providers/database_provider.dart';
+import '../../reader/providers/reader_translation_provider.dart';
 
 /// GitHub Releases Repository Provider
 /// Configured to use the correct repository (kvgharbigit/PolyRead)
@@ -25,8 +26,9 @@ final githubReleasesRepositoryProvider = Provider<GitHubReleasesRepository>((ref
 final combinedLanguagePackServiceProvider = Provider<CombinedLanguagePackService>((ref) {
   final database = ref.watch(databaseProvider);
   final repository = ref.watch(githubReleasesRepositoryProvider);
+  final translationService = ref.watch(translationServiceProvider);
   
-  return CombinedLanguagePackService(database, repository);
+  return CombinedLanguagePackService(database, repository, translationService);
 });
 
 /// Download Progress Stream Provider
