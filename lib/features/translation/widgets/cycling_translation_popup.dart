@@ -126,10 +126,10 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     if (_isReverseLookup && _reverseLookupResult != null) {
       final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
-      fullDefinition = cyclableReverse.expandedTranslation;
+      fullDefinition = cyclableReverse.displayTranslation; // Use display instead of expanded to avoid duplication
     } else if (_sourceLookupResult != null) {
       final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
-      fullDefinition = cyclableMeaning.expandedTranslation;
+      fullDefinition = cyclableMeaning.meaning.targetMeaning; // Use just the target meaning to avoid context duplication
     } else if (_mlKitFallbackResult != null) {
       fullDefinition = _mlKitFallbackResult!;
     }
