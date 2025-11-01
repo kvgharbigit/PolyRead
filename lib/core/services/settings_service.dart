@@ -8,8 +8,8 @@ class SettingsService {
   static const String _keyDefaultTargetLanguage = 'default_target_language';
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyFontSize = 'font_size';
-  static const String _keyTranslationProvider = 'translation_provider';
-  static const String _keyAutoDownloadModels = 'auto_download_models';
+  // Translation provider is now handled automatically with fallbacks
+  // Auto download models removed - users should always be prompted
   static const String _keyMaxStorageMB = 'max_storage_mb';
   static const String _keyShowOnboarding = 'show_onboarding';
   
@@ -50,17 +50,7 @@ class SettingsService {
     await _prefs.setDouble(_keyFontSize, size);
   }
   
-  // Translation Settings
-  String get translationProvider => _prefs.getString(_keyTranslationProvider) ?? 'ml_kit';
-  bool get autoDownloadModels => _prefs.getBool(_keyAutoDownloadModels) ?? true;
-  
-  Future<void> setTranslationProvider(String provider) async {
-    await _prefs.setString(_keyTranslationProvider, provider);
-  }
-  
-  Future<void> setAutoDownloadModels(bool enabled) async {
-    await _prefs.setBool(_keyAutoDownloadModels, enabled);
-  }
+  // Translation settings removed - handled automatically by fallback system
   
   // Storage Settings
   int get maxStorageMB => _prefs.getInt(_keyMaxStorageMB) ?? 500;
@@ -114,8 +104,6 @@ class SettingsService {
       'defaultTargetLanguage': defaultTargetLanguage,
       'themeMode': themeMode,
       'fontSize': fontSize,
-      'translationProvider': translationProvider,
-      'autoDownloadModels': autoDownloadModels,
       'maxStorageMB': maxStorageMB,
       'cyclingEnabled': cyclingEnabled,
       'cyclingSpeed': cyclingSpeed,
@@ -137,12 +125,6 @@ class SettingsService {
     }
     if (settings['fontSize'] != null) {
       await setFontSize(settings['fontSize']);
-    }
-    if (settings['translationProvider'] != null) {
-      await setTranslationProvider(settings['translationProvider']);
-    }
-    if (settings['autoDownloadModels'] != null) {
-      await setAutoDownloadModels(settings['autoDownloadModels']);
     }
     if (settings['maxStorageMB'] != null) {
       await setMaxStorageMB(settings['maxStorageMB']);

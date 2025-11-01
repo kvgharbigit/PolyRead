@@ -30,8 +30,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       defaultTargetLanguage: _service.defaultTargetLanguage,
       themeMode: _service.themeMode,
       fontSize: _service.fontSize,
-      translationProvider: _service.translationProvider,
-      autoDownloadModels: _service.autoDownloadModels,
       maxStorageMB: _service.maxStorageMB,
       showOnboarding: _service.showOnboarding,
     );
@@ -57,15 +55,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     state = state.copyWith(fontSize: size);
   }
   
-  Future<void> setTranslationProvider(String provider) async {
-    await _service.setTranslationProvider(provider);
-    state = state.copyWith(translationProvider: provider);
-  }
-  
-  Future<void> setAutoDownloadModels(bool enabled) async {
-    await _service.setAutoDownloadModels(enabled);
-    state = state.copyWith(autoDownloadModels: enabled);
-  }
+  // Translation settings removed - handled automatically by fallback system
   
   Future<void> setMaxStorageMB(int mb) async {
     await _service.setMaxStorageMB(mb);
@@ -88,8 +78,6 @@ class SettingsState {
   final String defaultTargetLanguage;
   final String themeMode;
   final double fontSize;
-  final String translationProvider;
-  final bool autoDownloadModels;
   final int maxStorageMB;
   final bool showOnboarding;
   
@@ -98,8 +86,6 @@ class SettingsState {
     required this.defaultTargetLanguage,
     required this.themeMode,
     required this.fontSize,
-    required this.translationProvider,
-    required this.autoDownloadModels,
     required this.maxStorageMB,
     required this.showOnboarding,
   });
@@ -110,8 +96,6 @@ class SettingsState {
       defaultTargetLanguage: 'en',
       themeMode: 'system',
       fontSize: 16.0,
-      translationProvider: 'ml_kit',
-      autoDownloadModels: true,
       maxStorageMB: 500,
       showOnboarding: true,
     );
@@ -122,8 +106,6 @@ class SettingsState {
     String? defaultTargetLanguage,
     String? themeMode,
     double? fontSize,
-    String? translationProvider,
-    bool? autoDownloadModels,
     int? maxStorageMB,
     bool? showOnboarding,
   }) {
@@ -132,8 +114,6 @@ class SettingsState {
       defaultTargetLanguage: defaultTargetLanguage ?? this.defaultTargetLanguage,
       themeMode: themeMode ?? this.themeMode,
       fontSize: fontSize ?? this.fontSize,
-      translationProvider: translationProvider ?? this.translationProvider,
-      autoDownloadModels: autoDownloadModels ?? this.autoDownloadModels,
       maxStorageMB: maxStorageMB ?? this.maxStorageMB,
       showOnboarding: showOnboarding ?? this.showOnboarding,
     );

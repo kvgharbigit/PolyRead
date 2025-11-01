@@ -152,62 +152,18 @@ class SettingsScreen extends ConsumerWidget {
           
           const SizedBox(height: PolyReadSpacing.majorSpacing),
           
-          // Translation Settings
+          // Language Packs Settings
           _ElegantSettingsSection(
-            title: 'Translation & Learning',
-            subtitle: 'Configure translation services and learning features',
-            icon: Icons.translate_rounded,
+            title: 'Language Packs',
+            subtitle: 'Manage offline dictionaries and translation models',
+            icon: Icons.download_rounded,
             children: [
-              _ElegantDropdown(
-                title: 'Translation Service',
-                subtitle: 'Choose your preferred translation provider',
-                icon: Icons.cloud_outlined,
-                value: settings.translationProvider,
-                items: const [
-                  DropdownMenuItem(
-                    value: 'ml_kit', 
-                    child: Row(
-                      children: [
-                        Text('📱', style: TextStyle(fontSize: 20)),
-                        SizedBox(width: PolyReadSpacing.smallSpacing),
-                        Text('ML Kit (Offline)'),
-                      ],
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'google', 
-                    child: Row(
-                      children: [
-                        Text('🌐', style: TextStyle(fontSize: 20)),
-                        SizedBox(width: PolyReadSpacing.smallSpacing),
-                        Text('Google Translate'),
-                      ],
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'bergamot', 
-                    child: Row(
-                      children: [
-                        Text('🔗', style: TextStyle(fontSize: 20)),
-                        SizedBox(width: PolyReadSpacing.smallSpacing),
-                        Text('Bergamot (Web)'),
-                      ],
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    settingsNotifier.setTranslationProvider(value);
-                  }
-                },
-              ),
-              _ElegantSwitch(
-                title: 'Smart Model Downloads',
-                subtitle: 'Automatically download translation models when needed',
-                icon: Icons.download_rounded,
-                value: settings.autoDownloadModels,
-                onChanged: (value) {
-                  settingsNotifier.setAutoDownloadModels(value);
+              _ElegantActionTile(
+                title: 'Manage Language Packs',
+                subtitle: 'Download dictionaries for offline translation',
+                icon: Icons.language_rounded,
+                onTap: () {
+                  context.push('/language-packs');
                 },
               ),
             ],
