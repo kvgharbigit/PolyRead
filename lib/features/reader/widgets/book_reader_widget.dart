@@ -677,14 +677,16 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     
     // This was previously readerThemeData.colorScheme.background (cream)
     final statusBarFillColor = isImmersive ? pageBg : readerThemeData.colorScheme.background;
-    final statusBarHeight = MediaQuery.of(context).viewPadding.top;
+    final safeTop = MediaQuery.paddingOf(context).top; // e.g. 59.0
+    final safeBottom = MediaQuery.paddingOf(context).bottom; // e.g. 34.0 for home indicator
+    const tapStripHeight = 16.0; // thin tappable area just below/above system areas
     
     print('🎨 BUILD: Immersive mode: $isImmersive');
     print('🎨 BUILD: Reader theme: ${_readerSettings.theme}');
     print('🎨 PAGE BG: ${pageBg.toString()} (${pageBg.value.toRadixString(16)})');
     print('🎨 BUILD: Scaffold color: ${scaffoldColor?.toString()} (${scaffoldColor?.value.toRadixString(16)})');
     print('🎨 BUILD: Status bar fill color: ${statusBarFillColor.toString()} (${statusBarFillColor.value.toRadixString(16)})');
-    print('🎨 BUILD: Status bar height: $statusBarHeight');
+    print('🎨 BUILD: Safe top: $safeTop, Safe bottom: $safeBottom, Tap strip height: $tapStripHeight');
     
     return Theme(
       data: readerThemeData,
@@ -697,60 +699,117 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
           extendBodyBehindAppBar: true,   // ensures bg shows behind island
           appBar: isImmersive ? null : _buildAppBar(),
           body: isImmersive
-              ? Column(
-                  children: [
-                    // Top filler exactly the same white as the page - tappable to exit immersive mode
-                    GestureDetector(
-                      onTap: () {
-                        print('🎯 STATUS BAR TAP: Detected tap on status bar area!');
-                        print('🎯 STATUS BAR TAP: Current immersive mode: ${ref.read(immersiveModeProvider)}');
-                        print('🎯 STATUS BAR TAP: Exiting immersive mode...');
-                        final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
-                        immersiveModeNotifier.setImmersiveMode(false);
-                        _updateStatusBarForImmersiveMode(false);
-                        _startAutoEnterImmersiveTimer(); // Restart auto-enter timer
-                        print('🎯 STATUS BAR TAP: Immersive mode exited successfully');
-                      },
-                      onTapDown: (details) {
-                        print('🎯 STATUS BAR TAP DOWN: Position: ${details.localPosition}, Global: ${details.globalPosition}');
-                        print('🎯 STATUS BAR TAP DOWN: Status bar height: $statusBarHeight');
-                        // Provide subtle visual feedback on tap
-                        HapticFeedback.lightImpact();
-                      },
-                      onTapUp: (details) {
-                        print('🎯 STATUS BAR TAP UP: Position: ${details.localPosition}, Global: ${details.globalPosition}');
-                      },
-                      onTapCancel: () {
-                        print('🎯 STATUS BAR TAP CANCELLED');
-                      },
-                      behavior: HitTestBehavior.opaque, // Ensure taps are captured across the entire area
-                      child: Container(
-                        height: statusBarHeight,
+            ? Stack(
+                children: [
+                  // Main content: top filler + tap strip + reader, with space carved out for WebView
+                  Column(
+                    children: [
+                      // Purely visual filler up to the status bar; no gestures here (system owns it)
+                      Container(
+                        height: safeTop,
                         color: statusBarFillColor,
-                        width: double.infinity, // Ensure full width coverage
-                        // Add debug visual indicator
-                        child: statusBarHeight > 0 ? Container(
-                          alignment: Alignment.center,
-                          child: Text(
-                            'TAP TO EXIT • ${statusBarHeight.toStringAsFixed(0)}px',
-                            style: TextStyle(
-                              color: statusBarFillColor.computeLuminance() > 0.5 
-                                  ? Colors.black.withOpacity(0.1)
-                                  : Colors.white.withOpacity(0.1),
-                              fontSize: 8,
-                              fontWeight: FontWeight.w300,
+                        width: double.infinity,
+                      ),
+                      
+                      // Our tappable strip directly below the safe area
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) {
+                          print('🎯 TAP STRIP DOWN: Position: ${details.localPosition}, Global: ${details.globalPosition}');
+                          HapticFeedback.lightImpact();
+                        },
+                        onTap: () {
+                          print('🎯 TAP STRIP: exit immersive');
+                          print('🎯 TAP STRIP: Current immersive mode: ${ref.read(immersiveModeProvider)}');
+                          final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
+                          immersiveModeNotifier.setImmersiveMode(false);
+                          _updateStatusBarForImmersiveMode(false);
+                          _startAutoEnterImmersiveTimer();
+                          print('🎯 TAP STRIP: Immersive mode exited successfully');
+                        },
+                        onTapUp: (details) {
+                          print('🎯 TAP STRIP UP: Position: ${details.localPosition}');
+                        },
+                        child: Container(
+                          height: tapStripHeight,
+                          color: statusBarFillColor, // seamless with page background
+                          width: double.infinity,
+                          // Debug indicator (very subtle)
+                          child: Container(
+                            alignment: Alignment.center,
+                            child: Text(
+                              'TAP HERE TO EXIT',
+                              style: TextStyle(
+                                color: statusBarFillColor.computeLuminance() > 0.5 
+                                    ? Colors.black.withOpacity(0.1)
+                                    : Colors.white.withOpacity(0.1),
+                                fontSize: 8,
+                                fontWeight: FontWeight.w300,
+                              ),
                             ),
                           ),
-                        ) : null,
+                        ),
                       ),
-                    ),
-                    Expanded(child: _buildReaderBody(pageBg: pageBg)),
-                  ],
-                )
-              : SafeArea(
-                  top: true, // Respect the app bar in non-immersive mode
-                  child: _buildReaderBody(pageBg: null),
-                ),
+                      
+                      // Reader body starts AFTER the top tap strip so WebView can't cover it
+                      Expanded(
+                        child: _buildReaderBody(pageBg: pageBg),
+                      ),
+                      
+                      // Bottom tappable strip above the safe area (home indicator)
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) {
+                          print('🎯 BOTTOM TAP STRIP DOWN: Position: ${details.localPosition}, Global: ${details.globalPosition}');
+                          HapticFeedback.lightImpact();
+                        },
+                        onTap: () {
+                          print('🎯 BOTTOM TAP STRIP: exit immersive');
+                          print('🎯 BOTTOM TAP STRIP: Current immersive mode: ${ref.read(immersiveModeProvider)}');
+                          final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
+                          immersiveModeNotifier.setImmersiveMode(false);
+                          _updateStatusBarForImmersiveMode(false);
+                          _startAutoEnterImmersiveTimer();
+                          print('🎯 BOTTOM TAP STRIP: Immersive mode exited successfully');
+                        },
+                        onTapUp: (details) {
+                          print('🎯 BOTTOM TAP STRIP UP: Position: ${details.localPosition}');
+                        },
+                        child: Container(
+                          height: tapStripHeight,
+                          color: statusBarFillColor, // seamless with page background
+                          width: double.infinity,
+                          // Debug indicator (very subtle)
+                          child: Container(
+                            alignment: Alignment.center,
+                            child: Text(
+                              'TAP HERE TO EXIT',
+                              style: TextStyle(
+                                color: statusBarFillColor.computeLuminance() > 0.5 
+                                    ? Colors.black.withOpacity(0.1)
+                                    : Colors.white.withOpacity(0.1),
+                                fontSize: 8,
+                                fontWeight: FontWeight.w300,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      
+                      // Purely visual filler down to the home indicator; no gestures here (system owns it)
+                      Container(
+                        height: safeBottom,
+                        color: statusBarFillColor,
+                        width: double.infinity,
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : SafeArea(
+                top: true, // Respect the app bar in non-immersive mode
+                child: _buildReaderBody(pageBg: null),
+              ),
         ),
       ),
     );
