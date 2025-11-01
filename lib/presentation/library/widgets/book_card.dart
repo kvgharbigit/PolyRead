@@ -249,8 +249,8 @@ class _BookCardState extends State<BookCard>
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Title
-        Expanded(
+        // Title - using Flexible instead of Expanded to avoid overflow
+        Flexible(
           child: Text(
             widget.book.title,
             style: PolyReadTypography.interfaceBody.copyWith(
@@ -263,6 +263,7 @@ class _BookCardState extends State<BookCard>
         ),
         
         if (widget.book.author != null) ...[
+          const SizedBox(height: 2),
           Text(
             widget.book.author!,
             style: PolyReadTypography.interfaceCaption.copyWith(

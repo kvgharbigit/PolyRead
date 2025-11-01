@@ -9,7 +9,6 @@ import 'package:polyread/presentation/library/library_screen.dart';
 import 'package:polyread/presentation/onboarding/onboarding_screen.dart';
 import 'package:polyread/presentation/reader/reader_screen.dart';
 import 'package:polyread/presentation/settings/settings_screen.dart';
-import 'package:polyread/features/language_packs/widgets/language_pack_manager.dart';
 import 'package:polyread/core/providers/immersive_mode_provider.dart';
 
 // Route paths
@@ -18,7 +17,6 @@ class AppRoutes {
   static const String library = '/';
   static const String reader = '/reader';
   static const String settings = '/settings';
-  static const String languagePacks = '/language-packs';
   static const String vocabulary = '/vocabulary';
 }
 
@@ -60,13 +58,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.settings,
             name: 'settings',
             builder: (context, state) => const SettingsScreen(),
-          ),
-          
-          // Language packs screen
-          GoRoute(
-            path: AppRoutes.languagePacks,
-            name: 'language-packs',
-            builder: (context, state) => const LanguagePackManager(),
           ),
           
           // Vocabulary screen
@@ -163,12 +154,10 @@ class MainBottomNavigationBar extends ConsumerWidget {
       switch (location) {
         case AppRoutes.library:
           return 0;
-        case AppRoutes.languagePacks:
-          return 1;
         case AppRoutes.vocabulary:
-          return 2;
+          return 1;
         case AppRoutes.settings:
-          return 3;
+          return 2;
         default:
           return 0;
       }
@@ -182,12 +171,9 @@ class MainBottomNavigationBar extends ConsumerWidget {
             context.go(AppRoutes.library);
             break;
           case 1:
-            context.go(AppRoutes.languagePacks);
-            break;
-          case 2:
             context.go(AppRoutes.vocabulary);
             break;
-          case 3:
+          case 2:
             context.go(AppRoutes.settings);
             break;
         }
@@ -197,11 +183,6 @@ class MainBottomNavigationBar extends ConsumerWidget {
           icon: Icon(Icons.library_books_outlined),
           selectedIcon: Icon(Icons.library_books),
           label: 'Library',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.language_outlined),
-          selectedIcon: Icon(Icons.language),
-          label: 'Languages',
         ),
         NavigationDestination(
           icon: Icon(Icons.school_outlined),

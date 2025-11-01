@@ -8,6 +8,7 @@ import 'package:polyread/core/providers/settings_provider.dart';
 import 'package:polyread/core/themes/polyread_spacing.dart';
 import 'package:polyread/core/themes/polyread_typography.dart';
 import 'package:polyread/core/utils/constants.dart';
+import 'package:polyread/features/language_packs/widgets/language_pack_manager.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -28,127 +29,18 @@ class SettingsScreen extends ConsumerWidget {
           _buildWelcomeHeader(context),
           const SizedBox(height: PolyReadSpacing.majorSpacing),
           
-          // Language Settings
-          _ElegantSettingsSection(
-            title: 'Language Preferences',
-            subtitle: 'Configure your reading and translation languages',
-            icon: Icons.language_rounded,
-            children: [
-              _ElegantDropdown(
-                title: 'Reading Language',
-                subtitle: 'Primary language of your books',
-                icon: Icons.auto_stories_outlined,
-                value: settings.defaultSourceLanguage,
-                items: AppConstants.supportedLanguages
-                    .map((code) => DropdownMenuItem(
-                          value: code,
-                          child: Row(
-                            children: [
-                              Text('🌍', style: const TextStyle(fontSize: 20)),
-                              const SizedBox(width: PolyReadSpacing.smallSpacing),
-                              Text(AppConstants.languageNames[code] ?? code),
-                            ],
-                          ),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    settingsNotifier.setDefaultSourceLanguage(value);
-                  }
-                },
-              ),
-              _ElegantDropdown(
-                title: 'Translation Language',
-                subtitle: 'Language to translate unknown words to',
-                icon: Icons.translate_rounded,
-                value: settings.defaultTargetLanguage,
-                items: AppConstants.supportedLanguages
-                    .where((code) => code != 'auto')
-                    .map((code) => DropdownMenuItem(
-                          value: code,
-                          child: Row(
-                            children: [
-                              Text('🗣️', style: const TextStyle(fontSize: 20)),
-                              const SizedBox(width: PolyReadSpacing.smallSpacing),
-                              Text(AppConstants.languageNames[code] ?? code),
-                            ],
-                          ),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    settingsNotifier.setDefaultTargetLanguage(value);
-                  }
-                },
-              ),
-            ],
+          // Language Settings - Compact Layout
+          _CompactLanguageSection(
+            settings: settings,
+            settingsNotifier: settingsNotifier,
           ),
           
           const SizedBox(height: PolyReadSpacing.majorSpacing),
           
-          // Reading Experience Settings
-          _ElegantSettingsSection(
-            title: 'Reading Experience',
-            subtitle: 'Customize your reading comfort and appearance',
-            icon: Icons.auto_stories_rounded,
-            children: [
-              _ElegantSlider(
-                title: 'Reading Font Size',
-                subtitle: 'Adjust text size for comfortable reading',
-                icon: Icons.format_size_rounded,
-                value: settings.fontSize,
-                min: AppConstants.minFontSize,
-                max: AppConstants.maxFontSize,
-                divisions: ((AppConstants.maxFontSize - AppConstants.minFontSize) / 2).round(),
-                valueLabel: '${settings.fontSize.toInt()}pt',
-                onChanged: (value) {
-                  settingsNotifier.setFontSize(value);
-                },
-              ),
-              _ElegantDropdown(
-                title: 'App Theme',
-                subtitle: 'Choose your preferred visual appearance',
-                icon: Icons.palette_outlined,
-                value: settings.themeMode,
-                items: const [
-                  DropdownMenuItem(
-                    value: 'system', 
-                    child: Row(
-                      children: [
-                        Text('🔄', style: TextStyle(fontSize: 20)),
-                        SizedBox(width: PolyReadSpacing.smallSpacing),
-                        Text('System Default'),
-                      ],
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'light', 
-                    child: Row(
-                      children: [
-                        Text('☀️', style: TextStyle(fontSize: 20)),
-                        SizedBox(width: PolyReadSpacing.smallSpacing),
-                        Text('Light Theme'),
-                      ],
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'dark', 
-                    child: Row(
-                      children: [
-                        Text('🌙', style: TextStyle(fontSize: 20)),
-                        SizedBox(width: PolyReadSpacing.smallSpacing),
-                        Text('Dark Theme'),
-                      ],
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    settingsNotifier.setThemeMode(value);
-                  }
-                },
-              ),
-            ],
+          // Reading Experience Settings - Compact
+          _CompactReadingSection(
+            settings: settings,
+            settingsNotifier: settingsNotifier,
           ),
           
           const SizedBox(height: PolyReadSpacing.majorSpacing),
@@ -164,7 +56,11 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Download dictionaries for offline translation',
                 icon: Icons.language_rounded,
                 onTap: () {
-                  context.push('/language-packs');
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const LanguagePackManager(),
+                    ),
+                  );
                 },
               ),
             ],
@@ -750,6 +646,380 @@ class _ElegantActionTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Compact Language Section
+class _CompactLanguageSection extends StatelessWidget {
+  final dynamic settings;
+  final dynamic settingsNotifier;
+  
+  const _CompactLanguageSection({
+    required this.settings,
+    required this.settingsNotifier,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+        boxShadow: PolyReadSpacing.cardShadow,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Compact header
+          Container(
+            padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(PolyReadSpacing.cardRadius),
+                topRight: Radius.circular(PolyReadSpacing.cardRadius),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.language_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: PolyReadSpacing.smallSpacing),
+                Text(
+                  "Languages",
+                  style: PolyReadTypography.interfaceBodyMedium.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Language pair in horizontal layout
+          Padding(
+            padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing),
+            child: Row(
+              children: [
+                // Reading language
+                Expanded(
+                  child: _CompactDropdown(
+                    label: "Reading",
+                    icon: "🌍",
+                    value: settings.defaultSourceLanguage,
+                    items: AppConstants.supportedLanguages
+                        .map((code) => DropdownMenuItem(
+                              value: code,
+                              child: Text(
+                                AppConstants.languageNames[code] ?? code,
+                                style: PolyReadTypography.interfaceCaption.copyWith(
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        settingsNotifier.setDefaultSourceLanguage(value);
+                      }
+                    },
+                  ),
+                ),
+                
+                const SizedBox(width: PolyReadSpacing.elementSpacing),
+                
+                // Arrow
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                
+                const SizedBox(width: PolyReadSpacing.elementSpacing),
+                
+                // Translation language  
+                Expanded(
+                  child: _CompactDropdown(
+                    label: "Translation",
+                    icon: "🗣️",
+                    value: settings.defaultTargetLanguage,
+                    items: AppConstants.supportedLanguages
+                        .where((code) => code != "auto")
+                        .map((code) => DropdownMenuItem(
+                              value: code,
+                              child: Text(
+                                AppConstants.languageNames[code] ?? code,
+                                style: PolyReadTypography.interfaceCaption.copyWith(
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        settingsNotifier.setDefaultTargetLanguage(value);
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Compact Reading Section
+class _CompactReadingSection extends StatelessWidget {
+  final dynamic settings;
+  final dynamic settingsNotifier;
+  
+  const _CompactReadingSection({
+    required this.settings,
+    required this.settingsNotifier,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
+        boxShadow: PolyReadSpacing.cardShadow,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Compact header
+          Container(
+            padding: const EdgeInsets.all(PolyReadSpacing.elementSpacing),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(PolyReadSpacing.cardRadius),
+                topRight: Radius.circular(PolyReadSpacing.cardRadius),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.auto_stories_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: PolyReadSpacing.smallSpacing),
+                Text(
+                  "Reading Experience",
+                  style: PolyReadTypography.interfaceBodyMedium.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Compact font size slider
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: PolyReadSpacing.elementSpacing,
+              vertical: PolyReadSpacing.smallSpacing,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.format_size_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: PolyReadSpacing.smallSpacing),
+                Text(
+                  "Font Size",
+                  style: PolyReadTypography.interfaceCaption.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: PolyReadSpacing.smallSpacing),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                      activeTrackColor: Theme.of(context).colorScheme.primary,
+                      inactiveTrackColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    ),
+                    child: Slider(
+                      value: settings.fontSize,
+                      min: AppConstants.minFontSize,
+                      max: AppConstants.maxFontSize,
+                      divisions: ((AppConstants.maxFontSize - AppConstants.minFontSize) / 2).round(),
+                      onChanged: (value) => settingsNotifier.setFontSize(value),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    "${settings.fontSize.toInt()}pt",
+                    style: PolyReadTypography.interfaceCaption.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Compact theme selector
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              PolyReadSpacing.elementSpacing,
+              0,
+              PolyReadSpacing.elementSpacing,
+              PolyReadSpacing.elementSpacing,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.palette_outlined,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: PolyReadSpacing.smallSpacing),
+                Text(
+                  "Theme",
+                  style: PolyReadTypography.interfaceCaption.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: DropdownButton<String>(
+                    value: settings.themeMode,
+                    items: const [
+                      DropdownMenuItem(value: "system", child: Text("🔄 System")),
+                      DropdownMenuItem(value: "light", child: Text("☀️ Light")),
+                      DropdownMenuItem(value: "dark", child: Text("🌙 Dark")),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        settingsNotifier.setThemeMode(value);
+                      }
+                    },
+                    underline: const SizedBox(),
+                    style: PolyReadTypography.interfaceCaption.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontSize: 12,
+                    ),
+                    icon: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Compact Dropdown Component
+class _CompactDropdown<T> extends StatelessWidget {
+  final String label;
+  final String icon;
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+  
+  const _CompactDropdown({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: PolyReadTypography.interfaceCaption.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            ),
+          ),
+          child: DropdownButton<T>(
+            value: value,
+            items: items,
+            onChanged: onChanged,
+            underline: const SizedBox(),
+            isExpanded: true,
+            style: PolyReadTypography.interfaceCaption.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 12,
+            ),
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

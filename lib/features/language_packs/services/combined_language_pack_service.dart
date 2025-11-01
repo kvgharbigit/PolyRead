@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:polyread/core/database/app_database.dart';
 import 'package:polyread/features/translation/services/cycling_dictionary_service.dart';
 import 'package:polyread/features/translation/services/translation_service.dart';
@@ -88,14 +89,22 @@ class CombinedLanguagePackService {
     required String targetLanguage,
   }) async {
     try {
+      print('🔍 CHECK INSTALL: Checking if $sourceLanguage-$targetLanguage is installed...');
+      
       final count = await _database.customSelect(
         'SELECT COUNT(*) as count FROM word_groups WHERE source_language = ? AND target_language = ?',
         variables: [Variable.withString(sourceLanguage), Variable.withString(targetLanguage)],
       ).getSingle();
       
-      return count.data['count'] as int > 0;
+      final wordGroupCount = count.data['count'] as int;
+      final isInstalled = wordGroupCount > 0;
+      
+      print('🔍 CHECK INSTALL: Found $wordGroupCount word groups for $sourceLanguage-$targetLanguage');
+      print('🔍 CHECK INSTALL: Is installed: $isInstalled');
+      
+      return isInstalled;
     } catch (e) {
-      print('Error checking language pack installation: $e');
+      print('❌ CHECK INSTALL ERROR: Failed to check installation status for $sourceLanguage-$targetLanguage: $e');
       return false;
     }
   }
@@ -134,9 +143,10 @@ class CombinedLanguagePackService {
       onProgress?.call('Starting installation of $packId...');
       
       // Check if already installed
-      print('🔍 Checking if $packId already installed...');
-      if (await isLanguagePackInstalled(sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)) {
-        print('✅ $packId already installed, skipping download');
+      print('🔍 INSTALL CHECK: Checking if $packId already installed...');
+      final alreadyInstalled = await isLanguagePackInstalled(sourceLanguage: sourceLanguage, targetLanguage: targetLanguage);
+      if (alreadyInstalled) {
+        print('✅ INSTALL CHECK: $packId already installed, skipping download');
         final completedProgress = DownloadProgress(
           packId: packId,
           packName: packId,
@@ -469,28 +479,84 @@ class CombinedLanguagePackService {
     print('Installation cancelled for $packId');
   }
   
-  /// Remove/uninstall a language pack
+  /// Remove/uninstall a language pack (both dictionary and ML Kit models)
   Future<void> removeLanguagePack({
     required String sourceLanguage,
     required String targetLanguage,
   }) async {
     try {
-      // Remove word groups and related data for this language pair
-      await _database.customStatement(
-        'DELETE FROM word_groups WHERE source_language = ? AND target_language = ?',
-        [sourceLanguage, targetLanguage],
-      );
+      print('🗑️ Removing language pack: $sourceLanguage-$targetLanguage');
       
-      // Update language pack metadata
+      // Step 1: Remove cycling dictionary data
+      final wordGroupsResult = await _database.customSelect(
+        'SELECT id FROM word_groups WHERE source_language = ? AND target_language = ?',
+        variables: [Variable.withString(sourceLanguage), Variable.withString(targetLanguage)],
+      ).get();
+      
+      if (wordGroupsResult.isNotEmpty) {
+        final wordGroupIds = wordGroupsResult.map((row) => row.data['id']).toList();
+        final placeholders = wordGroupIds.map((_) => '?').join(',');
+        
+        print('🗑️ Deleting ${wordGroupIds.length} word groups and associated data...');
+        
+        // Delete meanings first (due to foreign key constraints)
+        await _database.customStatement(
+          'DELETE FROM meanings WHERE word_group_id IN ($placeholders)',
+          wordGroupIds.cast<int>(),
+        );
+        
+        // Delete reverse lookups
+        await _database.customStatement(
+          'DELETE FROM target_reverse_lookup WHERE source_word_group_id IN ($placeholders)',
+          wordGroupIds.cast<int>(),
+        );
+        
+        // Finally delete word groups
+        await _database.customStatement(
+          'DELETE FROM word_groups WHERE source_language = ? AND target_language = ?',
+          [sourceLanguage, targetLanguage],
+        );
+        
+        print('🗑️ Dictionary data deleted successfully');
+      } else {
+        print('🗑️ No dictionary data found for $sourceLanguage-$targetLanguage');
+      }
+      
+      // Step 2: Remove ML Kit models
+      try {
+        final modelManager = OnDeviceTranslatorModelManager();
+        final sourceDownloaded = await modelManager.isModelDownloaded(sourceLanguage);
+        final targetDownloaded = await modelManager.isModelDownloaded(targetLanguage);
+        
+        if (sourceDownloaded || targetDownloaded) {
+          print('⚠️ ML Kit models still downloaded (manual deletion required)');
+        }
+      } catch (mlkitError) {
+        print('⚠️ Failed to check ML Kit models: $mlkitError');
+      }
+      
+      // Step 3: Update language pack metadata
+      final packId = '$sourceLanguage-$targetLanguage';
       await (_database.update(_database.languagePacks)
-          ..where((pack) => pack.packId.equals('$sourceLanguage-$targetLanguage')))
+          ..where((pack) => pack.packId.equals(packId)))
           .write(const LanguagePacksCompanion(
             isInstalled: Value(false),
           ));
       
-      print('Removed language pack: $sourceLanguage-$targetLanguage');
+      // Step 4: Verify removal
+      final verifyResult = await _database.customSelect(
+        'SELECT COUNT(*) as count FROM word_groups WHERE source_language = ? AND target_language = ?',
+        variables: [Variable.withString(sourceLanguage), Variable.withString(targetLanguage)],
+      ).getSingle();
+      
+      final remainingCount = verifyResult.data['count'] as int;
+      if (remainingCount == 0) {
+        print('✅ Language pack $sourceLanguage-$targetLanguage removed successfully');
+      } else {
+        print('⚠️ Warning: $remainingCount word groups still remain');
+      }
     } catch (e) {
-      print('Error removing language pack: $e');
+      print('❌ Error removing language pack $sourceLanguage-$targetLanguage: $e');
       rethrow;
     }
   }

@@ -8,7 +8,7 @@ class ReaderConfig {
   static const int contextWordsCount = 8;
   
   // UI timing
-  static const Duration immersiveModeAutoTimeout = Duration(seconds: 10);
+  static const Duration immersiveModeAutoTimeout = Duration(seconds: 4);
   
   // Progress tracking
   static const Duration progressSaveInterval = Duration(seconds: 30);
