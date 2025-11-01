@@ -325,6 +325,7 @@ document.addEventListener('mouseleave', handleMouseUp); // Cancel if mouse leave
     }
   }
 
+
   @override
   Future<void> dispose() async {
     print('EPUB: Disposing...');
@@ -539,4 +540,5 @@ document.addEventListener('mouseleave', handleMouseUp); // Cancel if mouse leave
     onTextSelectionCallback = callback;
     print('EPUB: Callback stored, available: ${onTextSelectionCallback != null}');
   }
+  
 }

@@ -882,16 +882,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Label for sentence translation
-        Text(
-          'Sentence:',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 4),
-        // Translated sentence with bolded matched words
+        // Translated sentence with bolded matched words (no heading)
         _buildHighlightedSentenceTranslation(),
       ],
     );
@@ -950,14 +941,19 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
         
         print('🎯 Found word to highlight: "$word" matches stored best match "$_currentBestMatch"');
         
-        // Bold this word with primary color to match translation styling
+        // Highlight this word with multiple visual cues for maximum visibility
         spans.add(TextSpan(
           text: word,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
+            color: Theme.of(context).colorScheme.onPrimary, // White/black text on colored background
+            backgroundColor: Theme.of(context).colorScheme.primary, // Colored background
             height: 1.4,
             fontSize: 14,
-            fontWeight: FontWeight.w600, // Same weight as translation
+            fontWeight: FontWeight.w700, // Extra bold
+            decoration: TextDecoration.underline, // Underline for extra emphasis
+            decorationColor: Theme.of(context).colorScheme.onPrimary,
+            decorationThickness: 2.0, // Thick underline
+            letterSpacing: 0.5, // Slight letter spacing for emphasis
           ),
         ));
         hasHighlighted = true;
