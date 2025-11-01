@@ -47,6 +47,7 @@ dependencies:
   wakelock_plus: ^1.2.8
   archive: ^3.4.10
   sqlite3: ^2.9.3
+  url_launcher: ^6.2.2
 
 dev_dependencies:
   flutter_test:

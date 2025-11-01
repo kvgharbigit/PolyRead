@@ -11,7 +11,7 @@ import '../models/download_progress.dart';
 
 class StorageManagementService {
   static const String _tableName = 'language_pack_installations';
-  static const int _defaultStorageLimitMB = 500;
+  static const int _defaultStorageLimitMB = 51200;
   
   final Database _database;
   final int storageLimitBytes;

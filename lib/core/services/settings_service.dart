@@ -2,6 +2,7 @@
 // Manages user preferences and app configuration
 
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/constants.dart';
 
 class SettingsService {
   static const String _keyDefaultSourceLanguage = 'default_source_language';
@@ -10,7 +11,7 @@ class SettingsService {
   static const String _keyFontSize = 'font_size';
   // Translation provider is now handled automatically with fallbacks
   // Auto download models removed - users should always be prompted
-  static const String _keyMaxStorageMB = 'max_storage_mb';
+  // Storage limit removed from UI - handled internally with high limit
   static const String _keyShowOnboarding = 'show_onboarding';
   
   // Cycling Dictionary Settings
@@ -52,12 +53,8 @@ class SettingsService {
   
   // Translation settings removed - handled automatically by fallback system
   
-  // Storage Settings
-  int get maxStorageMB => _prefs.getInt(_keyMaxStorageMB) ?? 500;
-  
-  Future<void> setMaxStorageMB(int mb) async {
-    await _prefs.setInt(_keyMaxStorageMB, mb);
-  }
+  // Storage settings removed from UI - uses high internal limit
+  int get maxStorageMB => AppConstants.defaultMaxStorageMB;
   
   // Onboarding
   bool get showOnboarding => _prefs.getBool(_keyShowOnboarding) ?? true;
@@ -104,7 +101,7 @@ class SettingsService {
       'defaultTargetLanguage': defaultTargetLanguage,
       'themeMode': themeMode,
       'fontSize': fontSize,
-      'maxStorageMB': maxStorageMB,
+      // maxStorageMB removed from export - uses high internal limit
       'cyclingEnabled': cyclingEnabled,
       'cyclingSpeed': cyclingSpeed,
       'autoExpansion': autoExpansion,
@@ -126,9 +123,7 @@ class SettingsService {
     if (settings['fontSize'] != null) {
       await setFontSize(settings['fontSize']);
     }
-    if (settings['maxStorageMB'] != null) {
-      await setMaxStorageMB(settings['maxStorageMB']);
-    }
+    // maxStorageMB import removed - uses high internal limit
     if (settings['cyclingEnabled'] != null) {
       await setCyclingEnabled(settings['cyclingEnabled']);
     }

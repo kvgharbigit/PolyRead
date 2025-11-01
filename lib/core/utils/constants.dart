@@ -8,10 +8,8 @@ class AppConstants {
   static const String appName = 'PolyRead';
   static const String appVersion = '1.0.0';
   
-  // Storage Limits
-  static const int defaultMaxStorageMB = 500;
-  static const int minStorageMB = 100;
-  static const int maxStorageMB = 2048;
+  // Storage Limits (internal only - no UI exposure)
+  static const int defaultMaxStorageMB = 51200; // 50GB internal limit
   
   // Language Codes
   static const List<String> supportedLanguages = [

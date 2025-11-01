@@ -346,7 +346,7 @@ class _StorageChartState extends State<StorageChart>
 
   StorageQuota _getMockStorageQuota() {
     return StorageQuota.create(
-      totalLimitBytes: 500 * 1024 * 1024, // 500MB
+      totalLimitBytes: 51200 * 1024 * 1024, // 50GB
       packUsage: {
         'en-es-v1.0': 25 * 1024 * 1024,
         'en-fr-v1.2': 35 * 1024 * 1024,

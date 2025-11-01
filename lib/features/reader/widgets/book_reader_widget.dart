@@ -702,21 +702,46 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
                     // Top filler exactly the same white as the page - tappable to exit immersive mode
                     GestureDetector(
                       onTap: () {
-                        print('🎯 STATUS BAR TAP: Exiting immersive mode');
+                        print('🎯 STATUS BAR TAP: Detected tap on status bar area!');
+                        print('🎯 STATUS BAR TAP: Current immersive mode: ${ref.read(immersiveModeProvider)}');
+                        print('🎯 STATUS BAR TAP: Exiting immersive mode...');
                         final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
                         immersiveModeNotifier.setImmersiveMode(false);
                         _updateStatusBarForImmersiveMode(false);
                         _startAutoEnterImmersiveTimer(); // Restart auto-enter timer
+                        print('🎯 STATUS BAR TAP: Immersive mode exited successfully');
                       },
-                      onTapDown: (_) {
+                      onTapDown: (details) {
+                        print('🎯 STATUS BAR TAP DOWN: Position: ${details.localPosition}, Global: ${details.globalPosition}');
+                        print('🎯 STATUS BAR TAP DOWN: Status bar height: $statusBarHeight');
                         // Provide subtle visual feedback on tap
                         HapticFeedback.lightImpact();
+                      },
+                      onTapUp: (details) {
+                        print('🎯 STATUS BAR TAP UP: Position: ${details.localPosition}, Global: ${details.globalPosition}');
+                      },
+                      onTapCancel: () {
+                        print('🎯 STATUS BAR TAP CANCELLED');
                       },
                       behavior: HitTestBehavior.opaque, // Ensure taps are captured across the entire area
                       child: Container(
                         height: statusBarHeight,
                         color: statusBarFillColor,
                         width: double.infinity, // Ensure full width coverage
+                        // Add debug visual indicator
+                        child: statusBarHeight > 0 ? Container(
+                          alignment: Alignment.center,
+                          child: Text(
+                            'TAP TO EXIT • ${statusBarHeight.toStringAsFixed(0)}px',
+                            style: TextStyle(
+                              color: statusBarFillColor.computeLuminance() > 0.5 
+                                  ? Colors.black.withOpacity(0.1)
+                                  : Colors.white.withOpacity(0.1),
+                              fontSize: 8,
+                              fontWeight: FontWeight.w300,
+                            ),
+                          ),
+                        ) : null,
                       ),
                     ),
                     Expanded(child: _buildReaderBody(pageBg: pageBg)),

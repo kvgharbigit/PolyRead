@@ -30,7 +30,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       defaultTargetLanguage: _service.defaultTargetLanguage,
       themeMode: _service.themeMode,
       fontSize: _service.fontSize,
-      maxStorageMB: _service.maxStorageMB,
       showOnboarding: _service.showOnboarding,
     );
   }
@@ -55,12 +54,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     state = state.copyWith(fontSize: size);
   }
   
-  // Translation settings removed - handled automatically by fallback system
-  
-  Future<void> setMaxStorageMB(int mb) async {
-    await _service.setMaxStorageMB(mb);
-    state = state.copyWith(maxStorageMB: mb);
-  }
+  // Translation and storage settings removed - handled automatically
   
   Future<void> setShowOnboarding(bool show) async {
     await _service.setShowOnboarding(show);
@@ -78,7 +72,6 @@ class SettingsState {
   final String defaultTargetLanguage;
   final String themeMode;
   final double fontSize;
-  final int maxStorageMB;
   final bool showOnboarding;
   
   const SettingsState({
@@ -86,7 +79,6 @@ class SettingsState {
     required this.defaultTargetLanguage,
     required this.themeMode,
     required this.fontSize,
-    required this.maxStorageMB,
     required this.showOnboarding,
   });
   
@@ -96,7 +88,6 @@ class SettingsState {
       defaultTargetLanguage: 'en',
       themeMode: 'system',
       fontSize: 16.0,
-      maxStorageMB: 500,
       showOnboarding: true,
     );
   }
@@ -106,7 +97,6 @@ class SettingsState {
     String? defaultTargetLanguage,
     String? themeMode,
     double? fontSize,
-    int? maxStorageMB,
     bool? showOnboarding,
   }) {
     return SettingsState(
@@ -114,7 +104,6 @@ class SettingsState {
       defaultTargetLanguage: defaultTargetLanguage ?? this.defaultTargetLanguage,
       themeMode: themeMode ?? this.themeMode,
       fontSize: fontSize ?? this.fontSize,
-      maxStorageMB: maxStorageMB ?? this.maxStorageMB,
       showOnboarding: showOnboarding ?? this.showOnboarding,
     );
   }

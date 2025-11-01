@@ -5,15 +5,19 @@
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/meaning_entry.dart';
 import '../services/cycling_dictionary_service.dart';
+import '../services/dictionary_link_service.dart';
 import '../../reader/providers/reader_translation_provider.dart';
 import '../../../core/themes/polyread_spacing.dart';
 import '../../../core/themes/polyread_typography.dart';
 import '../../../core/themes/polyread_theme.dart';
 import '../../../core/utils/constants.dart';
+import '../../../core/providers/settings_provider.dart';
 import 'translation_requirements_dialog.dart';
 import '../models/translation_response.dart';
 import '../config/part_of_speech_emojis.dart';
@@ -92,9 +96,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   int _currentMeaningIndex = 0;
   int _currentReverseIndex = 0;
   bool _isReverseLookup = false;
-  bool _isExpanded = false;
   String? _mlKitFallbackResult; // Store ML Kit fallback translation
-  String? _expandedDefinition; // Store ML Kit translated expanded definition
   String? _sentenceTranslation; // Store ML Kit sentence translation
   bool _isSentenceLoading = false; // Loading state for sentence translation
   String? _currentBestMatch; // Store the best matching word from sentence for current translation
@@ -102,6 +104,11 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   // Performance optimization: Cache calculated constraints
   BoxConstraints? _cachedConstraints;
   Size? _lastScreenSize;
+  
+  // Performance optimization: Cache normalized words and sentence splits
+  List<String>? _cachedSentenceWords;
+  final Map<String, String> _normalizedWordCache = {};
+  final Map<String, _WordPrioritizationResult> _scoringCache = {};
   
   @override
   void initState() {
@@ -162,81 +169,9 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     await _checkTranslationComponents();
   }
 
-  /// Handle long press for expanded definition
-  void _handleLongPress() async {
-    if (_isExpanded) return; // Already expanded
-    
-    // Check if there's actually context to expand
-    bool hasContext = false;
-    String fullDefinition = '';
-    
-    if (_isReverseLookup && _reverseLookupResult != null) {
-      final cyclableReverse = _reverseLookupResult!.translations[_currentReverseIndex];
-      
-      // For reverse lookup, check if there's context available from the original entry
-      hasContext = cyclableReverse.context?.isNotEmpty == true;
-      
-      if (hasContext) {
-        // Extract only the context part for translation to home language
-        fullDefinition = cyclableReverse.context!;
-      }
-    } else if (_sourceLookupResult != null) {
-      final cyclableMeaning = _sourceLookupResult!.meanings[_currentMeaningIndex];
-      
-      // Only expand if there's actual context information
-      hasContext = cyclableMeaning.meaning.context?.isNotEmpty == true;
-      
-      if (hasContext) {
-        // Extract only the context part, not the repeated word
-        fullDefinition = cyclableMeaning.meaning.context!;
-      }
-    } else if (_mlKitFallbackResult != null) {
-      // ML Kit fallback has no context to expand
-      hasContext = false;
-    }
-    
-    if (!hasContext) return; // Nothing to expand
-    
-    setState(() {
-      _isExpanded = true;
-    });
-    
-    // Translate the expanded definition to home language using ML Kit
-    if (fullDefinition.isNotEmpty && widget.translationService != null) {
-      try {
-        final translationResponse = await widget.translationService.translateText(
-          text: fullDefinition,
-          sourceLanguage: widget.sourceLanguage,
-          targetLanguage: widget.targetLanguage,
-          useCache: true,
-        );
-        
-        if (translationResponse.translatedText.isNotEmpty) {
-          setState(() {
-            _expandedDefinition = translationResponse.translatedText;
-          });
-        }
-      } catch (e) {
-        print('Failed to translate expanded definition: $e');
-        // Fallback to original definition
-        setState(() {
-          _expandedDefinition = fullDefinition;
-        });
-      }
-    }
-  }
   
   /// Handle tap for cycling through meanings
   void _handleTap() {
-    if (_isExpanded) {
-      // Collapse expanded view
-      setState(() {
-        _isExpanded = false;
-        _expandedDefinition = null;
-      });
-      return;
-    }
-    
     // Cycle through meanings if available
     if (_isReverseLookup && _reverseLookupResult != null) {
       if (_currentReverseIndex < _reverseLookupResult!.translations.length - 1) {
@@ -325,6 +260,9 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     try {
       print('CyclingPopup: Attempting source lookup for "${widget.selectedText}" (${widget.sourceLanguage} -> ${widget.targetLanguage})...');
       
+      // Get ML Kit single word translation upfront to include in prioritization
+      final mlKitSingleWord = await _getMlKitSingleWordTranslation();
+      
       // Simple lookup - try source meanings first
       final sourceResult = await _dictionaryService!.lookupSourceMeanings(
         widget.selectedText,
@@ -336,15 +274,17 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       if (sourceResult.hasResults) {
         print('CyclingPopup: Source lookup found ${sourceResult.meanings.length} meanings');
         
-        // Apply smart prioritization if we have sentence translation
-        final prioritizedResult = await _applySmartPrioritization(sourceResult, false);
+        // Apply smart prioritization including ML Kit candidate
+        final prioritizedResult = await _applySmartPrioritizationWithMlKit(sourceResult, false, mlKitSingleWord);
         
         setState(() {
           _sourceLookupResult = prioritizedResult;
           _isReverseLookup = false;
           _isLoading = false;
-          // Store the best match for highlighting
-          _updateCurrentBestMatch();
+          // Only update best match if we're not using ML Kit fallback
+          if (_mlKitFallbackResult == null) {
+            _updateCurrentBestMatch();
+          }
         });
         return;
       }
@@ -362,22 +302,34 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       if (reverseResult.hasResults) {
         print('CyclingPopup: Reverse lookup found ${reverseResult.translations.length} translations');
         
-        // Apply smart prioritization if we have sentence translation
-        final prioritizedResult = await _applySmartPrioritization(reverseResult, true);
+        // Apply smart prioritization including ML Kit candidate
+        final prioritizedResult = await _applySmartPrioritizationWithMlKit(reverseResult, true, mlKitSingleWord);
         
         setState(() {
           _reverseLookupResult = prioritizedResult;
           _isReverseLookup = true;
           _isLoading = false;
-          // Store the best match for highlighting
-          _updateCurrentBestMatch();
+          // Only update best match if we're not using ML Kit fallback
+          if (_mlKitFallbackResult == null) {
+            _updateCurrentBestMatch();
+          }
         });
         return;
       }
 
       // No results found in dictionary, try ML Kit as fallback
       print('CyclingPopup: No results found in either direction for "${widget.selectedText}"');
-      await _tryMlKitFallback();
+      if (mlKitSingleWord != null && mlKitSingleWord.isNotEmpty) {
+        print('CyclingPopup: Using ML Kit single word as sole result');
+        // Update best match for highlighting ML Kit result
+        _updateCurrentBestMatchForMlKit(mlKitSingleWord);
+        setState(() {
+          _mlKitFallbackResult = mlKitSingleWord;
+          _isLoading = false;
+        });
+      } else {
+        await _tryMlKitFallback();
+      }
       
     } catch (e) {
       print('CyclingPopup: Lookup error: $e');
@@ -448,6 +400,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
           _sentenceTranslation = translationResponse.translatedText;
           _isSentenceLoading = false;
           _invalidateConstraintsCache(); // Content changed, invalidate cache
+          _invalidatePerformanceCache(); // New sentence translation, clear caches
         });
         print('CyclingPopup: ✅ Sentence translation completed successfully');
         print('CyclingPopup: Final sentence translation: "${_sentenceTranslation}"');
@@ -546,11 +499,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                                 color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
                               ),
                             ),
-                            child: GestureDetector(
-                              onLongPress: _handleLongPress,
-                              onTap: _handleTap,
-                              child: content,
-                            ),
+                            child: content,
                           ),
                         ),
                       ),
@@ -629,114 +578,58 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-          // Main translation row: emoji + translation
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Part-of-speech emoji indicator
-              Text(
-                PartOfSpeechEmojis.getEmojiForPOS(
-                  cyclableMeaning.meaning.partOfSpeech, 
-                  language: widget.sourceLanguage,
-                ),
-                style: const TextStyle(fontSize: 18),
-              ),
-              const SizedBox(width: 8),
-              // Translation text
-              Expanded(
-                child: Text(
-                  cyclableMeaning.displayTranslation,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w500,
+            // Main translation row: emoji + translation
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Part-of-speech emoji indicator
+                Text(
+                  PartOfSpeechEmojis.getEmojiForPOS(
+                    cyclableMeaning.meaning.partOfSpeech, 
+                    language: widget.sourceLanguage,
                   ),
-                  maxLines: _isExpanded ? null : 2,
-                  overflow: _isExpanded ? null : TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 18),
+                ),
+                const SizedBox(width: 8),
+                // Translation text with clickable original word
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      children: [
+                        _createClickableOriginalWordSpan(),
+                        TextSpan(
+                          text: ' → ',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w300,
+                          ),
+                        ),
+                        _createClickableTranslatedWordSpan(cyclableMeaning.displayTranslation),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // Cycling indicator (if multiple meanings)
+            if (cyclableMeaning.totalMeanings > 1) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: _handleTap,
+                child: Text(
+                  '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontSize: 11,
+                    decoration: TextDecoration.underline,
+                    decorationStyle: TextDecorationStyle.dotted,
+                  ),
                 ),
               ),
             ],
-          ),
-          
-          // Expanded content when long-pressed
-          if (_isExpanded) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Show the translated expanded definition
-                  if (_expandedDefinition != null)
-                    Text(
-                      _expandedDefinition!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    )
-                  else
-                    // Minimal loading indicator for translation
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Translating context...',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ] else ...[
-            // Indicators: cycling and expansion availability
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Cycling indicator (if multiple meanings)
-                if (cyclableMeaning.totalMeanings > 1)
-                  Text(
-                    '${cyclableMeaning.currentIndex}/${cyclableMeaning.totalMeanings}',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 11,
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
-                
-                // Expansion indicator (if context available)
-                if (cyclableMeaning.meaning.context?.isNotEmpty == true)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
-              ],
-            ),
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -755,114 +648,58 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-          // Main translation row: emoji + translation
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Part-of-speech emoji indicator
-              Text(
-                PartOfSpeechEmojis.getEmojiForPOS(
-                  cyclableReverse.partOfSpeech, 
-                  language: widget.targetLanguage,
-                ),
-                style: const TextStyle(fontSize: 18),
-              ),
-              const SizedBox(width: 8),
-              // Translation text
-              Expanded(
-                child: Text(
-                  cyclableReverse.displayTranslation,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w500,
+            // Main translation row: emoji + translation
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Part-of-speech emoji indicator
+                Text(
+                  PartOfSpeechEmojis.getEmojiForPOS(
+                    cyclableReverse.partOfSpeech, 
+                    language: widget.targetLanguage,
                   ),
-                  maxLines: _isExpanded ? null : 2,
-                  overflow: _isExpanded ? null : TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 18),
+                ),
+                const SizedBox(width: 8),
+                // Translation text with clickable original word
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      children: [
+                        _createClickableOriginalWordSpan(),
+                        TextSpan(
+                          text: ' → ',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w300,
+                          ),
+                        ),
+                        _createClickableTranslatedWordSpan(cyclableReverse.displayTranslation),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // Cycling indicator (if multiple translations)
+            if (cyclableReverse.totalTranslations > 1) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: _handleTap,
+                child: Text(
+                  '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontSize: 11,
+                    decoration: TextDecoration.underline,
+                    decorationStyle: TextDecorationStyle.dotted,
+                  ),
                 ),
               ),
             ],
-          ),
-          
-          // Expanded content when long-pressed
-          if (_isExpanded) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Just the expanded translation content
-                  if (_expandedDefinition != null)
-                    Text(
-                      _expandedDefinition!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    )
-                  else
-                    // Minimal loading indicator
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Translating...',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ] else ...[
-            // Indicators: cycling and expansion availability
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Cycling indicator (if multiple translations)
-                if (cyclableReverse.totalTranslations > 1)
-                  Text(
-                    '${cyclableReverse.currentIndex}/${cyclableReverse.totalTranslations}',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 11,
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
-                
-                // Expansion indicator (if context available)
-                if (cyclableReverse.context?.isNotEmpty == true)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
-              ],
-            ),
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -884,13 +721,21 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
                 style: TextStyle(fontSize: 18),
               ),
               const SizedBox(width: 8),
-              // Translation text
+              // Translation text with clickable original word
               Expanded(
-                child: Text(
-                  _mlKitFallbackResult!,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w500,
+                child: RichText(
+                  text: TextSpan(
+                    children: [
+                      _createClickableOriginalWordSpan(),
+                      TextSpan(
+                        text: ' → ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w300,
+                        ),
+                      ),
+                      _createClickableTranslatedWordSpan(_mlKitFallbackResult!),
+                    ],
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -969,12 +814,6 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       estimatedMinHeight += 30; // Space for loading indicator
     }
     
-    // Factor in expanded content
-    if (_isExpanded && _expandedDefinition != null) {
-      final expandedLength = _expandedDefinition!.length;
-      estimatedLines += ((expandedLength / 45).ceil()).clamp(1, 5);
-      estimatedMinHeight += estimatedLines * 20;
-    }
     
     return _ContentMetrics(
       estimatedMinHeight: estimatedMinHeight,
@@ -985,9 +824,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   
   /// Get content-aware maximum width
   double _getContentAwareMaxWidth(double availableWidth, _ContentMetrics metrics) {
-    if (_isExpanded) {
-      return (availableWidth * 0.9).clamp(320, double.infinity);
-    } else if (metrics.hasLongContent) {
+    if (metrics.hasLongContent) {
       // Long content needs more width for better line breaks
       return (availableWidth * 0.88).clamp(300, double.infinity);
     } else if (_sentenceTranslation != null || _isSentenceLoading) {
@@ -999,9 +836,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   
   /// Get base minimum width based on content type
   double _getBaseMinWidth() {
-    if (_isExpanded) {
-      return 280; // Expanded content needs more space
-    } else if (_sentenceTranslation != null || _isSentenceLoading) {
+    if (_sentenceTranslation != null || _isSentenceLoading) {
       return 240; // Sentence translation minimum
     } else {
       return 180; // Word-only minimum
@@ -1010,9 +845,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   
   /// Get base maximum width based on available space
   double _getBaseMaxWidth(double availableWidth) {
-    if (_isExpanded) {
-      return (availableWidth * 0.9).clamp(320, double.infinity);
-    } else if (_sentenceTranslation != null || _isSentenceLoading) {
+    if (_sentenceTranslation != null || _isSentenceLoading) {
       return (availableWidth * 0.85).clamp(280, double.infinity);
     } else {
       return (availableWidth * 0.6).clamp(200, 300); // Word-only doesn't need much width
@@ -1069,13 +902,15 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     final sentenceText = _sentenceTranslation!;
     
     if (_currentBestMatch == null || _currentBestMatch!.isEmpty) {
-      // No match found, show plain text
-      return Text(
-        sentenceText,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurface,
-          height: 1.4,
-          fontSize: 14,
+      // No match found, show plain text using RichText for consistency
+      return RichText(
+        text: TextSpan(
+          text: sentenceText,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+            height: 1.4,
+            fontSize: 14,
+          ),
         ),
         softWrap: true,
       );
@@ -1090,7 +925,7 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     int lastEnd = 0;
     bool hasHighlighted = false;
-    final normalizedBestMatch = _normalizeWord(_currentBestMatch!);
+    final normalizedBestMatch = _getCachedNormalizedWord(_currentBestMatch!);
     
     for (final match in matches) {
       // Add any whitespace before this word
@@ -1108,21 +943,21 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       
       final word = match.group(0)!;
       final cleanWord = word.replaceAll(RegExp(r'''[.,!?;:'"]'''), '');
-      final normalizedWord = _normalizeWord(cleanWord);
+      final normalizedWord = _getCachedNormalizedWord(cleanWord);
       
       // Check if this word matches our stored best match (simple exact match after normalization)
       if (!hasHighlighted && normalizedWord == normalizedBestMatch) {
         
         print('🎯 Found word to highlight: "$word" matches stored best match "$_currentBestMatch"');
         
-        // Bold this word
+        // Bold this word with primary color to match translation styling
         spans.add(TextSpan(
           text: word,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface,
+            color: Theme.of(context).colorScheme.primary,
             height: 1.4,
             fontSize: 14,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600, // Same weight as translation
           ),
         ));
         hasHighlighted = true;
@@ -1190,6 +1025,130 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     await _handleMissingComponents(MissingComponent.dictionary);
   }
 
+  /// Get ML Kit single word translation to include as a candidate
+  Future<String?> _getMlKitSingleWordTranslation() async {
+    try {
+      print('CyclingPopup: Getting ML Kit single word translation for "${widget.selectedText}"...');
+      
+      final translationResponse = await widget.translationService.translateText(
+        text: widget.selectedText,
+        sourceLanguage: widget.sourceLanguage,
+        targetLanguage: widget.targetLanguage,
+        useCache: false,
+      );
+      
+      // Check if ML Kit translation was successful
+      if (translationResponse.source == TranslationSource.mlKit || 
+          translationResponse.source == TranslationSource.server) {
+        final mlKitTranslation = translationResponse.translatedText.trim();
+        print('CyclingPopup: ML Kit single word translation: "${mlKitTranslation}"');
+        return mlKitTranslation;
+      }
+      
+      print('CyclingPopup: ML Kit single word translation failed or models not available');
+      return null;
+      
+    } catch (e) {
+      print('CyclingPopup: ML Kit single word translation error: $e');
+      return null;
+    }
+  }
+
+  /// Apply smart prioritization including ML Kit candidate
+  Future<dynamic> _applySmartPrioritizationWithMlKit(dynamic lookupResult, bool isReverseLookup, String? mlKitCandidate) async {
+    print('🧠 SmartPrioritization: Starting prioritization with ML Kit candidate: "$mlKitCandidate"');
+    
+    // Wait for sentence translation to complete if it's still loading
+    if (_sentenceTranslation == null && _isSentenceLoading) {
+      print('🧠 SmartPrioritization: Waiting for sentence translation to complete...');
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    
+    // If we don't have sentence translation, use original prioritization
+    if (_sentenceTranslation == null || _sentenceTranslation!.trim().isEmpty) {
+      print('🧠 SmartPrioritization: No sentence translation available, using original order');
+      return await _applySmartPrioritization(lookupResult, isReverseLookup);
+    }
+    
+    // Calculate expected position of the word in the source sentence
+    final expectedPosition = _calculateExpectedPosition();
+    
+    // Get ML Kit score if we have a candidate
+    double mlKitScore = 0.0;
+    if (mlKitCandidate != null && mlKitCandidate.isNotEmpty) {
+      final mlKitResult = _calculateWordPriorityScore(mlKitCandidate, expectedPosition);
+      mlKitScore = mlKitResult.finalScore;
+      print('🧠 SmartPrioritization: ML Kit candidate "$mlKitCandidate" score: ${mlKitScore.toStringAsFixed(3)}');
+    }
+    
+    // Prioritize dictionary results
+    dynamic prioritizedResult;
+    double bestDictScore = 0.0;
+    String? bestDictMatch;
+    
+    if (isReverseLookup) {
+      prioritizedResult = _prioritizeReverseResults(lookupResult as ReverseLookupResult, expectedPosition);
+      if ((prioritizedResult as ReverseLookupResult).translations.isNotEmpty) {
+        bestDictMatch = prioritizedResult.translations.first.sourceWord;
+        bestDictScore = _calculateWordPriorityScore(bestDictMatch, expectedPosition).finalScore;
+      }
+    } else {
+      prioritizedResult = _prioritizeSourceResults(lookupResult as MeaningLookupResult, expectedPosition);
+      if ((prioritizedResult as MeaningLookupResult).meanings.isNotEmpty) {
+        bestDictMatch = prioritizedResult.meanings.first.meaning.targetMeaning;
+        bestDictScore = _calculateWordPriorityScore(bestDictMatch, expectedPosition).finalScore;
+      }
+    }
+    
+    print('🧠 SmartPrioritization: Best dictionary score: ${bestDictScore.toStringAsFixed(3)} ("$bestDictMatch")');
+    
+    // Log the complete comparison
+    print('🧠 SmartPrioritization: === DECISION SUMMARY ===');
+    print('🧠 SmartPrioritization: Word: "${widget.selectedText}"');
+    print('🧠 SmartPrioritization: Context: "${widget.context}"');
+    print('🧠 SmartPrioritization: Sentence translation: "${_sentenceTranslation}"');
+    if (mlKitCandidate != null) {
+      print('🧠 SmartPrioritization: ML Kit candidate: "$mlKitCandidate" (score: ${mlKitScore.toStringAsFixed(3)})');
+    } else {
+      print('🧠 SmartPrioritization: ML Kit candidate: None available');
+    }
+    print('🧠 SmartPrioritization: Best dictionary: "$bestDictMatch" (score: ${bestDictScore.toStringAsFixed(3)})');
+    
+    // Check if ML Kit wins and doesn't match a dictionary option
+    if (mlKitCandidate != null && mlKitScore > bestDictScore) {
+      // Check if ML Kit result matches any dictionary option (case-insensitive)
+      bool matchesDictionary = false;
+      if (isReverseLookup) {
+        final reverseResult = prioritizedResult as ReverseLookupResult;
+        matchesDictionary = reverseResult.translations.any((t) => 
+          t.sourceWord.toLowerCase() == mlKitCandidate.toLowerCase());
+      } else {
+        final sourceResult = prioritizedResult as MeaningLookupResult;
+        matchesDictionary = sourceResult.meanings.any((m) => 
+          m.meaning.targetMeaning.toLowerCase() == mlKitCandidate.toLowerCase());
+      }
+      
+      if (matchesDictionary) {
+        print('🧠 SmartPrioritization: DECISION: ML Kit matches dictionary → Using DICTIONARY');
+        print('🧠 SmartPrioritization: Reason: ML Kit "$mlKitCandidate" found in dictionary options');
+        return prioritizedResult;
+      } else {
+        print('🧠 SmartPrioritization: DECISION: ML Kit wins contextually → Using ML KIT');
+        print('🧠 SmartPrioritization: Reason: ML Kit score ${mlKitScore.toStringAsFixed(3)} > dictionary ${bestDictScore.toStringAsFixed(3)}, no dictionary match');
+        // Update best match for highlighting ML Kit result before setting state
+        _updateCurrentBestMatchForMlKit(mlKitCandidate);
+        setState(() {
+          _mlKitFallbackResult = mlKitCandidate;
+        });
+        return prioritizedResult; // Return dictionary results but display will show ML Kit
+      }
+    }
+    
+    print('🧠 SmartPrioritization: DECISION: Dictionary wins contextually → Using DICTIONARY');
+    print('🧠 SmartPrioritization: Reason: Dictionary score ${bestDictScore.toStringAsFixed(3)} >= ML Kit ${mlKitScore.toStringAsFixed(3)}');
+    return prioritizedResult;
+  }
+
   /// Try ML Kit translation as fallback when dictionary lookup fails
   Future<void> _tryMlKitFallback() async {
     try {
@@ -1213,10 +1172,12 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
       if (translationResponse.source == TranslationSource.mlKit || 
           translationResponse.source == TranslationSource.server) {
         print('CyclingPopup: ML Kit/Server fallback successful');
+        // Update best match for highlighting ML Kit result
+        _updateCurrentBestMatchForMlKit(translationResponse.translatedText);
         setState(() {
           _error = null;
           _isLoading = false;
-          // Store the ML Kit result for display (will need to add a field for this)
+          // Store the ML Kit result for display
           _mlKitFallbackResult = translationResponse.translatedText;
         });
         return;
@@ -1384,10 +1345,13 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   
   /// Calculate priority score for a word candidate based on fuzzy similarity and position
   _WordPrioritizationResult _calculateWordPriorityScore(String candidate, int expectedPosition) {
-    final sentenceWords = _sentenceTranslation!.toLowerCase()
-        .split(RegExp(r'[\s\p{P}]+', unicode: true))
-        .where((word) => word.isNotEmpty)
-        .toList();
+    // Check cache first
+    final cacheKey = '${candidate}_$expectedPosition';
+    if (_scoringCache.containsKey(cacheKey)) {
+      return _scoringCache[cacheKey]!;
+    }
+    
+    final sentenceWords = _getCachedSentenceWords();
     
     print('🧠 SmartPrioritization: Sentence words: [${sentenceWords.join(', ')}]');
     print('🧠 SmartPrioritization: Evaluating candidate: "${candidate}"');
@@ -1434,6 +1398,9 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     print('🧠 SmartPrioritization: Position score: ${positionScore.toStringAsFixed(3)}');
     print('🧠 SmartPrioritization: Final score: ${finalScore.toStringAsFixed(3)}');
     
+    // Cache the result for future use
+    _scoringCache[cacheKey] = result;
+    
     return result;
   }
 
@@ -1460,16 +1427,12 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     print('🎯 Updating best match for current candidate: "$currentCandidate"');
     
-    // Find the best match in sentence translation using same logic as prioritization
-    final sentenceWords = _sentenceTranslation!.toLowerCase()
-        .split(RegExp(r'[\s\p{P}]+', unicode: true))
-        .where((word) => word.isNotEmpty)
-        .toList();
-    
-    final normalizedCandidate = _normalizeWord(currentCandidate);
+    // Use cached sentence words and normalized candidate
+    final sentenceWords = _getCachedSentenceWords();
+    final normalizedCandidate = _getCachedNormalizedWord(currentCandidate);
     
     for (final sentenceWord in sentenceWords) {
-      final normalizedSentenceWord = _normalizeWord(sentenceWord);
+      final normalizedSentenceWord = _getCachedNormalizedWord(sentenceWord);
       
       if (normalizedSentenceWord == normalizedCandidate) {
         _currentBestMatch = sentenceWord;
@@ -1484,8 +1447,8 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
   
   /// Calculate fuzzy similarity between candidate and sentence word
   double _calculateFuzzySimilarity(String candidate, String sentenceWord) {
-    final normCandidate = _normalizeWord(candidate);
-    final normSentenceWord = _normalizeWord(sentenceWord);
+    final normCandidate = _getCachedNormalizedWord(candidate);
+    final normSentenceWord = _getCachedNormalizedWord(sentenceWord);
     
     // Exact match
     if (normCandidate == normSentenceWord) {
@@ -1581,11 +1544,11 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
         .where((word) => word.isNotEmpty)
         .toList();
     
-    final normalizedSelectedWord = _normalizeWord(widget.selectedText);
+    final normalizedSelectedWord = _getCachedNormalizedWord(widget.selectedText);
     
     // Find the position of the selected word in the source sentence
     for (int i = 0; i < sourceWords.length; i++) {
-      final normalizedSourceWord = _normalizeWord(sourceWords[i]);
+      final normalizedSourceWord = _getCachedNormalizedWord(sourceWords[i]);
       if (normalizedSourceWord.contains(normalizedSelectedWord) || 
           normalizedSelectedWord.contains(normalizedSourceWord)) {
         print('🧠 SmartPrioritization: Found selected word "${widget.selectedText}" at position $i in source sentence');
@@ -1595,5 +1558,197 @@ class _CyclingTranslationPopupState extends ConsumerState<CyclingTranslationPopu
     
     print('🧠 SmartPrioritization: Selected word "${widget.selectedText}" not found in context, defaulting to position 0');
     return 0; // Default to beginning if word not found
+  }
+  
+  /// Performance optimization: Cache helpers
+  
+  /// Get cached sentence words, splitting only once
+  List<String> _getCachedSentenceWords() {
+    if (_cachedSentenceWords == null && _sentenceTranslation != null) {
+      _cachedSentenceWords = _sentenceTranslation!.toLowerCase()
+          .split(RegExp(r'[\s\p{P}]+', unicode: true))
+          .where((word) => word.isNotEmpty)
+          .toList();
+    }
+    return _cachedSentenceWords ?? [];
+  }
+  
+  /// Get cached normalized word
+  String _getCachedNormalizedWord(String word) {
+    if (!_normalizedWordCache.containsKey(word)) {
+      _normalizedWordCache[word] = _normalizeWord(word);
+    }
+    return _normalizedWordCache[word]!;
+  }
+  
+  /// Invalidate performance caches when sentence translation changes
+  void _invalidatePerformanceCache() {
+    _cachedSentenceWords = null;
+    _normalizedWordCache.clear();
+    _scoringCache.clear();
+  }
+  
+  /// Get text style for translation based on sentence matching confidence
+  TextStyle? _getTranslationTextStyle(String translation) {
+    final baseStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
+      fontWeight: FontWeight.w500,
+    );
+    
+    // If no sentence translation available, use default styling
+    if (_sentenceTranslation == null) {
+      return baseStyle?.copyWith(
+        color: Theme.of(context).colorScheme.onSurface,
+      );
+    }
+    
+    // Check if this translation has a good match in the sentence
+    final hasGoodMatch = _checkTranslationMatch(translation);
+    
+    if (hasGoodMatch) {
+      // Good match: confident styling with bold weight and primary color
+      return baseStyle?.copyWith(
+        color: Theme.of(context).colorScheme.primary,
+        fontWeight: FontWeight.w600, // Bolder for confident matches
+      );
+    } else {
+      // No good match: same style but reduced opacity to show uncertainty
+      return baseStyle?.copyWith(
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6), // Reduced opacity
+      );
+    }
+  }
+  
+  /// Check if a translation has a good match in the sentence
+  bool _checkTranslationMatch(String translation) {
+    if (_sentenceTranslation == null) return false;
+    
+    final sentenceWords = _getCachedSentenceWords();
+    final normalizedTranslation = _getCachedNormalizedWord(translation);
+    
+    // Check for exact or fuzzy matches above confidence threshold
+    for (final sentenceWord in sentenceWords) {
+      final normalizedSentenceWord = _getCachedNormalizedWord(sentenceWord);
+      
+      // Exact match
+      if (normalizedSentenceWord == normalizedTranslation) {
+        return true;
+      }
+      
+      // Fuzzy match above threshold
+      final similarity = _calculateFuzzySimilarity(translation, sentenceWord);
+      if (similarity >= 0.6) { // Slightly lower threshold than highlighting (0.7)
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /// Update best match for highlighting ML Kit translation
+  void _updateCurrentBestMatchForMlKit(String mlKitTranslation) {
+    if (_sentenceTranslation == null) {
+      _currentBestMatch = null;
+      return;
+    }
+    
+    print('🎯 Updating best match for ML Kit translation: "$mlKitTranslation"');
+    
+    // Use cached sentence words and normalized ML Kit translation
+    final sentenceWords = _getCachedSentenceWords();
+    final normalizedMlKit = _getCachedNormalizedWord(mlKitTranslation);
+    
+    // Find exact match first
+    for (final sentenceWord in sentenceWords) {
+      final normalizedSentenceWord = _getCachedNormalizedWord(sentenceWord);
+      
+      if (normalizedSentenceWord == normalizedMlKit) {
+        _currentBestMatch = sentenceWord;
+        print('🎯 Stored ML Kit best match: "$sentenceWord" for translation "$mlKitTranslation"');
+        return;
+      }
+    }
+    
+    // If no exact match, try fuzzy matching like in prioritization
+    double bestSimilarity = 0.0;
+    String? bestMatch;
+    
+    for (final sentenceWord in sentenceWords) {
+      final similarity = _calculateFuzzySimilarity(mlKitTranslation, sentenceWord);
+      if (similarity > bestSimilarity && similarity > 0.7) { // Use same threshold as prioritization
+        bestSimilarity = similarity;
+        bestMatch = sentenceWord;
+      }
+    }
+    
+    if (bestMatch != null) {
+      _currentBestMatch = bestMatch;
+      print('🎯 Stored ML Kit fuzzy match: "$bestMatch" (similarity: ${bestSimilarity.toStringAsFixed(3)}) for translation "$mlKitTranslation"');
+    } else {
+      _currentBestMatch = null;
+      print('🎯 No match found for ML Kit translation "$mlKitTranslation"');
+    }
+  }
+
+  /// Launch dictionary URL for the original word
+  Future<void> _launchDictionaryLink() async {
+    final settings = ref.read(settingsProvider);
+    final homeLanguage = settings.defaultTargetLanguage;
+    
+    if (homeLanguage == 'auto' || homeLanguage == widget.sourceLanguage) {
+      // If home language is auto or same as source, don't show dictionary
+      return;
+    }
+    
+    final url = DictionaryLinkService.getDictionaryUrl(
+      widget.selectedText,
+      widget.sourceLanguage,
+      homeLanguage,
+    );
+    
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        print('🔗 Launched dictionary: $url');
+      } else {
+        print('❌ Cannot launch dictionary URL: $url');
+      }
+    } catch (e) {
+      print('❌ Error launching dictionary: $e');
+    }
+  }
+
+  /// Create clickable text span for original word
+  TextSpan _createClickableOriginalWordSpan() {
+    final settings = ref.read(settingsProvider);
+    final homeLanguage = settings.defaultTargetLanguage;
+    final isClickable = homeLanguage != 'auto' && homeLanguage != widget.sourceLanguage;
+    
+    return TextSpan(
+      text: widget.selectedText,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+        color: isClickable 
+          ? Theme.of(context).colorScheme.primary
+          : Theme.of(context).colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w400,
+        decoration: isClickable ? TextDecoration.underline : null,
+        decorationColor: isClickable ? Theme.of(context).colorScheme.primary : null,
+      ),
+      recognizer: isClickable ? (TapGestureRecognizer()..onTap = _launchDictionaryLink) : null,
+    );
+  }
+
+  /// Create clickable text span for translated word (for cycling)
+  TextSpan _createClickableTranslatedWordSpan(String translatedText) {
+    final baseStyle = _getTranslationTextStyle(translatedText);
+    return TextSpan(
+      text: translatedText,
+      style: (baseStyle ?? Theme.of(context).textTheme.bodyLarge)?.copyWith(
+        decoration: TextDecoration.underline,
+        decorationStyle: TextDecorationStyle.dotted,
+        decorationColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+      ),
+      recognizer: TapGestureRecognizer()..onTap = _handleTap,
+    );
   }
 }

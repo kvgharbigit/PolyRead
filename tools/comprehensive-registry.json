@@ -1,0 +1,93 @@
+{
+  "version": "2.2.0",
+  "format_version": "2.1",
+  "updated_at": "2025-10-31T23:56:59Z",
+  "description": "PolyRead multi-language dictionary registry with cycling support",
+  "language_packs": {
+    "es-en": {
+      "id": "es-en",
+      "name": "Spanish ↔ English Dictionary (Bidirectional)",
+      "description": "Complete Spanish-English bidirectional dictionary with 94K word groups and smart cycling support",
+      "version": "2.2.0",
+      "pack_type": "dictionary",
+      "source_language": "es",
+      "target_language": "en",
+      "supported_target_languages": ["en", "es"],
+      "size_mb": 18.6,
+      "size_bytes": 18648116,
+      "entries": 94334,
+      "unique_headwords": 94334,
+      "meanings": 126873,
+      "reverse_lookups": 113177,
+      "checksum": "sha256-placeholder-es-en",
+      "features": [
+        "one_level_cycling",
+        "bidirectional_lookup", 
+        "quality_ranking",
+        "part_of_speech_tags",
+        "context_expansion",
+        "smart_prioritization"
+      ],
+      "technical_details": {
+        "schema_version": 6,
+        "database_format": "sqlite",
+        "compression": "zip",
+        "indexes": ["word_groups_base", "meanings_order", "reverse_lookup_target"],
+        "fts_support": true
+      },
+      "quality_metrics": {
+        "proper_nouns_filtered": true,
+        "conjugations_filtered": true,
+        "quality_scored": true,
+        "primary_meanings_marked": true
+      }
+    },
+    "fr-en": {
+      "id": "fr-en", 
+      "name": "French ↔ English Dictionary (Bidirectional)",
+      "description": "Complete French-English bidirectional dictionary with 75K word groups and smart cycling support",
+      "version": "2.2.0",
+      "pack_type": "dictionary",
+      "source_language": "fr",
+      "target_language": "en", 
+      "supported_target_languages": ["en", "fr"],
+      "size_mb": 13.7,
+      "size_bytes": 13655366,
+      "entries": 75032,
+      "unique_headwords": 75032,
+      "meanings": 98438,
+      "reverse_lookups": 89455,
+      "checksum": "sha256-placeholder-fr-en",
+      "features": [
+        "one_level_cycling",
+        "bidirectional_lookup",
+        "quality_ranking", 
+        "part_of_speech_tags",
+        "context_expansion",
+        "smart_prioritization",
+        "french_accent_support"
+      ],
+      "technical_details": {
+        "schema_version": 6,
+        "database_format": "sqlite",
+        "compression": "zip", 
+        "indexes": ["word_groups_base", "meanings_order", "reverse_lookup_target"],
+        "fts_support": true
+      },
+      "quality_metrics": {
+        "proper_nouns_filtered": true,
+        "conjugations_filtered": true,
+        "quality_scored": true,
+        "primary_meanings_marked": true
+      }
+    }
+  },
+  "metadata": {
+    "total_packs": 2,
+    "total_languages": 2,
+    "supported_pairs": ["es-en", "fr-en"],
+    "data_source": "Vuizur Wiktionary-Dictionaries",
+    "builder_version": "2.2.0",
+    "generated_by": "PolyRead Dictionary Builder"
+  }
+}

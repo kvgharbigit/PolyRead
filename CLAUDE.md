@@ -32,6 +32,17 @@ PolyRead is a Flutter-based language learning application that enables users to 
 
 ## 📊 Production Status
 
+### ✅ **COMPLETED v2.5 - HYPERLINKED DICTIONARY INTEGRATION** 🔗
+
+- **🔗 Bidirectional Dictionary Links**: Tap original words to open home-language-specific dictionary explanations
+- **🎯 Smart Service Selection**: WordReference for quality pairs, Reverso for context, Google Translate fallback
+- **🖱️ Conflict-Free Tap Handling**: Original word→dictionary, translated word→cycling, no interaction conflicts
+- **🌍 Universal Language Support**: Any source→home language pair with intelligent URL generation
+- **🎨 Visual Distinction**: Underlined original words (dictionary), dotted translated words (cycling)
+- **⚙️ Intelligent Availability**: Dictionary links only when home ≠ source language, seamless UX
+- **📱 External App Launch**: Opens browser/dictionary apps for comprehensive word explanations
+- **🔧 Production Ready**: Full integration with existing Smart Contextual Translation v2.4 system
+
 ### ✅ **COMPLETED v2.4 - SMART CONTEXTUAL TRANSLATION** 🧠
 - **🧠 Smart Word Prioritization**: AI-powered ranking using ML Kit sentence translation as ground truth
 - **🎯 Fuzzy Matching Algorithm**: Handles conjugations, accents, and spelling variations (80% similarity + 20% position weight)
@@ -151,6 +162,41 @@ CREATE TABLE target_reverse_lookup (
     quality_score INTEGER           -- Higher = better translation
 );
 ```
+
+## 🔗 **Dictionary Link Integration v2.5**
+
+**✅ IMPLEMENTATION COMPLETE** - Universal dictionary hyperlinking achieved:
+
+### **Smart Dictionary Service Selection:**
+- **WordReference**: Best quality for major language pairs (EN↔ES, FR↔EN, DE↔EN, etc.)
+- **Reverso Context**: European languages with contextual examples and usage
+- **Google Translate**: Universal fallback supporting 100+ language pairs
+
+### **Conflict-Free Interaction Design:**
+```
+Original Word (before →) ═══> Dictionary Link (underlined, primary color)
+    ↓ perro → dog ↑
+Translated Word (after →) ═══> Cycling Translations (dotted underline)
+```
+
+### **URL Generation Examples:**
+```dart
+// English→Spanish (Spanish speaker)
+"dog" → https://www.wordreference.com/enes/translation.asp?spen=dog
+
+// French→Spanish (Spanish speaker) 
+"chien" → https://www.wordreference.com/fres/translation.asp?spen=chien
+
+// Japanese→English (English speaker)
+"犬" → https://translate.google.com/?sl=ja&tl=en&text=犬&op=translate
+```
+
+### **Technical Implementation:**
+- **Service**: `DictionaryLinkService` with language pair detection and URL generation
+- **UI Integration**: Conflict-free tap handling in `CyclingTranslationPopup`
+- **Smart Availability**: Only shows links when home language ≠ source language
+- **Visual Cues**: Clear distinction between dictionary (solid underline) and cycling (dotted underline)
+- **External Launch**: Uses `url_launcher` for seamless browser/app integration
 
 ## 📚 Documentation
 

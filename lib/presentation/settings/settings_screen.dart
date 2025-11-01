@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:polyread/core/providers/settings_provider.dart';
 import 'package:polyread/core/themes/polyread_spacing.dart';
 import 'package:polyread/core/themes/polyread_typography.dart';
@@ -164,30 +165,6 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.language_rounded,
                 onTap: () {
                   context.push('/language-packs');
-                },
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: PolyReadSpacing.majorSpacing),
-          
-          // Storage & Performance Settings
-          _ElegantSettingsSection(
-            title: 'Storage & Performance',
-            subtitle: 'Manage app storage and optimize performance',
-            icon: Icons.storage_rounded,
-            children: [
-              _ElegantSlider(
-                title: 'Storage Limit',
-                subtitle: 'Maximum storage for books and language data',
-                icon: Icons.folder_outlined,
-                value: settings.maxStorageMB.toDouble(),
-                min: AppConstants.minStorageMB.toDouble(),
-                max: AppConstants.maxStorageMB.toDouble(),
-                divisions: ((AppConstants.maxStorageMB - AppConstants.minStorageMB) / 100).round(),
-                valueLabel: '${settings.maxStorageMB} MB',
-                onChanged: (value) {
-                  settingsNotifier.setMaxStorageMB(value.round());
                 },
               ),
             ],
@@ -649,67 +626,6 @@ class _ElegantSlider extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ElegantSwitch extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  
-  const _ElegantSwitch({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.value,
-    required this.onChanged,
-  });
-  
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-            width: 1,
-          ),
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: PolyReadSpacing.cardPadding,
-          vertical: PolyReadSpacing.smallSpacing,
-        ),
-        leading: Icon(
-          icon,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-        title: Text(
-          title,
-          style: PolyReadTypography.interfaceBody.copyWith(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: PolyReadTypography.interfaceCaption.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        trailing: Switch(
-          value: value,
-          onChanged: onChanged,
-          activeThumbColor: Theme.of(context).colorScheme.primary,
-          activeTrackColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-          inactiveThumbColor: Theme.of(context).colorScheme.outline,
-          inactiveTrackColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-        ),
       ),
     );
   }

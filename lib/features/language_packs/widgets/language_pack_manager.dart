@@ -6,11 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/download_progress.dart';
-import 'storage_chart.dart';
 import '../providers/language_packs_provider.dart';
-import '../services/drift_language_pack_service.dart';
 import '../services/language_pack_registry_service.dart' as registry_service;
-import '../../../core/providers/database_provider.dart' as db;
 import '../../../core/themes/polyread_spacing.dart';
 import '../../../core/themes/polyread_typography.dart';
 
@@ -23,7 +20,6 @@ class LanguagePackManager extends ConsumerStatefulWidget {
 
 class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     with TickerProviderStateMixin {
-  late TabController _tabController;
   final registry_service.LanguagePackRegistryService _registryService = 
       registry_service.LanguagePackRegistryService();
   List<registry_service.LanguagePackInfo>? _availablePacks;
@@ -45,7 +41,6 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -56,7 +51,6 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _animationController.dispose();
     _progressSubscription?.cancel();
     _cleanupTimer?.cancel(); // Prevent memory leaks from timers
@@ -122,17 +116,11 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     return Scaffold(
       appBar: _buildElegantAppBar(context),
       backgroundColor: Theme.of(context).colorScheme.surface,
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildLanguagePacksTab(),
-          _buildStorageTab(),
-        ],
-      ),
+      body: _buildLanguagePacksTab(),
     );
   }
   
-  /// Build elegant app bar with tabs
+  /// Build elegant app bar
   PreferredSizeWidget _buildElegantAppBar(BuildContext context) {
     return AppBar(
       title: Text(
@@ -145,28 +133,6 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
       foregroundColor: Theme.of(context).colorScheme.onSurface,
       elevation: 0,
       centerTitle: true,
-      bottom: TabBar(
-        controller: _tabController,
-        indicatorColor: Theme.of(context).colorScheme.primary,
-        labelColor: Theme.of(context).colorScheme.primary,
-        unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-        labelStyle: PolyReadTypography.interfaceBodyMedium.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: PolyReadTypography.interfaceBodyMedium.copyWith(
-          fontWeight: FontWeight.w500,
-        ),
-        tabs: const [
-          Tab(
-            icon: Icon(Icons.translate_rounded),
-            text: 'Language Packs',
-          ),
-          Tab(
-            icon: Icon(Icons.storage_rounded),
-            text: 'Storage',
-          ),
-        ],
-      ),
     );
   }
 
@@ -783,134 +749,6 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     }
   }
 
-  Widget _buildStorageTab() {
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: PolyReadSpacing.getResponsivePadding(context),
-      children: [
-        const StorageChart(),
-        const SizedBox(height: PolyReadSpacing.majorSpacing),
-        _buildElegantStorageActions(),
-      ],
-    );
-  }
-
-  /// Build elegant storage management section
-  Widget _buildElegantStorageActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section header
-        Padding(
-          padding: const EdgeInsets.only(bottom: PolyReadSpacing.elementSpacing),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(PolyReadSpacing.smallSpacing),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
-                ),
-                child: Icon(
-                  Icons.settings_rounded,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: PolyReadSpacing.elementSpacing),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Storage Management',
-                      style: PolyReadTypography.interfaceSubheadline.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      'Maintain and optimize your language packs',
-                      style: PolyReadTypography.interfaceCaption.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        
-        // Elegant actions container
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
-            boxShadow: PolyReadSpacing.cardShadow,
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(PolyReadSpacing.cardRadius),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _validateAllPacks,
-                child: Padding(
-                  padding: const EdgeInsets.all(PolyReadSpacing.cardPadding),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(PolyReadSpacing.smallSpacing),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(PolyReadSpacing.buttonRadius),
-                        ),
-                        child: Icon(
-                          Icons.verified_rounded,
-                          size: 20,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: PolyReadSpacing.elementSpacing),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Validate All Packs',
-                              style: PolyReadTypography.interfaceBody.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: PolyReadSpacing.microSpacing),
-                            Text(
-                              'Check integrity and repair corrupted language packs',
-                              style: PolyReadTypography.interfaceCaption.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
   /// Build elegant error state with retry option
   Widget _buildElegantErrorState() {
@@ -1214,20 +1052,6 @@ class _LanguagePackManagerState extends ConsumerState<LanguagePackManager>
     }
   }
 
-  Future<void> _validateAllPacks() async {
-    try {
-      final driftService = DriftLanguagePackService(ref.read(db.databaseProvider));
-      final brokenPacks = await driftService.detectBrokenPacks();
-      
-      if (brokenPacks.isEmpty) {
-        _showSuccess('✅ All language packs are valid');
-      } else {
-        _showError('Found ${brokenPacks.length} broken packs');
-      }
-    } catch (e) {
-      _showError('Validation failed: $e');
-    }
-  }
 
   /// Show elegant pack details dialog
   Future<void> _showElegantPackDetails(String sourceCode, String targetCode, String label) async {

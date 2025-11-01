@@ -18,7 +18,6 @@ class ReaderConfig {
   
   // Error messages
   static const String translationServiceNotAvailable = 'Translation service not available';
-  static const String bookmarkServiceNotAvailable = 'Bookmark service not available';
   static const String readerNotInitialized = 'Reader not initialized';
   
   // UI dimensions
