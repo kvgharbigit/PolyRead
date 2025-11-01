@@ -17,8 +17,6 @@ import 'package:polyread/features/reader/widgets/reader_settings_dialog.dart';
 import 'package:polyread/features/reader/models/reader_settings.dart';
 import 'package:polyread/features/reader/services/reader_settings_service.dart';
 import 'package:polyread/features/reader/services/auto_scroll_service.dart';
-import 'package:polyread/features/reader/widgets/bookmarks_dialog.dart';
-import 'package:polyread/features/reader/services/bookmark_service.dart';
 import 'package:polyread/features/translation/widgets/cycling_translation_popup.dart';
 import 'package:polyread/features/reader/providers/reader_translation_provider.dart';
 import 'package:polyread/core/database/app_database.dart';
@@ -46,7 +44,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   ReaderEngine? _readerEngine;
   ReadingProgressService? _progressService;
   dynamic _translationService;
-  BookmarkService? _bookmarkService;
   ReaderSettingsService? _settingsService;
   AutoScrollService? _autoScrollService;
   Timer? _progressTimer;
@@ -101,7 +98,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     try {
       final database = ref.read(databaseProvider);
       _progressService = ReadingProgressService(database);
-      _bookmarkService = BookmarkService(database);
       
       // Initialize settings service
       _settingsService = ReaderSettingsService();
@@ -611,50 +607,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     );
   }
 
-  Future<void> _toggleBookmark() async {
-    if (_bookmarkService == null || _readerEngine == null) return;
-    
-    try {
-      final currentPosition = _readerEngine!.currentPosition;
-      final result = await _bookmarkService!.toggleBookmark(
-        bookId: widget.book.id,
-        position: currentPosition,
-        title: null, // Will generate default title
-        excerpt: _readerEngine!.getSelectedText(), // Use current selection if available
-      );
-      
-      final message = result.wasAdded
-          ? 'Bookmark added at ${result.bookmark.displayTitle}'
-          : 'Bookmark removed from ${result.bookmark.displayTitle}';
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-      
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error managing bookmark: $e')),
-      );
-    }
-  }
-
-  void _showBookmarks() {
-    if (_bookmarkService == null || _readerEngine == null) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => BookmarksDialog(
-        bookId: widget.book.id,
-        bookTitle: widget.book.title,
-        bookmarkService: _bookmarkService!,
-        currentPosition: _readerEngine!.currentPosition,
-        onNavigate: (position) async {
-          await _readerEngine!.goToPosition(position);
-          setState(() {}); // Refresh UI with new position
-        },
-      ),
-    );
-  }
   
   @override
   Widget build(BuildContext context) {
@@ -747,15 +699,46 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
           body: isImmersive
               ? Column(
                   children: [
-                    // Top filler exactly the same white as the page
-                    Container(
-                      height: statusBarHeight,
-                      color: statusBarFillColor,
+                    // Top filler exactly the same white as the page - tappable to exit immersive mode
+                    GestureDetector(
+                      onTap: () {
+                        print('🎯 STATUS BAR TAP: Exiting immersive mode');
+                        final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
+                        immersiveModeNotifier.setImmersiveMode(false);
+                        _updateStatusBarForImmersiveMode(false);
+                        _startAutoEnterImmersiveTimer(); // Restart auto-enter timer
+                      },
+                      onTapDown: (_) {
+                        // Provide subtle visual feedback on tap
+                        HapticFeedback.lightImpact();
+                      },
+                      behavior: HitTestBehavior.opaque, // Ensure taps are captured across the entire area
+                      child: Container(
+                        height: statusBarHeight,
+                        color: statusBarFillColor,
+                        width: double.infinity, // Ensure full width coverage
+                        // Add a subtle hint that this area is interactive
+                        child: statusBarHeight > 0 ? Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: statusBarFillColor.computeLuminance() > 0.5 
+                                    ? Colors.black.withOpacity(0.05)
+                                    : Colors.white.withOpacity(0.05),
+                                width: 0.5,
+                              ),
+                            ),
+                          ),
+                        ) : null,
+                      ),
                     ),
                     Expanded(child: _buildReaderBody(pageBg: pageBg)),
                   ],
                 )
-              : _buildReaderBody(pageBg: null),
+              : SafeArea(
+                  top: true, // Respect the app bar in non-immersive mode
+                  child: _buildReaderBody(pageBg: null),
+                ),
         ),
       ),
     );
@@ -769,18 +752,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.bookmark_outline),
-          onPressed: () async {
-            if (_bookmarkService != null && _readerEngine != null) {
-              await _toggleBookmark();
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text(ReaderConfig.bookmarkServiceNotAvailable)),
-              );
-            }
-          },
-        ),
-        IconButton(
           icon: const Icon(Icons.search),
           onPressed: () {
             _showSearchDialog();
@@ -791,9 +762,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
             switch (value) {
               case 'toc':
                 _showTableOfContents();
-                break;
-              case 'bookmarks':
-                _showBookmarks();
                 break;
               case 'settings':
                 _showReaderSettings();
@@ -806,13 +774,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
               child: ListTile(
                 leading: Icon(Icons.list),
                 title: Text('Table of Contents'),
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'bookmarks',
-              child: ListTile(
-                leading: Icon(Icons.bookmarks),
-                title: Text('Bookmarks'),
               ),
             ),
             const PopupMenuItem(
