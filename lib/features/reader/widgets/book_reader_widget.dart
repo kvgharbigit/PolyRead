@@ -69,6 +69,10 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   // Immersive reading mode timer (state managed by provider)
   Timer? _immersiveModeTimer;
   
+  // Chapter navigation state
+  bool _showNextChapterPill = false;
+  Timer? _hideChapterPillTimer;
+  
   @override
   void initState() {
     super.initState();
@@ -80,6 +84,7 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
   void dispose() {
     _progressTimer?.cancel();
     _immersiveModeTimer?.cancel();
+    _hideChapterPillTimer?.cancel();
     
     // Reset immersive mode when leaving reader
     ref.read(immersiveModeProvider.notifier).setImmersiveMode(false);
@@ -776,6 +781,10 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
                       ),
                     ],
                   ),
+                  
+                  // Floating next chapter pill (only in immersive mode)
+                  if (_showNextChapterPill)
+                    _buildNextChapterPill(),
                 ],
               )
             : SafeArea(
@@ -785,6 +794,149 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
         ),
       ),
     );
+  }
+  
+  /// Build the floating next chapter pill
+  Widget _buildNextChapterPill() {
+    final pageBg = _readerSettings.getPageBackgroundColor(context);
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    
+    return Positioned(
+      bottom: safeBottom + 32, // Above home indicator with padding
+      left: 0,
+      right: 0,
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 500),
+          tween: Tween(begin: 0.0, end: 1.0),
+          curve: Curves.elasticOut,
+          builder: (context, value, child) {
+            return Transform.translate(
+              offset: Offset(0, 50 * (1 - value)), // Slide up animation
+              child: Opacity(
+                opacity: value,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: pageBg.computeLuminance() > 0.5
+                          ? Colors.black.withOpacity(0.85)
+                          : Colors.white.withOpacity(0.85),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: InkWell(
+                      onTap: () => _goToNextChapter(),
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Next',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: pageBg.computeLuminance() > 0.5
+                                    ? Colors.white
+                                    : Colors.black,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 18,
+                              color: pageBg.computeLuminance() > 0.5
+                                  ? Colors.white
+                                  : Colors.black,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+  
+  /// Navigate to next chapter
+  Future<void> _goToNextChapter() async {
+    if (_readerEngine != null) {
+      print('🔄 CHAPTER NAV: Attempting to go to next chapter');
+      final success = await _readerEngine!.goToNext();
+      if (success) {
+        print('🔄 CHAPTER NAV: Successfully moved to next chapter');
+        // Hide the pill after successful navigation
+        if (mounted) {
+          setState(() {
+            _showNextChapterPill = false;
+          });
+        }
+      } else {
+        print('🔄 CHAPTER NAV: No next chapter available');
+      }
+    }
+  }
+  
+  /// Show the next chapter pill with auto-hide timer
+  void _showNextChapterPillWithAutoHide() {
+    if (!mounted) return;
+    
+    print('🔄 CHAPTER NAV: Showing next chapter pill');
+    setState(() {
+      _showNextChapterPill = true;
+    });
+    
+    // Cancel any existing timer
+    _hideChapterPillTimer?.cancel();
+    
+    // Auto-hide after 4 seconds
+    _hideChapterPillTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        print('🔄 CHAPTER NAV: Auto-hiding next chapter pill');
+        setState(() {
+          _showNextChapterPill = false;
+        });
+      }
+    });
+  }
+  
+  /// Check if at end of chapter and show pill if needed
+  void _checkForChapterEnd() async {
+    if (!mounted || _readerEngine == null) return;
+    
+    // Only show in immersive mode
+    final isImmersive = ref.read(immersiveModeProvider);
+    if (!isImmersive) return;
+    
+    // For now, let's add a method to detect scroll position
+    // This will need to be enhanced based on the specific reader engine
+    print('🔄 CHAPTER NAV: Checking for chapter end');
+    
+    // Check if there's a next chapter available
+    try {
+      // We can't actually call goToNext() to test without navigating
+      // So for now, we'll assume there's always a next chapter
+      // This logic will need to be refined based on the specific reader engine
+      
+      if (!_showNextChapterPill) {
+        _showNextChapterPillWithAutoHide();
+      }
+    } catch (e) {
+      print('🔄 CHAPTER NAV: Error checking for next chapter: $e');
+    }
   }
   
   PreferredSizeWidget _buildAppBar() {
@@ -809,6 +961,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
               case 'settings':
                 _showReaderSettings();
                 break;
+              case 'test_pill':
+                _showNextChapterPillWithAutoHide();
+                break;
             }
           },
           itemBuilder: (context) => [
@@ -824,6 +979,13 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
               child: ListTile(
                 leading: Icon(Icons.tune),
                 title: Text('Reading Settings'),
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'test_pill',
+              child: ListTile(
+                leading: Icon(Icons.arrow_forward),
+                title: Text('Test Chapter Pill'),
               ),
             ),
           ],
