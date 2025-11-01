@@ -717,19 +717,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
                         height: statusBarHeight,
                         color: statusBarFillColor,
                         width: double.infinity, // Ensure full width coverage
-                        // Add a subtle hint that this area is interactive
-                        child: statusBarHeight > 0 ? Container(
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: statusBarFillColor.computeLuminance() > 0.5 
-                                    ? Colors.black.withOpacity(0.05)
-                                    : Colors.white.withOpacity(0.05),
-                                width: 0.5,
-                              ),
-                            ),
-                          ),
-                        ) : null,
                       ),
                     ),
                     Expanded(child: _buildReaderBody(pageBg: pageBg)),
