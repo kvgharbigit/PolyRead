@@ -811,10 +811,12 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
           tween: Tween(begin: 0.0, end: 1.0),
           curve: Curves.elasticOut,
           builder: (context, value, child) {
+            // Clamp value to prevent opacity assertion errors
+            final clampedValue = value.clamp(0.0, 1.0);
             return Transform.translate(
-              offset: Offset(0, 50 * (1 - value)), // Slide up animation
+              offset: Offset(0, 50 * (1 - clampedValue)), // Slide up animation
               child: Opacity(
-                opacity: value,
+                opacity: clampedValue,
                 child: Material(
                   color: Colors.transparent,
                   child: Container(
