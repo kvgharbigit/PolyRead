@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:polyread/features/reader/engines/reader_interface.dart';
 import 'package:polyread/features/reader/engines/pdf_reader_engine.dart';
@@ -86,6 +87,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     // Reset immersive mode when leaving reader
     ref.read(immersiveModeProvider.notifier).setImmersiveMode(false);
     
+    // Restore normal status bar when leaving reader
+    _updateStatusBarForImmersiveMode(false);
+    
     _readerEngine?.dispose();
     // Don't dispose translation service here - it's managed by Riverpod
     _settingsService?.dispose();
@@ -166,6 +170,9 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       
       // Start progress tracking
       _startProgressTracking();
+      
+      // Start auto-enter immersive mode timer
+      _startAutoEnterImmersiveTimer();
       
       setState(() {
         _isLoading = false;
@@ -511,22 +518,90 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     
     final isImmersive = ref.read(immersiveModeProvider);
     
-    // Optional: Auto-show UI after 10 seconds of immersive mode
+    // Update status bar color to match page background
+    _updateStatusBarForImmersiveMode(isImmersive);
+    
+    // Auto-enter immersive mode after inactivity when not immersive
     if (isImmersive) {
-      _startImmersiveModeTimer();
+      _immersiveModeTimer?.cancel(); // Cancel auto-enter timer when in immersive mode
     } else {
-      _immersiveModeTimer?.cancel();
+      _startAutoEnterImmersiveTimer(); // Start timer to auto-enter immersive mode
     }
   }
 
-  void _startImmersiveModeTimer() {
+  void _startAutoEnterImmersiveTimer() {
     _immersiveModeTimer?.cancel();
     _immersiveModeTimer = Timer(ReaderConfig.immersiveModeAutoTimeout, () {
       if (mounted) {
         final immersiveModeNotifier = ref.read(immersiveModeProvider.notifier);
-        immersiveModeNotifier.setImmersiveMode(false);
+        immersiveModeNotifier.setImmersiveMode(true);
+        // Update status bar when auto-entering immersive mode
+        _updateStatusBarForImmersiveMode(true);
       }
     });
+  }
+
+  void _updateStatusBarForImmersiveMode(bool isImmersive) {
+    print('🎨 STATUS BAR: Updating for immersive mode: $isImmersive');
+    
+    if (isImmersive) {
+      // Get unified theme colors for status bar
+      final themeData = _readerSettings.getThemeData(context);
+      final backgroundColor = themeData.colorScheme.background;
+      final isLightBackground = backgroundColor.computeLuminance() > 0.5;
+      
+      print('🎨 IMMERSIVE: Reader theme: ${_readerSettings.theme}');
+      print('🎨 IMMERSIVE: Background color: ${backgroundColor.toString()} (${backgroundColor.value.toRadixString(16)})');
+      print('🎨 IMMERSIVE: Luminance: ${backgroundColor.computeLuminance()}');
+      print('🎨 IMMERSIVE: Is light background: $isLightBackground');
+      
+      // Set immersive system UI mode
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.immersiveSticky,
+        overlays: [SystemUiOverlay.top], // Keep status bar visible but styled
+      );
+      
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarColor: backgroundColor, // Try setting the actual color instead of transparent
+          statusBarBrightness: isLightBackground ? Brightness.light : Brightness.dark,
+          statusBarIconBrightness: isLightBackground ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: backgroundColor,
+          systemNavigationBarIconBrightness: isLightBackground ? Brightness.dark : Brightness.light,
+          systemNavigationBarDividerColor: backgroundColor,
+        ),
+      );
+      
+      print('🎨 IMMERSIVE: Applied SystemUIMode.immersiveSticky with background color');
+    } else {
+      // Restore normal system UI mode
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.edgeToEdge,
+        overlays: SystemUiOverlay.values,
+      );
+      
+      // Restore app-wide theme colors for status bar
+      final appTheme = Theme.of(context);
+      final backgroundColor = appTheme.colorScheme.surface;
+      final isLightBackground = backgroundColor.computeLuminance() > 0.5;
+      
+      print('🎨 NORMAL: App theme background: ${backgroundColor.toString()} (${backgroundColor.value.toRadixString(16)})');
+      print('🎨 NORMAL: Luminance: ${backgroundColor.computeLuminance()}');
+      print('🎨 NORMAL: Is light background: $isLightBackground');
+      
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent, // Keep transparent for normal mode
+          statusBarBrightness: isLightBackground ? Brightness.light : Brightness.dark,
+          statusBarIconBrightness: isLightBackground ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: backgroundColor,
+          systemNavigationBarIconBrightness: isLightBackground ? Brightness.dark : Brightness.light,
+          systemNavigationBarDividerColor: backgroundColor,
+        ),
+      );
+      
+      print('🎨 NORMAL: Restored SystemUIMode.edgeToEdge');
+    }
   }
   
   void _addToVocabulary(String word) {
@@ -640,12 +715,48 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       );
     }
     
+    final readerThemeData = _readerSettings.getThemeData(context);
+    
+    // NEW: single source of truth for the page bg used by the WebView/CSS
+    final pageBg = _readerSettings.getPageBackgroundColor(context);
+    
+    // In immersive, paint Scaffold with the **page** color (not theme color).
+    final scaffoldColor = isImmersive ? pageBg : null;
+    
+    // This was previously readerThemeData.colorScheme.background (cream)
+    final statusBarFillColor = isImmersive ? pageBg : readerThemeData.colorScheme.background;
+    final statusBarHeight = MediaQuery.of(context).viewPadding.top;
+    
+    print('🎨 BUILD: Immersive mode: $isImmersive');
+    print('🎨 BUILD: Reader theme: ${_readerSettings.theme}');
+    print('🎨 PAGE BG: ${pageBg.toString()} (${pageBg.value.toRadixString(16)})');
+    print('🎨 BUILD: Scaffold color: ${scaffoldColor?.toString()} (${scaffoldColor?.value.toRadixString(16)})');
+    print('🎨 BUILD: Status bar fill color: ${statusBarFillColor.toString()} (${statusBarFillColor.value.toRadixString(16)})');
+    print('🎨 BUILD: Status bar height: $statusBarHeight');
+    
     return Theme(
-      data: _readerSettings.getThemeData(context),
-      child: Scaffold(
-        appBar: isImmersive ? null : _buildAppBar(),
-        body: _buildReaderBody(),
-        extendBodyBehindAppBar: true, // Extend body behind app bar
+      data: readerThemeData,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: (pageBg.computeLuminance() > 0.5)
+            ? SystemUiOverlayStyle.dark
+            : SystemUiOverlayStyle.light,
+        child: Scaffold(
+          backgroundColor: scaffoldColor, // <- now white in immersive
+          extendBodyBehindAppBar: true,   // ensures bg shows behind island
+          appBar: isImmersive ? null : _buildAppBar(),
+          body: isImmersive
+              ? Column(
+                  children: [
+                    // Top filler exactly the same white as the page
+                    Container(
+                      height: statusBarHeight,
+                      color: statusBarFillColor,
+                    ),
+                    Expanded(child: _buildReaderBody(pageBg: pageBg)),
+                  ],
+                )
+              : _buildReaderBody(pageBg: null),
+        ),
       ),
     );
   }
@@ -717,7 +828,8 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     );
   }
   
-  Widget _buildReaderBody() {
+  
+  Widget _buildReaderBody({Color? pageBg}) {
     if (_readerEngine == null) {
       return const Center(child: Text(ReaderConfig.readerNotInitialized));
     }
@@ -728,61 +840,67 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
       behavior: HitTestBehavior.translucent,
       child: Stack(
         children: [
-          // Main reader content
-          _buildReaderContent(),
+          // Main reader content with optional background color
+          Container(
+            color: pageBg, // fallback behind WebView
+            child: _buildReaderContent(),
+          ),
         
-        // Reading progress indicator (hidden in immersive mode)  
-        if (!ref.watch(immersiveModeProvider))
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: ReaderConfig.progressIndicatorHeight,
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: ReaderConfig.progressIndicatorOpacity),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: _readerEngine!.progress,
-                child: Container(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: ReaderConfig.progressBarOpacity),
+          // Reading progress indicator (hidden in immersive mode)  
+          if (!ref.watch(immersiveModeProvider))
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: ReaderConfig.progressIndicatorHeight,
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: ReaderConfig.progressIndicatorOpacity),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: _readerEngine!.progress,
+                  child: Container(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: ReaderConfig.progressBarOpacity),
+                  ),
                 ),
               ),
             ),
-          ),
         
-        // Translation popup overlay with tap-outside-to-dismiss
-        if (_showTranslationPopup && _selectedText != null)
-          Stack(
-            children: [
-              // Full-screen transparent overlay for dismissal
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: _closeTranslationPopup,
-                  behavior: HitTestBehavior.translucent,
-                  child: Container(color: Colors.transparent),
+          // Translation popup overlay with tap-outside-to-dismiss
+          if (_showTranslationPopup && _selectedText != null)
+            Stack(
+              children: [
+                // Full-screen transparent overlay for dismissal
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: _closeTranslationPopup,
+                    behavior: HitTestBehavior.translucent,
+                    child: Container(color: Colors.transparent),
+                  ),
                 ),
-              ),
-              // Actual popup positioned normally
-              CyclingTranslationPopup(
-                key: ValueKey('translation_$_selectedText'),
-                selectedText: _selectedText!,
-                sourceLanguage: _sourceLanguage,
-                targetLanguage: _homeLanguage,
-                position: _tapPosition,
-                onClose: _closeTranslationPopup,
-                translationService: _translationService,
-                context: _selectedContext,
-              ),
-            ],
-          ),
+                // Actual popup positioned normally
+                CyclingTranslationPopup(
+                  key: ValueKey('translation_$_selectedText'),
+                  selectedText: _selectedText!,
+                  sourceLanguage: _sourceLanguage,
+                  targetLanguage: _homeLanguage,
+                  position: _tapPosition,
+                  onClose: _closeTranslationPopup,
+                  translationService: _translationService,
+                  context: _selectedContext,
+                ),
+              ],
+            ),
         ],
       ),
     );
   }
-  
+
   Widget _buildReaderContent() {
     return _readerEngine!.buildReader(context);
   }
+
+  String _toCssColor(Color c) =>
+      '#${c.value.toRadixString(16).padLeft(8, '0').substring(2)}';
   
   void _showSearchDialog() {
     showDialog(
@@ -906,6 +1024,10 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
     
     // Apply new settings to the current engine
     await _applySettingsToEngine();
+    
+    // Update status bar to match new theme
+    final isImmersive = ref.read(immersiveModeProvider);
+    _updateStatusBarForImmersiveMode(isImmersive);
     
     // Handle auto-scroll settings
     if (newSettings.autoScroll && _autoScrollService != null && _readerEngine != null) {

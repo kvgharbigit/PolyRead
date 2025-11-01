@@ -353,7 +353,7 @@ class ReaderEngineSettings {
     switch (theme) {
       case ReadingThemeType.warmLight:
         return const ThemeColors(
-          backgroundColor: '#FDF6E3',
+          backgroundColor: '#FFFFFF', // White page background to match getPageBackgroundColor
           textColor: '#2E2A24',
           selectionColor: '#E6D7C3',
           selectionTextColor: '#2E2A24',
@@ -420,6 +420,22 @@ class ThemeColors {
 
 /// Extension to add text styling to TextStyle
 extension ReaderSettingsTextStyle on ReaderSettings {
+  /// Get the actual page background color used in WebView/EPUB content
+  Color getPageBackgroundColor(BuildContext context) {
+    switch (theme) {
+      case ReadingThemeType.warmLight:
+        return Colors.white; // EPUB pages are white, not cream
+      case ReadingThemeType.enhancedSepia:
+        return const Color(0xFFF4ECD8); // Sepia page color
+      case ReadingThemeType.trueDark:
+        return const Color(0xFF000000); // True dark page color
+      case ReadingThemeType.blueFilter:
+        return const Color(0xFFFFF8E1); // Blue filter page color
+      case ReadingThemeType.custom:
+        final brightnessValue = (this.brightness * 255).round();
+        return Color.fromRGBO(brightnessValue, brightnessValue, brightnessValue, 1.0);
+    }
+  }
   /// Get Flutter TextStyle based on settings
   TextStyle getFlutterTextStyle([TextStyle? baseStyle]) {
     String? fontFamily;

@@ -423,46 +423,7 @@ document.addEventListener('mouseleave', handleMouseUp); // Cancel if mouse leave
       );
     }
     
-    final totalChapters = _book?.Chapters?.length ?? 0;
-    
-    return Column(
-      children: [
-        // Navigation bar
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            border: Border(
-              bottom: BorderSide(color: Colors.grey.shade300),
-            ),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: _currentChapterIndex > 0 ? () => goToPrevious() : null,
-                icon: const Icon(Icons.arrow_back),
-              ),
-              Expanded(
-                child: Text(
-                  'Chapter ${_currentChapterIndex + 1} of $totalChapters: $_currentChapter',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleSmall,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              IconButton(
-                onPressed: _currentChapterIndex < (totalChapters - 1) ? () => goToNext() : null,
-                icon: const Icon(Icons.arrow_forward),
-              ),
-            ],
-          ),
-        ),
-        // WebView content
-        Expanded(
-          child: WebViewWidget(controller: _webViewController!),
-        ),
-      ],
-    );
+    return WebViewWidget(controller: _webViewController!);
   }
   
   @override
