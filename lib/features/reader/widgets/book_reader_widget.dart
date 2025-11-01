@@ -734,20 +734,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
                           height: tapStripHeight,
                           color: statusBarFillColor, // seamless with page background
                           width: double.infinity,
-                          // Debug indicator (very subtle)
-                          child: Container(
-                            alignment: Alignment.center,
-                            child: Text(
-                              'TAP HERE TO EXIT',
-                              style: TextStyle(
-                                color: statusBarFillColor.computeLuminance() > 0.5 
-                                    ? Colors.black.withOpacity(0.1)
-                                    : Colors.white.withOpacity(0.1),
-                                fontSize: 8,
-                                fontWeight: FontWeight.w300,
-                              ),
-                            ),
-                          ),
                         ),
                       ),
                       
@@ -779,20 +765,6 @@ class _BookReaderWidgetState extends ConsumerState<BookReaderWidget> {
                           height: tapStripHeight,
                           color: statusBarFillColor, // seamless with page background
                           width: double.infinity,
-                          // Debug indicator (very subtle)
-                          child: Container(
-                            alignment: Alignment.center,
-                            child: Text(
-                              'TAP HERE TO EXIT',
-                              style: TextStyle(
-                                color: statusBarFillColor.computeLuminance() > 0.5 
-                                    ? Colors.black.withOpacity(0.1)
-                                    : Colors.white.withOpacity(0.1),
-                                fontSize: 8,
-                                fontWeight: FontWeight.w300,
-                              ),
-                            ),
-                          ),
                         ),
                       ),
                       
